@@ -493,72 +493,40 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
   }
 }
 
-async function fetchTencentStockPosition(holding: StockHoldingConfig): Promise<StockPosition> {
-  const normalizedCode = normalizeStockCode(holding.code);
-  const tencentCode = toTencentStockCode(normalizedCode);
+async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Promise<StockPosition[]> {
+  const valid = holdings
+    .map((h) => ({ ...h, code: normalizeStockCode(h.code) }))
+    .filter((h) => h.code);
 
-  if (!tencentCode) {
-    return {
-      code: normalizedCode || holding.code,
-      name: normalizedCode || holding.code,
-      shares: holding.shares,
-      cost: holding.cost,
-      price: Number.NaN,
-      prevClose: Number.NaN,
-      floatingPnl: Number.NaN,
-      dailyPnl: Number.NaN,
-      dailyChangePct: Number.NaN,
-      intraday: [],
-      updatedAt: '-',
-    };
-  }
+  if (valid.length === 0) return [];
 
-  try {
-    const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
-    const json = await response.json() as {
-      data?: Record<string, {
-        data?: { data?: string[]; date?: string };
-        qt?: Record<string, string[]>;
-      }>;
-    };
+  const tencentCodes = valid.map((h) => toTencentStockCode(h.code));
+  const text = await fetchTextWithEncoding(
+    `https://qt.gtimg.cn/q=${tencentCodes.join(',')}`,
+    'gb18030',
+  );
 
-    const payload = json.data?.[tencentCode];
-    const quote = payload?.qt?.[tencentCode];
+  return valid.map((holding) => {
+    const tencentCode = toTencentStockCode(holding.code);
+    const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
+    const parts = matched?.[1]?.split('~') ?? [];
 
-    if (!payload || !quote) {
-      throw new Error(`quote payload missing for ${tencentCode}`);
-    }
-
-    const intradayRaw = payload.data?.data ?? [];
-    const intraday: Array<{ time: string; price: number }> = intradayRaw
-      .map((line) => {
-        const parts = String(line).split(' ');
-        if (parts.length < 2) return null;
-        const time = parts[0];
-        const price = toNumber(parts[1]);
-        if (!Number.isFinite(price)) return null;
-        
-        let formattedTime = time;
-        if (/^\d{4}$/.test(time)) {
-          formattedTime = `${time.slice(0, 2)}:${time.slice(2, 4)}`;
-        }
-        
-        return { time: formattedTime, price };
-      })
-      .filter((item): item is { time: string; price: number } => item !== null);
-
-    const price = toNumber(quote[3]);
-    const prevClose = toNumber(quote[4]);
-    const change = toNumber(quote[31]);
-    const changePct = toNumber(quote[32]);
     const shares = Math.max(0, holding.shares);
     const cost = Math.max(0, holding.cost);
-    const floatingPnl = shares > 0 ? (price - cost) * shares : Number.NaN;
-    const dailyPnl = shares > 0 ? change * shares : Number.NaN;
+    const price = toNumber(parts[3]);
+    const prevClose = toNumber(parts[4]);
+    const change = toNumber(parts[31]);
+    const changePct = toNumber(parts[32]);
+    const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
+      ? (price - cost) * shares
+      : Number.NaN;
+    const dailyPnl = shares > 0 && Number.isFinite(change)
+      ? change * shares
+      : Number.NaN;
 
     return {
-      code: normalizedCode,
-      name: quote[1] || normalizedCode,
+      code: holding.code,
+      name: parts[1] || holding.code,
       shares,
       cost,
       price,
@@ -566,24 +534,37 @@ async function fetchTencentStockPosition(holding: StockHoldingConfig): Promise<S
       floatingPnl,
       dailyPnl,
       dailyChangePct: changePct,
-      intraday,
-      updatedAt: formatQuoteTime(quote[30] || ''),
-    };
-  } catch {
-    return {
-      code: normalizedCode,
-      name: normalizedCode,
-      shares: holding.shares,
-      cost: holding.cost,
-      price: Number.NaN,
-      prevClose: Number.NaN,
-      floatingPnl: Number.NaN,
-      dailyPnl: Number.NaN,
-      dailyChangePct: Number.NaN,
       intraday: [],
-      updatedAt: '-',
+      updatedAt: formatQuoteTime(parts[30] || ''),
     };
-  }
+  });
+}
+
+async function fetchStockIntraday(code: string): Promise<Array<{ time: string; price: number }>> {
+  const tencentCode = toTencentStockCode(code);
+  if (!tencentCode) return [];
+
+  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
+  const json = await response.json() as {
+    data?: Record<string, {
+      data?: { data?: string[] };
+    }>;
+  };
+
+  const intradayRaw = json.data?.[tencentCode]?.data?.data ?? [];
+  return intradayRaw
+    .map((line) => {
+      const parts = String(line).split(' ');
+      if (parts.length < 2) return null;
+      const time = parts[0];
+      const price = toNumber(parts[1]);
+      if (!Number.isFinite(price)) return null;
+      const formattedTime = /^\d{4}$/.test(time)
+        ? `${time.slice(0, 2)}:${time.slice(2, 4)}`
+        : time;
+      return { time: formattedTime, price };
+    })
+    .filter((item): item is { time: string; price: number } => item !== null);
 }
 
 async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
@@ -1151,22 +1132,44 @@ export default function App() {
       if (running) return;
       running = true;
       setStocksLoading(true);
+
+      // 阶段一：1 个批量请求拿报价，立即渲染表格
       try {
-        const rows = await Promise.all(stockHoldings.map((holding) => fetchTencentStockPosition(holding)));
+        const rows = await fetchBatchStockQuotes(stockHoldings);
         if (!cancelled) {
-          setStockPositions(rows);
+          setStockPositions((prev) => {
+            const prevMap = new Map(prev.map((p) => [p.code, p]));
+            return rows.map((row) => ({
+              ...row,
+              intraday: prevMap.get(row.code)?.intraday ?? [],
+            }));
+          });
           setStocksError('');
         }
       } catch {
-        if (!cancelled) {
-          setStocksError('股票行情获取失败');
-        }
+        if (!cancelled) setStocksError('股票行情获取失败');
       } finally {
-        if (!cancelled) {
-          setStocksLoading(false);
-        }
+        if (!cancelled) setStocksLoading(false);
         running = false;
       }
+
+      // 阶段二：并行拉分时图，拿到一个更新一个（与报价同周期，不阻塞 UI）
+      const codes = stockHoldings
+        .map((h) => normalizeStockCode(h.code))
+        .filter(Boolean);
+
+      codes.forEach(async (code) => {
+        try {
+          const intraday = await fetchStockIntraday(code);
+          if (!cancelled) {
+            setStockPositions((prev) =>
+              prev.map((p) => (p.code === code ? { ...p, intraday } : p)),
+            );
+          }
+        } catch {
+          // 单只失败不影响其他
+        }
+      });
     };
 
     void loadStocks();
@@ -1681,6 +1684,7 @@ export default function App() {
         </aside>
 
         <main className={`main-area ${stockDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -1701,6 +1705,7 @@ export default function App() {
             </div>
             {indexesError ? <span className="index-error">{indexesError}</span> : null}
           </section>
+          ) : null}
 
           {!stockDetailTarget ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>

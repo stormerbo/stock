@@ -222,12 +222,16 @@ function parseMinuteTicks(lines: string[] | undefined, tradeDate: string, startP
   if (!Array.isArray(lines)) return [];
   const date = formatDateTime(tradeDate).slice(0, 10);
   let prev = Number.isFinite(startPrev) ? (startPrev as number) : Number.NaN;
+  // API returns cumulative volume; track previous to compute per-minute increment
+  let prevCumVol = 0;
 
   return lines
     .map((line) => {
       const [timeRaw, priceRaw, volumeRaw] = String(line).split(" ");
       const price = toNumber(priceRaw);
-      const volume = toNumber(volumeRaw);
+      const cumVol = toNumber(volumeRaw);
+      const volume = Math.max(0, cumVol - prevCumVol);
+      prevCumVol = cumVol;
       const normalizedTime = /^\d{4}$/.test(timeRaw) ? `${timeRaw.slice(0, 2)}:${timeRaw.slice(2, 4)}` : timeRaw;
       const open = Number.isFinite(prev) ? prev : price;
       const close = price;
@@ -249,6 +253,7 @@ function parseMinuteTicks(lines: string[] | undefined, tradeDate: string, startP
       && Number.isFinite(row.high)
       && Number.isFinite(row.low)
       && Number.isFinite(row.volume)
+      && row.date.slice(-5) <= '15:00'
     ));
 }
 
