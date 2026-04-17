@@ -1,0 +1,484 @@
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";
+import {
+  calcMA,
+  calcMACD,
+  fetchTencentStockDetail,
+  type StockDetailData,
+  type StockPeriod,
+} from "./stockDetail";
+
+type Props = {
+  code: string;
+  fallbackName: string;
+  onBack: () => void;
+};
+
+function formatNumber(value: number, digits = 2): string {
+  if (!Number.isFinite(value)) return "-";
+  return value.toLocaleString("zh-CN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return "-";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function toneClass(value: number): string {
+  if (!Number.isFinite(value)) return "";
+  return value >= 0 ? "up" : "down";
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getVolumeDisplayUnit(maxVolume: number): { divisor: number; unit: string } {
+  if (maxVolume >= 100000000) return { divisor: 100000000, unit: "亿手" };
+  if (maxVolume >= 10000) return { divisor: 10000, unit: "万手" };
+  return { divisor: 1, unit: "手" };
+}
+
+const PERIOD_TABS: Array<{ label: string; value: StockPeriod }> = [
+  { label: "分时", value: "minute" },
+  { label: "五日", value: "fiveDay" },
+  { label: "日K", value: "day" },
+  { label: "周K", value: "week" },
+  { label: "月K", value: "month" },
+  { label: "年K", value: "year" },
+  { label: "120分", value: "m120" },
+  { label: "60分", value: "m60" },
+  { label: "30分", value: "m30" },
+  { label: "15分", value: "m15" },
+  { label: "5分", value: "m5" },
+];
+
+const WINDOW_OPTIONS = [
+  { label: "近60", size: 60 },
+  { label: "近120", size: 120 },
+  { label: "近240", size: 240 },
+  { label: "全部", size: 0 },
+] as const;
+
+function createLinePath(values: Array<number | null>, width: number, height: number, min: number, max: number): string {
+  const validValues = values.filter((item): item is number => item !== null && Number.isFinite(item));
+  if (validValues.length < 2 || max <= min) return "";
+
+  const total = values.length - 1;
+  const points: string[] = [];
+  values.forEach((value, index) => {
+    if (value === null || !Number.isFinite(value)) return;
+    const x = total > 0 ? (index / total) * width : 0;
+    const y = height - ((value - min) / (max - min)) * height;
+    points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+  });
+  return points.join(" ");
+}
+
+function createLinePathFromNumbers(values: number[], width: number, height: number, min: number, max: number): string {
+  if (values.length < 2 || max <= min) return "";
+  const total = values.length - 1;
+  const points: string[] = [];
+  values.forEach((value, index) => {
+    const x = total > 0 ? (index / total) * width : 0;
+    const y = height - ((value - min) / (max - min)) * height;
+    points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+  });
+  return points.join(" ");
+}
+
+function valueByIndex(values: Array<number | null>, index: number): number | null {
+  if (index < 0 || index >= values.length) return null;
+  const value = values[index];
+  return value !== null && Number.isFinite(value) ? value : null;
+}
+
+function KlineChart({ detail }: { detail: StockDetailData }) {
+  const [windowSize, setWindowSize] = useState<number>(240);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const visibleKline = useMemo(() => {
+    if (windowSize <= 0 || detail.kline.length <= windowSize) return detail.kline;
+    return detail.kline.slice(-windowSize);
+  }, [detail.kline, windowSize]);
+
+  const closes = useMemo(() => visibleKline.map((item) => item.close), [visibleKline]);
+  const highs = useMemo(() => visibleKline.map((item) => item.high), [visibleKline]);
+  const lows = useMemo(() => visibleKline.map((item) => item.low), [visibleKline]);
+  const volumes = useMemo(() => visibleKline.map((item) => item.volume), [visibleKline]);
+  const ma5 = useMemo(() => calcMA(closes, 5), [closes]);
+  const ma10 = useMemo(() => calcMA(closes, 10), [closes]);
+  const ma30 = useMemo(() => calcMA(closes, 30), [closes]);
+  const ma60 = useMemo(() => calcMA(closes, 60), [closes]);
+  const macdData = useMemo(() => calcMACD(closes), [closes]);
+
+  if (visibleKline.length < 2) {
+    return <div className="detail-empty">暂无 K 线数据</div>;
+  }
+
+  const last = visibleKline.length - 1;
+  const isMinuteStyle = detail.period === "minute" || detail.period === "fiveDay";
+  const mainWidth = 760;
+  const mainHeight = isMinuteStyle ? 100 : 260;
+  const low = Math.min(...lows);
+  const high = Math.max(...highs);
+  const pad = (high - low) * 0.08;
+  const min = low - pad;
+  const max = high + pad;
+  const priceRange = Math.max(0.00001, max - min);
+
+  const volumeMax = Math.max(...volumes, 1);
+  const volumeUnit = getVolumeDisplayUnit(volumeMax);
+  const volumeWidth = 760;
+  const volumeHeight = 70;
+
+  const macdWidth = 760;
+  const macdHeight = 90;
+  const macdValid = macdData.macd.filter((value): value is number => value !== null && Number.isFinite(value));
+  const difValid = macdData.dif.filter((value): value is number => value !== null && Number.isFinite(value));
+  const deaValid = macdData.dea.filter((value): value is number => value !== null && Number.isFinite(value));
+  const macdRangeMin = Math.min(...macdValid, ...difValid, ...deaValid, -0.01);
+  const macdRangeMax = Math.max(...macdValid, ...difValid, ...deaValid, 0.01);
+  const macdAbs = Math.max(Math.abs(macdRangeMin), Math.abs(macdRangeMax));
+  const macdMin = -macdAbs;
+  const macdMax = macdAbs;
+
+  const lastMa5 = valueByIndex(ma5, last);
+  const lastMa10 = valueByIndex(ma10, last);
+  const lastMa30 = valueByIndex(ma30, last);
+  const lastMa60 = valueByIndex(ma60, last);
+  const step = mainWidth / visibleKline.length;
+  const activeIndex = hoverIndex === null ? last : clamp(hoverIndex, 0, last);
+  const activeBar = visibleKline[activeIndex];
+  const activeCloseY = mainHeight - ((activeBar.close - min) / priceRange) * mainHeight;
+  const activeX = activeIndex * step + step / 2;
+  const prevClose = activeIndex > 0 ? visibleKline[activeIndex - 1].close : activeBar.open;
+  const activeChangePct = prevClose > 0 ? ((activeBar.close - prevClose) / prevClose) * 100 : Number.NaN;
+  const avgLineData = useMemo(() => {
+    let sum = 0;
+    return closes.map((value, index) => {
+      sum += value;
+      return sum / (index + 1);
+    });
+  }, [closes]);
+  const baseline = visibleKline[0]?.open ?? visibleKline[0]?.close ?? 0;
+  const minuteHigh = Math.max(...closes, baseline);
+  const minuteLow = Math.min(...closes, baseline);
+  const minuteSpan = Math.max(minuteHigh - baseline, baseline - minuteLow, 0.0001);
+  const minuteMin = baseline - minuteSpan * 1.08;
+  const minuteMax = baseline + minuteSpan * 1.08;
+  const minuteColor = closes[last] >= baseline ? "#e45555" : "#2aa568";
+  return (
+    <div className="detail-chart-wrap">
+      {!isMinuteStyle ? (
+        <div className="legend-row">
+          <span className="legend-item"><i style={{ background: "#f4b400" }} />MA5 {lastMa5 === null ? "-" : formatNumber(lastMa5, 2)}</span>
+          <span className="legend-item"><i style={{ background: "#8e44ff" }} />MA10 {lastMa10 === null ? "-" : formatNumber(lastMa10, 2)}</span>
+          <span className="legend-item"><i style={{ background: "#4a78ff" }} />MA30 {lastMa30 === null ? "-" : formatNumber(lastMa30, 2)}</span>
+          <span className="legend-item"><i style={{ background: "#14263f" }} />MA60 {lastMa60 === null ? "-" : formatNumber(lastMa60, 2)}</span>
+        </div>
+      ) : (
+        <div className="legend-row">
+          <span className="legend-item"><i style={{ background: minuteColor }} />分时</span>
+          <span className="legend-item"><i style={{ background: "#c6ad58" }} />均价</span>
+          <span className="legend-item"><i style={{ background: "#7984a1" }} />昨收 {formatNumber(baseline, 2)}</span>
+        </div>
+      )}
+      <div className="ohlc-row">
+        <span>{activeBar.date}</span>
+        <span>开 {formatNumber(activeBar.open, 2)}</span>
+        <span>高 {formatNumber(activeBar.high, 2)}</span>
+        <span>低 {formatNumber(activeBar.low, 2)}</span>
+        <span>收 <em className={toneClass(activeBar.close - prevClose)}>{formatNumber(activeBar.close, 2)}</em></span>
+        <span>涨跌 <em className={toneClass(activeBar.close - prevClose)}>{formatPercent(activeChangePct)}</em></span>
+        <span>量 {formatNumber(activeBar.volume / volumeUnit.divisor, 2)}{volumeUnit.unit}</span>
+      </div>
+      <div className="timeline-controls">
+        {WINDOW_OPTIONS.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            className={`timeline-btn ${windowSize === option.size ? "active" : ""}`}
+            onClick={() => setWindowSize(option.size)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <svg
+        className="kline-main"
+        viewBox={`0 0 ${mainWidth} ${mainHeight}`}
+        onMouseMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (rect.width <= 0) return;
+          const relativeX = clamp((event.clientX - rect.left) / rect.width, 0, 0.999999);
+          const index = Math.floor(relativeX * visibleKline.length);
+          setHoverIndex(clamp(index, 0, visibleKline.length - 1));
+        }}
+        onMouseLeave={() => setHoverIndex(null)}
+      >
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
+          <line
+            key={ratio}
+            x1="0"
+            x2={mainWidth}
+            y1={(mainHeight * ratio).toFixed(2)}
+            y2={(mainHeight * ratio).toFixed(2)}
+            className="chart-grid-line"
+          />
+        ))}
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={`v-${ratio}`}
+            x1={(mainWidth * ratio).toFixed(2)}
+            x2={(mainWidth * ratio).toFixed(2)}
+            y1="0"
+            y2={mainHeight}
+            className="chart-grid-line"
+          />
+        ))}
+        {!isMinuteStyle ? visibleKline.map((bar, index) => {
+          const x = index * step + step / 2;
+          const wickTop = mainHeight - ((bar.high - min) / priceRange) * mainHeight;
+          const wickBottom = mainHeight - ((bar.low - min) / priceRange) * mainHeight;
+          const openY = mainHeight - ((bar.open - min) / priceRange) * mainHeight;
+          const closeY = mainHeight - ((bar.close - min) / priceRange) * mainHeight;
+          const up = bar.close >= bar.open;
+          const bodyTop = Math.min(openY, closeY);
+          const bodyHeight = Math.max(1, Math.abs(openY - closeY));
+          const bodyWidth = Math.max(1, step * 0.66);
+          return (
+            <g key={`${bar.date}-${index}`}>
+              <line x1={x} x2={x} y1={wickTop} y2={wickBottom} className={up ? "candle-wick-up" : "candle-wick-down"} />
+              <rect
+                x={x - bodyWidth / 2}
+                y={bodyTop}
+                width={bodyWidth}
+                height={bodyHeight}
+                className={up ? "candle-body-up" : "candle-body-down"}
+              />
+            </g>
+          );
+        }) : (
+          <>
+            <polyline
+              points={createLinePathFromNumbers(closes, mainWidth, mainHeight, minuteMin, minuteMax)}
+              className="minute-line"
+            />
+            <polyline
+              points={createLinePathFromNumbers(avgLineData, mainWidth, mainHeight, minuteMin, minuteMax)}
+              className="minute-avg-line"
+            />
+          </>
+        )}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          const tickValue = isMinuteStyle
+            ? (minuteMax - (minuteMax - minuteMin) * ratio)
+            : (max - (max - min) * ratio);
+          const y = mainHeight * ratio;
+          return (
+            <text
+              key={`price-tick-${ratio}`}
+              x={mainWidth - 2}
+              y={y - 2}
+              textAnchor="end"
+              className="axis-label"
+            >
+              {formatNumber(tickValue, 2)}
+            </text>
+          );
+        })}
+        <line
+          x1="0"
+          x2={mainWidth}
+          y1={isMinuteStyle
+            ? (mainHeight - ((activeBar.close - minuteMin) / (minuteMax - minuteMin)) * mainHeight)
+            : activeCloseY}
+          y2={isMinuteStyle
+            ? (mainHeight - ((activeBar.close - minuteMin) / (minuteMax - minuteMin)) * mainHeight)
+            : activeCloseY}
+          className="crosshair-line"
+        />
+        <line x1={activeX} x2={activeX} y1="0" y2={mainHeight} className="crosshair-line" />
+        {!isMinuteStyle ? (
+          <>
+            <polyline points={createLinePath(ma5, mainWidth, mainHeight, min, max)} className="ma5-line" />
+            <polyline points={createLinePath(ma10, mainWidth, mainHeight, min, max)} className="ma10-line" />
+            <polyline points={createLinePath(ma30, mainWidth, mainHeight, min, max)} className="ma30-line" />
+            <polyline points={createLinePath(ma60, mainWidth, mainHeight, min, max)} className="ma60-line" />
+          </>
+        ) : null}
+      </svg>
+
+      <svg className="kline-volume" viewBox={`0 0 ${volumeWidth} ${volumeHeight}`}>
+        {volumes.map((volume, index) => {
+          const x = (index / volumes.length) * volumeWidth;
+          const height = (volume / volumeMax) * (volumeHeight - 2);
+          const y = volumeHeight - height;
+          const up = closes[index] >= (index > 0 ? closes[index - 1] : closes[index]);
+          return (
+            <rect
+              key={`${visibleKline[index].date}-${index}`}
+              x={x.toFixed(2)}
+              y={y.toFixed(2)}
+              width={(volumeWidth / volumes.length).toFixed(2)}
+              height={height.toFixed(2)}
+              className={up ? "volume-up" : "volume-down"}
+            />
+          );
+        })}
+        <text x={volumeWidth - 2} y={10} textAnchor="end" className="axis-label">VOL {volumeUnit.unit}</text>
+        <line x1={activeX} x2={activeX} y1="0" y2={volumeHeight} className="crosshair-line" />
+      </svg>
+
+      {!isMinuteStyle ? (
+        <>
+          <svg className="kline-macd" viewBox={`0 0 ${macdWidth} ${macdHeight}`}>
+            <line
+              x1="0"
+              x2={macdWidth}
+              y1={(macdHeight / 2).toFixed(2)}
+              y2={(macdHeight / 2).toFixed(2)}
+              className="chart-grid-line"
+            />
+            {macdData.macd.map((item, index) => {
+              if (item === null || !Number.isFinite(item)) return null;
+              const x = (index / macdData.macd.length) * macdWidth;
+              const zeroY = macdHeight - ((0 - macdMin) / (macdMax - macdMin)) * macdHeight;
+              const y = macdHeight - ((item - macdMin) / (macdMax - macdMin)) * macdHeight;
+              const barHeight = Math.abs(y - zeroY);
+              return (
+                <rect
+                  key={`macd-${index}`}
+                  x={x.toFixed(2)}
+                  y={Math.min(y, zeroY).toFixed(2)}
+                  width={(macdWidth / macdData.macd.length).toFixed(2)}
+                  height={barHeight.toFixed(2)}
+                  className={item >= 0 ? "volume-up" : "volume-down"}
+                />
+              );
+            })}
+            <polyline points={createLinePath(macdData.dif, macdWidth, macdHeight, macdMin, macdMax)} className="dif-line" />
+            <polyline points={createLinePath(macdData.dea, macdWidth, macdHeight, macdMin, macdMax)} className="dea-line" />
+            <line x1={activeX} x2={activeX} y1="0" y2={macdHeight} className="crosshair-line" />
+          </svg>
+
+          <div className="legend-row compact">
+            <span className="legend-item"><i style={{ background: "#24a5d6" }} />MACD</span>
+            <span className="legend-item"><i style={{ background: "#f6c545" }} />DIF</span>
+            <span className="legend-item"><i style={{ background: "#58cbf8" }} />DEA</span>
+          </div>
+        </>
+      ) : null}
+
+      <div className="kline-date-row">
+        <span>{visibleKline[0].date}</span>
+        <span>{visibleKline[Math.floor(visibleKline.length / 2)].date}</span>
+        <span>{visibleKline[visibleKline.length - 1].date}</span>
+      </div>
+    </div>
+  );
+}
+
+export default function StockDetailView({ code, fallbackName, onBack }: Props) {
+  const [detail, setDetail] = useState<StockDetailData | null>(null);
+  const [period, setPeriod] = useState<StockPeriod>("day");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshAt, setRefreshAt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const result = await fetchTencentStockDetail(code, fallbackName, period);
+        if (cancelled) return;
+        setDetail(result);
+        setError("");
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "详情获取失败");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
+    const timer = window.setInterval(() => {
+      void load();
+    }, period === "minute" || period === "fiveDay" ? 20_000 : 40_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [code, fallbackName, period, refreshAt]);
+
+  return (
+    <section className="stock-detail-panel">
+      <header className="detail-header">
+        <button type="button" className="detail-back-btn" onClick={onBack}>
+          <ChevronLeft size={14} />
+          返回
+        </button>
+        <button type="button" className="detail-refresh-btn" onClick={() => setRefreshAt((prev) => prev + 1)} disabled={loading}>
+          {loading ? <Loader2 size={13} className="spinning" /> : <RefreshCw size={13} />}
+          刷新
+        </button>
+      </header>
+
+      {loading && !detail ? (
+        <div className="detail-loading">详情加载中...</div>
+      ) : null}
+
+      {error && !detail ? (
+        <div className="detail-error">详情获取失败：{error}</div>
+      ) : null}
+
+      {detail ? (
+        <div className="detail-body">
+          <div className="detail-title-row">
+            <div className="title-left">
+              <strong>{detail.name}</strong>
+              <span>{detail.code}</span>
+            </div>
+            <div className={`title-price ${toneClass(detail.changePct)}`}>
+              {formatNumber(detail.price, 2)} / {formatPercent(detail.changePct)}
+            </div>
+          </div>
+
+          <div className="detail-stats-grid">
+            <div><span>今开</span><b>{formatNumber(detail.open, 2)}</b></div>
+            <div><span>昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
+            <div><span>最高</span><b>{formatNumber(detail.high, 2)}</b></div>
+            <div><span>最低</span><b>{formatNumber(detail.low, 2)}</b></div>
+            <div><span>成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
+            <div><span>成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
+            <div><span>换手率</span><b>{formatPercent(detail.turnoverRate)}</b></div>
+            <div><span>市盈率(TTM)</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
+            <div><span>总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
+            <div><span>更新时间</span><b>{detail.updatedAt}</b></div>
+          </div>
+
+          <KlineChart detail={detail} />
+          <div className="period-tabs">
+            {PERIOD_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                className={`period-tab ${period === tab.value ? "active" : ""}`}
+                onClick={() => setPeriod(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}

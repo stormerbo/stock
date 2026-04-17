@@ -8,15 +8,19 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://qt.gtimg.cn/*"
+    "https://qt.gtimg.cn/*",
+    "https://web.ifzq.gtimg.cn/*",
+    "https://smartbox.gtimg.cn/*",
+    "https://fund.eastmoney.com/*",
+    "https://fundgz.1234567.com.cn/*"
   ],
   "action": {
     "default_popup": "src/popup/index.html",
     "default_icon": {
-      "16": "public/icon16.svg",
-      "32": "public/icon32.svg",
-      "48": "public/icon48.svg",
-      "128": "public/icon128.svg"
+      "16": "public/icon16.png",
+      "32": "public/icon32.png",
+      "48": "public/icon48.png",
+      "128": "public/icon128.png"
     }
   },
   "background": {
@@ -24,9 +28,9 @@
   },
   "options_page": "src/options/index.html",
   "icons": {
-    "16": "public/icon16.svg",
-    "32": "public/icon32.svg",
-    "48": "public/icon48.svg",
-    "128": "public/icon128.svg"
+    "16": "public/icon16.png",
+    "32": "public/icon32.png",
+    "48": "public/icon48.png",
+    "128": "public/icon128.png"
   }
 }
