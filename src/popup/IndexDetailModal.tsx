@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
+import { isTradingHours } from './stockDetail';
 
 type Props = {
   code: string;
@@ -157,7 +158,9 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
     };
 
     void load();
-    const timer = window.setInterval(() => { void load(); }, 20_000);
+    const timer = window.setInterval(() => {
+      if (isTradingHours()) void load();
+    }, 20_000);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
@@ -202,7 +205,7 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
   }, [detail]);
 
   const activeIndex = detail && chartModel
-    ? (hoverIndex === null ? chartModel.points.length - 1 : Math.max(0, Math.min(hoverIndex, chartModel.points.length - 1)))
+    ? (hoverIndex === null ? null : Math.max(0, Math.min(hoverIndex, chartModel.points.length - 1)))
     : null;
 
   const activePoint = activeIndex !== null && chartModel ? chartModel.points[activeIndex] : null;

@@ -4,6 +4,7 @@ import {
   calcMA,
   calcMACD,
   fetchTencentStockDetail,
+  isTradingHours,
   type StockDetailData,
   type StockPeriod,
 } from "./stockDetail";
@@ -235,7 +236,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
     rangeBarDragRef.current = null;
   };
 
-  if (visibleKline.length < 2) {
+  if (visibleKline.length === 0) {
     return <div className="detail-empty">暂无 K 线数据</div>;
   }
 
@@ -711,7 +712,7 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
 
     void load();
     const timer = window.setInterval(() => {
-      void load();
+      if (isTradingHours()) void load();
     }, period === "minute" || period === "fiveDay" ? 20_000 : 40_000);
 
     return () => {

@@ -301,6 +301,56 @@ async function fetchFqPeriod(tencentCode: string, period: "day" | "week" | "mont
   return { quote, kline: parseKlineRows(rows) };
 }
 
+/**
+ * 从日线数据聚合计算年K线。
+ * 腾讯 API 的年K只返回当年数据（通常只有1条），所以改用东方财富 API 获取历史年K。
+ */
+async function fetchEastmoneyYearKline(tencentCode: string): Promise<StockDetailKlinePoint[]> {
+  // 东方财富 secid 规则：0.xxxx = 深圳, 1.xxxx = 上海
+  const plainCode = tencentCode.replace(/^(sh|sz)/, "");
+  const marketCode = tencentCode.startsWith("sh") ? "1" : "0";
+  const secid = `${marketCode}.${plainCode}`;
+
+  try {
+    const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=104&fqt=1&beg=20000101&end=20500101&lmt=100`;
+    const response = await fetch(url);
+    const json = await response.json() as {
+      data?: { klines?: string[] };
+    };
+
+    const klines = json.data?.klines ?? [];
+    if (klines.length === 0) return [];
+
+    return klines
+      .map((line) => {
+        const parts = line.split(",");
+        if (parts.length < 6) return null;
+        // 格式: 日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+        const [date, open, close, high, low, volume] = parts;
+        return {
+          date: String(date),
+          open: toNumber(open),
+          close: toNumber(close),
+          high: toNumber(high),
+          low: toNumber(low),
+          volume: toNumber(volume),
+        };
+      })
+      .filter((item): item is StockDetailKlinePoint => (
+        item !== null
+        && Number.isFinite(item.open)
+        && Number.isFinite(item.close)
+        && Number.isFinite(item.high)
+        && Number.isFinite(item.low)
+        && Number.isFinite(item.volume)
+      ));
+  } catch {
+    // 东方财富 API 失败时回退到腾讯的年K数据（当前年）
+    const { kline } = await fetchFqPeriod(tencentCode, "year", 240);
+    return kline;
+  }
+}
+
 async function fetchMinutePeriod(tencentCode: string): Promise<{ quote: string[]; kline: StockDetailKlinePoint[] }> {
   const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
   const json = await response.json() as TencentMinuteResponse;
@@ -349,6 +399,16 @@ async function fetchMklinePeriod(tencentCode: string, period: "m5" | "m15" | "m3
   return { quote, kline };
 }
 
+/**
+ * 判断当前时间是否在 A 股交易时段内（09:00 - 15:00）。
+ * 非交易时段不自动刷新行情数据，但手动刷新不受限制。
+ */
+export function isTradingHours(): boolean {
+  const now = new Date();
+  const hours = now.getHours();
+  return hours >= 9 && hours < 15;
+}
+
 export async function fetchTencentStockDetail(code: string, fallbackName = "", period: StockPeriod = "day"): Promise<StockDetailData> {
   const plainCode = normalizeStockCode(code);
   const tencentCode = toTencentStockCode(plainCode);
@@ -366,6 +426,12 @@ export async function fetchTencentStockDetail(code: string, fallbackName = "", p
   }
   if (period === "day" || period === "week" || period === "month" || period === "year") {
     const count = period === "day" ? 320 : 240;
+    if (period === "year") {
+      const kline = await fetchEastmoneyYearKline(tencentCode);
+      // 年K需要从日线单独拿报价
+      const { quote } = await fetchFqPeriod(tencentCode, "day", 1);
+      return buildDetail(code, plainCode, fallbackName, quote, period, kline);
+    }
     const { quote, kline } = await fetchFqPeriod(tencentCode, period, count);
     return buildDetail(code, plainCode, fallbackName, quote, period, kline);
   }

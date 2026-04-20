@@ -1,66 +1,27 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, GripVertical, Moon, PieChart, Pin, Search, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
+import FundDetailView from './FundDetailView';
+import {
+  fetchStockIntraday,
+  toTencentStockCode,
+  normalizeStockCode,
+  normalizeFundCode,
+  formatQuoteTime,
+  toNumber,
+  type StockHoldingConfig,
+  type FundHoldingConfig,
+  type StockPosition,
+  type FundPosition,
+  type MarketIndexQuote,
+  MARKET_INDEXES,
+} from '../shared/fetch';
+
+const BADGE_STORAGE_KEY = 'badgeConfig';
 
 type PageTab = 'stocks' | 'funds' | 'account';
 type ThemeMode = 'dark' | 'light';
-
-type StockHoldingConfig = {
-  code: string;
-  shares: number;
-  cost: number;
-  pinned?: boolean;
-  special?: boolean;
-};
-
-type FundHoldingConfig = {
-  code: string;
-  units: number;
-  cost: number;
-  name?: string;
-  pinned?: boolean;
-  special?: boolean;
-};
-
-type StockPosition = {
-  code: string;
-  name: string;
-  shares: number;
-  cost: number;
-  price: number;
-  prevClose: number;
-  floatingPnl: number;
-  dailyPnl: number;
-  dailyChangePct: number;
-  intraday: Array<{ time: string; price: number }>;
-  updatedAt: string;
-};
-
-type FundPosition = {
-  code: string;
-  name: string;
-  units: number;
-  cost: number;
-  latestNav: number;
-  navDate: string;
-  navDisclosedToday: boolean;
-  estimatedNav: number;
-  holdingAmount: number;
-  holdingProfit: number;
-  holdingProfitRate: number;
-  changePct: number;
-  estimatedProfit: number;
-  updatedAt: string;
-};
-
-type MarketIndexQuote = {
-  code: string;
-  label: string;
-  price: number;
-  change: number;
-  changePct: number;
-};
 
 type IndexDetailTarget = {
   code: string;
@@ -90,25 +51,14 @@ type StockDetailTarget = {
   name: string;
 };
 
+type FundDetailTarget = {
+  code: string;
+  name: string;
+};
+
 type PortfolioConfig = {
   stockHoldings: StockHoldingConfig[];
   fundHoldings: FundHoldingConfig[];
-};
-
-const STOCK_REFRESH_MS = 15_000;
-const FUND_REFRESH_MS = 60_000;
-const INDEX_REFRESH_MS = 30_000;
-
-const MARKET_INDEXES: Array<{ code: string; label: string }> = [
-  { code: 'sh000001', label: '上证指数' },
-  { code: 'sz399300', label: '沪深300' },
-  { code: 'sz399001', label: '深证成指' },
-  { code: 'sz399006', label: '创业板指' },
-];
-
-const STORAGE_KEYS = {
-  stockHoldings: 'stockHoldings',
-  fundHoldings: 'fundHoldings',
 };
 
 const EMPTY_PORTFOLIO: PortfolioConfig = {
@@ -121,34 +71,13 @@ const MORNING_START = 9 * 60 + 30;
 const MORNING_END = 11 * 60 + 30;
 const AFTERNOON_START = 13 * 60;
 const AFTERNOON_END = 15 * 60;
+
+const STORAGE_KEYS = {
+  stockHoldings: 'stockHoldings',
+  fundHoldings: 'fundHoldings',
+};
+
 let fundSearchIndexPromise: Promise<FundSearchEntry[]> | null = null;
-
-async function fetchTextViaExtension(url: string): Promise<string> {
-  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-    const result = await chrome.runtime.sendMessage<
-      { type: 'fetch-text'; url: string },
-      { ok: boolean; status: number; text?: string; error?: string }
-    >({
-      type: 'fetch-text',
-      url,
-    });
-
-    if (!result?.ok || typeof result.text !== 'string') {
-      throw new Error(result?.error || `request failed: ${result?.status ?? 0}`);
-    }
-
-    return result.text;
-  }
-
-  const response = await fetch(url);
-  return response.text();
-}
-
-async function fetchTextWithEncoding(url: string, encoding: string): Promise<string> {
-  const response = await fetch(url);
-  const buffer = await response.arrayBuffer();
-  return new TextDecoder(encoding).decode(buffer);
-}
 
 type IntradayDataPoint = {
   time: string;
@@ -168,11 +97,6 @@ function getMinuteIndex(timeStr: string): number | null {
     return (MORNING_END - MORNING_START) + (minutesFromMidnight - AFTERNOON_START);
   }
   return null;
-}
-
-function toNumber(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : Number.NaN;
 }
 
 function formatNumber(value: number, digits = 2): string {
@@ -206,23 +130,6 @@ function toneClass(value: number): string {
   return value >= 0 ? 'up' : 'down';
 }
 
-function normalizeStockCode(code: string): string {
-  const raw = code.trim().toLowerCase();
-  const plain = raw.replace(/^(sh|sz)/, '');
-  return /^\d{6}$/.test(plain) ? plain : '';
-}
-
-function toTencentStockCode(code: string): string {
-  const plain = normalizeStockCode(code);
-  if (!plain) return '';
-  return /^[689]/.test(plain) ? `sh${plain}` : `sz${plain}`;
-}
-
-function normalizeFundCode(code: string): string {
-  const raw = code.trim();
-  return /^\d{6}$/.test(raw) ? raw : '';
-}
-
 function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' | 'beijing' } | null {
   const plain = normalizeStockCode(code);
   if (!plain) return null;
@@ -232,34 +139,6 @@ function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' |
     return { label: '北', tone: 'beijing' };
   }
   return null;
-}
-
-function formatQuoteTime(raw: string): string {
-  if (!/^\d{14}$/.test(raw)) return '-';
-  return `${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`;
-}
-
-function formatFundTime(raw: string): string {
-  const parts = raw.split(' ');
-  if (parts.length < 2) return '-';
-  const time = parts[1];
-  if (/^\d{2}:\d{2}:\d{2}$/.test(time)) return time;
-  if (/^\d{2}:\d{2}$/.test(time)) return `${time}:00`;
-  return '-';
-}
-
-function getShanghaiToday(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-
-  const year = parts.find((item) => item.type === 'year')?.value ?? '0000';
-  const month = parts.find((item) => item.type === 'month')?.value ?? '00';
-  const day = parts.find((item) => item.type === 'day')?.value ?? '00';
-  return `${year}-${month}-${day}`;
 }
 
 function applyPinnedOrder<T extends { code: string; pinned?: boolean }>(items: T[], code: string): T[] {
@@ -450,7 +329,8 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
 
   try {
     if (!fundSearchIndexPromise) {
-      fundSearchIndexPromise = fetchTextViaExtension('https://fund.eastmoney.com/js/fundcode_search.js')
+      fundSearchIndexPromise = fetch('https://fund.eastmoney.com/js/fundcode_search.js')
+        .then((r) => r.text())
         .then((text) => {
           const matched = text.match(/var\s+r\s*=\s*(\[[\s\S]*\]);?/);
           if (!matched) return [];
@@ -483,6 +363,7 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
     }
 
     const entries = await fundSearchIndexPromise;
+    if (!entries) return [];
     const query = q.toLowerCase();
     return entries
       .filter((item) => item.haystack.includes(query))
@@ -490,193 +371,6 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
       .map(({ code, name }) => ({ code, name }));
   } catch {
     return [];
-  }
-}
-
-async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Promise<StockPosition[]> {
-  const valid = holdings
-    .map((h) => ({ ...h, code: normalizeStockCode(h.code) }))
-    .filter((h) => h.code);
-
-  if (valid.length === 0) return [];
-
-  const tencentCodes = valid.map((h) => toTencentStockCode(h.code));
-  const text = await fetchTextWithEncoding(
-    `https://qt.gtimg.cn/q=${tencentCodes.join(',')}`,
-    'gb18030',
-  );
-
-  return valid.map((holding) => {
-    const tencentCode = toTencentStockCode(holding.code);
-    const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
-    const parts = matched?.[1]?.split('~') ?? [];
-
-    const shares = Math.max(0, holding.shares);
-    const cost = Math.max(0, holding.cost);
-    const price = toNumber(parts[3]);
-    const prevClose = toNumber(parts[4]);
-    const change = toNumber(parts[31]);
-    const changePct = toNumber(parts[32]);
-    const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
-      ? (price - cost) * shares
-      : Number.NaN;
-    const dailyPnl = shares > 0 && Number.isFinite(change)
-      ? change * shares
-      : Number.NaN;
-
-    return {
-      code: holding.code,
-      name: parts[1] || holding.code,
-      shares,
-      cost,
-      price,
-      prevClose,
-      floatingPnl,
-      dailyPnl,
-      dailyChangePct: changePct,
-      intraday: [],
-      updatedAt: formatQuoteTime(parts[30] || ''),
-    };
-  });
-}
-
-async function fetchStockIntraday(code: string): Promise<Array<{ time: string; price: number }>> {
-  const tencentCode = toTencentStockCode(code);
-  if (!tencentCode) return [];
-
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
-  const json = await response.json() as {
-    data?: Record<string, {
-      data?: { data?: string[] };
-    }>;
-  };
-
-  const intradayRaw = json.data?.[tencentCode]?.data?.data ?? [];
-  return intradayRaw
-    .map((line) => {
-      const parts = String(line).split(' ');
-      if (parts.length < 2) return null;
-      const time = parts[0];
-      const price = toNumber(parts[1]);
-      if (!Number.isFinite(price)) return null;
-      const formattedTime = /^\d{4}$/.test(time)
-        ? `${time.slice(0, 2)}:${time.slice(2, 4)}`
-        : time;
-      return { time: formattedTime, price };
-    })
-    .filter((item): item is { time: string; price: number } => item !== null);
-}
-
-async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
-  const query = MARKET_INDEXES.map((item) => `s_${item.code}`).join(',');
-  const text = await fetchTextWithEncoding(`https://qt.gtimg.cn/q=${query}`, 'gb18030');
-
-  return MARKET_INDEXES.map((item) => {
-    const matched = text.match(new RegExp(`v_s_${item.code}="([^"]*)";?`));
-    const parts = matched?.[1]?.split('~') ?? [];
-    return {
-      code: item.code,
-      label: parts[1] || item.label,
-      price: toNumber(parts[3]),
-      change: toNumber(parts[4]),
-      changePct: toNumber(parts[5]),
-    };
-  });
-}
-
-async function fetchTiantianFundPosition(holding: FundHoldingConfig): Promise<FundPosition> {
-  const code = normalizeFundCode(holding.code);
-
-  if (!code) {
-    return {
-      code: holding.code,
-      name: holding.name || holding.code,
-      units: holding.units,
-      cost: holding.cost,
-      latestNav: Number.NaN,
-      navDate: '',
-      navDisclosedToday: false,
-      estimatedNav: Number.NaN,
-      holdingAmount: Number.NaN,
-      holdingProfit: Number.NaN,
-      holdingProfitRate: Number.NaN,
-      changePct: Number.NaN,
-      estimatedProfit: Number.NaN,
-      updatedAt: '-',
-    };
-  }
-
-  try {
-    const response = await fetch(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`);
-    const text = await response.text();
-    const matched = text.match(/jsonpgz\((.*)\);?/);
-    if (!matched) {
-      throw new Error(`fund payload missing for ${code}`);
-    }
-
-    const payload = JSON.parse(matched[1]) as {
-      name?: string;
-      jzrq?: string;
-      dwjz?: string;
-      gsz?: string;
-      gszzl?: string;
-      gztime?: string;
-    };
-
-    const units = Math.max(0, holding.units);
-    const cost = Math.max(0, holding.cost);
-    const navDate = String(payload.jzrq ?? '').trim();
-    const estimatedNav = toNumber(payload.gsz);
-    const latestNav = toNumber(payload.dwjz);
-    const changePct = toNumber(payload.gszzl);
-    const navDisclosedToday = navDate === getShanghaiToday();
-
-    const holdingAmount = units > 0 ? units * estimatedNav : Number.NaN;
-    const holdingProfit = units > 0 && cost > 0 && Number.isFinite(latestNav)
-      ? (latestNav - cost) * units
-      : Number.NaN;
-    const holdingProfitRate = cost > 0 && Number.isFinite(latestNav)
-      ? ((latestNav - cost) / cost) * 100
-      : Number.NaN;
-    const estimatedProfit = navDisclosedToday
-      ? 0
-      : (units > 0 && Number.isFinite(estimatedNav) && Number.isFinite(latestNav)
-        ? (estimatedNav - latestNav) * units
-        : Number.NaN);
-
-    return {
-      code,
-      name: payload.name || holding.name || code,
-      units,
-      cost,
-      latestNav,
-      navDate,
-      navDisclosedToday,
-      estimatedNav,
-      holdingAmount,
-      holdingProfit,
-      holdingProfitRate,
-      changePct,
-      estimatedProfit,
-      updatedAt: formatFundTime(payload.gztime || ''),
-    };
-  } catch {
-    return {
-      code,
-      name: holding.name || code,
-      units: holding.units,
-      cost: holding.cost,
-      latestNav: Number.NaN,
-      navDate: '',
-      navDisclosedToday: false,
-      estimatedNav: Number.NaN,
-      holdingAmount: Number.NaN,
-      holdingProfit: Number.NaN,
-      holdingProfitRate: Number.NaN,
-      changePct: Number.NaN,
-      estimatedProfit: Number.NaN,
-      updatedAt: '-',
-    };
   }
 }
 
@@ -730,12 +424,9 @@ function IntradayChart({
   const displayMax = maxPrice + edgePadding;
   const displayRange = Math.max(displayMax - displayMin, rawRange);
   const sortedPoints = [...dataPoints].sort((a, b) => a.minuteIndex - b.minuteIndex);
-  const minMinuteIndex = sortedPoints[0]?.minuteIndex ?? 0;
-  const maxMinuteIndex = sortedPoints[sortedPoints.length - 1]?.minuteIndex ?? 1;
-  const minuteRange = Math.max(maxMinuteIndex - minMinuteIndex, 1);
 
   const toX = (minuteIndex: number) => {
-    return padding.left + ((minuteIndex - minMinuteIndex) / minuteRange) * chartWidth;
+    return padding.left + (minuteIndex / TRADING_MINUTES) * chartWidth;
   };
 
   const toY = (price: number) => {
@@ -824,6 +515,13 @@ export default function App() {
     return saved === 'light' || saved === 'dark' ? saved : 'dark';
   });
 
+  const [popupOpacity, setPopupOpacity] = useState<number>(() => {
+    const saved = window.localStorage.getItem('popup-opacity');
+    return saved !== null ? Math.min(100, Math.max(0, Number(saved) || 95)) : 95;
+  });
+
+  const [badgeConfig, setBadgeConfig] = useState<{ enabled: boolean; mode: string } | null>(null);
+
   const [stockHoldings, setStockHoldings] = useState<StockHoldingConfig[]>([]);
   const [fundHoldings, setFundHoldings] = useState<FundHoldingConfig[]>([]);
   const [portfolioReady, setPortfolioReady] = useState(false);
@@ -850,6 +548,7 @@ export default function App() {
   const [keyword, setKeyword] = useState('');
   const [suggestions, setSuggestions] = useState<SearchStock[]>([]);
   const [stockDetailTarget, setStockDetailTarget] = useState<StockDetailTarget | null>(null);
+  const [fundDetailTarget, setFundDetailTarget] = useState<FundDetailTarget | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
   const [sortingMode, setSortingMode] = useState<SortingMode>(null);
   const [stockSortDraft, setStockSortDraft] = useState<string[] | null>(null);
@@ -1062,6 +761,11 @@ export default function App() {
   ), [stockDisplayRows]);
 
   useEffect(() => {
+    // 初始化面板透明度
+    document.documentElement.style.setProperty('--panel-opacity', String(popupOpacity / 100));
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     loadPortfolioConfig().then((config) => {
       if (!mounted) return;
@@ -1086,36 +790,155 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    let cancelled = false;
-    let running = false;
+    window.localStorage.setItem('popup-opacity', String(popupOpacity));
+    document.documentElement.style.setProperty('--panel-opacity', String(popupOpacity / 100));
+  }, [popupOpacity]);
 
-    const loadIndexes = async () => {
-      if (running) return;
-      running = true;
-      try {
-        const rows = await fetchTencentMarketIndexes();
-        if (!cancelled) {
-          setMarketIndexes(rows);
-          setIndexesError('');
+  // 监听 options 页发来的透明度更新
+  useEffect(() => {
+    if (typeof chrome.runtime?.onMessage?.addListener === 'function') {
+      const handler = (
+        message: unknown,
+        _sender: unknown,
+        sendResponse: (response?: unknown) => void
+      ) => {
+        const msg = message as { type?: string; opacity?: number };
+        if (msg.type === 'set-opacity' && typeof msg.opacity === 'number') {
+          setPopupOpacity(msg.opacity);
+          sendResponse({ ok: true });
         }
-      } catch {
-        if (!cancelled) {
-          setIndexesError('指数获取失败');
-        }
-      } finally {
-        running = false;
-      }
-    };
-
-    void loadIndexes();
-    const timer = window.setInterval(() => { void loadIndexes(); }, INDEX_REFRESH_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+      };
+      chrome.runtime.onMessage.addListener(handler as (message: unknown, sender: unknown, sendResponse: (response?: unknown) => void) => boolean | void);
+      return () => chrome.runtime.onMessage.removeListener(handler as (message: unknown, sender: unknown, sendResponse: (response?: unknown) => void) => void);
+    }
   }, []);
 
+  // 加载角标配置
+  useEffect(() => {
+    const loadConfig = () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+        chrome.storage.sync.get(BADGE_STORAGE_KEY, (result: Record<string, unknown>) => {
+          const config = result[BADGE_STORAGE_KEY] as { enabled: boolean; mode: string } | undefined;
+          setBadgeConfig(config || { enabled: true, mode: 'stockCount' });
+        });
+      }
+    };
+    loadConfig();
+
+    // 监听其他页面（如 options）修改角标配置
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+        if (area === 'sync' && changes[BADGE_STORAGE_KEY]) {
+          setBadgeConfig(changes[BADGE_STORAGE_KEY].newValue as { enabled: boolean; mode: string } | null);
+        }
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
+
+  // 更新角标数据
+  useEffect(() => {
+    if (!portfolioReady || !badgeConfig?.enabled) return;
+
+    const stockMarketValue = stockPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
+      return sum + item.price * item.shares;
+    }, 0);
+
+    const stockFloating = stockPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.floatingPnl)) return sum;
+      return sum + item.floatingPnl;
+    }, 0);
+
+    const stockDaily = stockPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.dailyPnl)) return sum;
+      return sum + item.dailyPnl;
+    }, 0);
+
+    const fundHoldingAmount = fundPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.holdingAmount)) return sum;
+      return sum + item.holdingAmount;
+    }, 0);
+
+    const fundHoldingProfit = fundPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.holdingProfit)) return sum;
+      return sum + item.holdingProfit;
+    }, 0);
+
+    const fundEstimatedProfit = fundPositions.reduce((sum, item) => {
+      if (!Number.isFinite(item.estimatedProfit)) return sum;
+      return sum + item.estimatedProfit;
+    }, 0);
+
+    if (typeof chrome.runtime?.sendMessage === 'function') {
+      void chrome.runtime.sendMessage({
+        type: 'update-badge',
+        badge: badgeConfig,
+        metrics: {
+          stockCount: stockHoldings.length,
+          fundCount: fundHoldings.length,
+          stockMarket: stockMarketValue,
+          stockFloatingPnl: stockFloating,
+          stockDailyPnl: stockDaily,
+          fundAmount: fundHoldingAmount,
+          fundHoldingProfit,
+          fundEstimatedProfit,
+        },
+      });
+    }
+  }, [portfolioReady, badgeConfig, stockPositions, fundPositions, stockHoldings, fundHoldings]);
+
+  // 打开设置页
+  const openSettings = () => {
+    chrome.runtime.openOptionsPage();
+  };
+
+  // ---- 从 storage.local 读取后台缓存数据 ----
+  useEffect(() => {
+    // 初始加载
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['stockPositions', 'fundPositions', 'indexPositions'], (result: Record<string, unknown>) => {
+        if (Array.isArray(result.stockPositions)) setStockPositions(result.stockPositions as StockPosition[]);
+        if (Array.isArray(result.fundPositions)) setFundPositions(result.fundPositions as FundPosition[]);
+        if (Array.isArray(result.indexPositions)) {
+          const cached = result.indexPositions as MarketIndexQuote[];
+          setMarketIndexes(MARKET_INDEXES.map((item) => {
+            const found = cached.find((c) => c.code === item.code);
+            return found || { code: item.code, label: item.label, price: Number.NaN, change: Number.NaN, changePct: Number.NaN };
+          }));
+        }
+      });
+    }
+
+    // 监听后台刷新写入
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'local') return;
+      if (changes.stockPositions?.newValue) setStockPositions(changes.stockPositions.newValue as StockPosition[]);
+      if (changes.fundPositions?.newValue) setFundPositions(changes.fundPositions.newValue as FundPosition[]);
+      if (changes.indexPositions?.newValue) {
+        const cached = changes.indexPositions.newValue as MarketIndexQuote[];
+        setMarketIndexes(MARKET_INDEXES.map((item) => {
+          const found = cached.find((c) => c.code === item.code);
+          return found || { code: item.code, label: item.label, price: Number.NaN, change: Number.NaN, changePct: Number.NaN };
+        }));
+      }
+    };
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
+
+  // ---- Keepalive port 防止 service worker 被回收 ----
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.connect) {
+      const port = chrome.runtime.connect({ name: 'keepalive' });
+      return () => port.disconnect();
+    }
+  }, []);
+
+  // 首次加载时如果后台没有缓存，手动请求一次
   useEffect(() => {
     if (!portfolioReady) return;
     if (stockHoldings.length === 0) {
@@ -1124,61 +947,52 @@ export default function App() {
       setStocksLoading(false);
       return;
     }
+    // 检查是否已有缓存数据
+    if (stockPositions.length > 0) {
+      setStocksLoading(false);
+      return;
+    }
 
     let cancelled = false;
-    let running = false;
-
     const loadStocks = async () => {
-      if (running) return;
-      running = true;
       setStocksLoading(true);
-
-      // 阶段一：1 个批量请求拿报价，立即渲染表格
       try {
+        const { fetchBatchStockQuotes, fetchStockIntraday } = await import('../shared/fetch');
         const rows = await fetchBatchStockQuotes(stockHoldings);
         if (!cancelled) {
-          setStockPositions((prev) => {
-            const prevMap = new Map(prev.map((p) => [p.code, p]));
-            return rows.map((row) => ({
-              ...row,
-              intraday: prevMap.get(row.code)?.intraday ?? [],
-            }));
-          });
+          setStockPositions(rows);
           setStocksError('');
+          // 并行拉分时图
+          const codes = stockHoldings
+            .map((h) => normalizeStockCode(h.code))
+            .filter(Boolean);
+          codes.forEach(async (code) => {
+            try {
+              const intraday = await fetchStockIntraday(code);
+              if (!cancelled) {
+                setStockPositions((prev) =>
+                  prev.map((p) => (p.code === code ? { ...p, intraday } : p)),
+                );
+                // 写回 storage.local 让后台刷新能保留 intraday
+                if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                  const result = await chrome.storage.local.get('stockPositions');
+                  const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
+                  const updated = existing.map((p) => (p.code === code ? { ...p, intraday } : p));
+                  await chrome.storage.local.set({ stockPositions: updated });
+                }
+              }
+            } catch { /* ignore */ }
+          });
         }
       } catch {
         if (!cancelled) setStocksError('股票行情获取失败');
       } finally {
         if (!cancelled) setStocksLoading(false);
-        running = false;
       }
-
-      // 阶段二：并行拉分时图，拿到一个更新一个（与报价同周期，不阻塞 UI）
-      const codes = stockHoldings
-        .map((h) => normalizeStockCode(h.code))
-        .filter(Boolean);
-
-      codes.forEach(async (code) => {
-        try {
-          const intraday = await fetchStockIntraday(code);
-          if (!cancelled) {
-            setStockPositions((prev) =>
-              prev.map((p) => (p.code === code ? { ...p, intraday } : p)),
-            );
-          }
-        } catch {
-          // 单只失败不影响其他
-        }
-      });
     };
 
     void loadStocks();
-    const timer = window.setInterval(() => { void loadStocks(); }, STOCK_REFRESH_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    return () => { cancelled = true; };
   }, [portfolioReady, stockHoldings]);
 
   useEffect(() => {
@@ -1189,39 +1003,30 @@ export default function App() {
       setFundsLoading(false);
       return;
     }
+    if (fundPositions.length > 0) {
+      setFundsLoading(false);
+      return;
+    }
 
     let cancelled = false;
-    let running = false;
-
     const loadFunds = async () => {
-      if (running) return;
-      running = true;
       setFundsLoading(true);
       try {
+        const { fetchTiantianFundPosition } = await import('../shared/fetch');
         const rows = await Promise.all(fundHoldings.map((holding) => fetchTiantianFundPosition(holding)));
         if (!cancelled) {
           setFundPositions(rows);
           setFundsError('');
         }
       } catch {
-        if (!cancelled) {
-          setFundsError('基金行情获取失败');
-        }
+        if (!cancelled) setFundsError('基金行情获取失败');
       } finally {
-        if (!cancelled) {
-          setFundsLoading(false);
-        }
-        running = false;
+        if (!cancelled) setFundsLoading(false);
       }
     };
 
     void loadFunds();
-    const timer = window.setInterval(() => { void loadFunds(); }, FUND_REFRESH_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    return () => { cancelled = true; };
   }, [portfolioReady, fundHoldings]);
 
   useEffect(() => {
@@ -1288,6 +1093,9 @@ export default function App() {
   useEffect(() => {
     if (activeTab !== 'stocks' && stockDetailTarget) {
       setStockDetailTarget(null);
+    }
+    if (activeTab !== 'funds' && fundDetailTarget) {
+      setFundDetailTarget(null);
     }
   }, [activeTab, stockDetailTarget]);
 
@@ -1491,6 +1299,17 @@ export default function App() {
     setStockDetailTarget(null);
   };
 
+  const openFundDetail = (item: FundPosition) => {
+    setFundDetailTarget({
+      code: item.code,
+      name: item.name || item.code,
+    });
+  };
+
+  const closeFundDetail = () => {
+    setFundDetailTarget(null);
+  };
+
   // 开始内联编辑
   const startEditing = (kind: 'stock' | 'fund', code: string, field: 'cost' | 'shares' | 'units') => {
     const holding = kind === 'stock'
@@ -1675,6 +1494,16 @@ export default function App() {
           <button
             type="button"
             className="nav-btn theme-toggle-btn"
+            onClick={openSettings}
+            aria-label="打开设置"
+          >
+            <Settings size={11} />
+            <span>设置</span>
+          </button>
+
+          <button
+            type="button"
+            className="nav-btn theme-toggle-btn"
             onClick={toggleTheme}
             aria-label="切换主题"
           >
@@ -1781,12 +1610,21 @@ export default function App() {
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
                 fallbackName={stockDetailTarget.name}
                 onBack={closeStockDetail}
+              />
+            ) : null}
+
+            {activeTab === 'funds' && fundDetailTarget ? (
+              <FundDetailView
+                code={fundDetailTarget.code}
+                fundPosition={fundPositions.find((p) => p.code === fundDetailTarget.code)}
+                fundHolding={fundHoldings.find((h) => h.code === fundDetailTarget.code)}
+                onBack={closeFundDetail}
               />
             ) : null}
 
@@ -2170,8 +2008,24 @@ export default function App() {
                         }}
                         onDrop={() => handleFundDrop(item.code)}
                       >
-                        <td className={`name-col ${item.special ? 'special-row' : ''}`}>
-                          <span className="primary" title={item.name}>
+                        <td className={`name-col fund-detail-trigger ${item.special ? 'special-row' : ''}`}>
+                          <span
+                            className="primary"
+                            title={item.name}
+                            onClick={() => {
+                              if (sortingMode === 'funds') return;
+                              openFundDetail(item);
+                            }}
+                            role="button"
+                            tabIndex={sortingMode === 'funds' ? -1 : 0}
+                            onKeyDown={(e) => {
+                              if (sortingMode === 'funds') return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openFundDetail(item);
+                              }
+                            }}
+                          >
                             <span className="name-inline">
                               {sortingMode === 'funds' ? (
                                 <span className={`drag-handle ${isLockedPinned ? 'disabled' : ''}`}>
