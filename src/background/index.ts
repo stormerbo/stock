@@ -14,11 +14,13 @@ import {
 } from '../shared/fetch';
 import {
   DAILY_PROFIT_DETAILS_KEY,
+  DAILY_PROFIT_PENDING_SNAPSHOT_KEY,
   buildDailyProfitDetailRecord,
   normalizeDailyProfitDetailHistory,
   upsertDailyProfitDetailHistory,
 } from '../shared/profit-details';
 import {
+  createAlertRule,
   loadAlertConfig,
   saveAlertConfig,
   checkAlerts,
@@ -26,6 +28,7 @@ import {
   evaluateSpikeRule,
   pruneNotificationHistory,
   NOTIFICATION_HISTORY_KEY,
+  type AlertConfig,
   type NotificationRecord,
   type StockAlertConfig,
   type StockSnapshot,
@@ -42,7 +45,8 @@ export type BadgeMode =
   | 'stockDailyPnl'
   | 'fundAmount'
   | 'fundHoldingProfit'
-  | 'fundEstimatedProfit';
+  | 'fundEstimatedProfit'
+  | 'combinedPnl';
 
 export type BadgeConfig = {
   enabled: boolean;
@@ -215,9 +219,13 @@ async function loadBadgeConfig(): Promise<BadgeConfig> {
 // -----------------------------------------------------------
 
 function setupAlarms(config: RefreshConfig) {
-  chrome.alarms.create(ALARM_STOCK, { periodInMinutes: config.stockRefreshSeconds / 60 });
-  chrome.alarms.create(ALARM_FUND, { periodInMinutes: config.fundRefreshSeconds / 60 });
-  chrome.alarms.create(ALARM_INDEX, { periodInMinutes: config.indexRefreshSeconds / 60 });
+  const minSec = 2;
+  const stockSec = Math.max(minSec, config.stockRefreshSeconds);
+  const fundSec = Math.max(minSec, config.fundRefreshSeconds);
+  const indexSec = Math.max(minSec, config.indexRefreshSeconds);
+  chrome.alarms.create(ALARM_STOCK, { periodInMinutes: stockSec / 60 });
+  chrome.alarms.create(ALARM_FUND, { periodInMinutes: fundSec / 60 });
+  chrome.alarms.create(ALARM_INDEX, { periodInMinutes: indexSec / 60 });
 }
 
 function clearAlarms() {
@@ -326,6 +334,78 @@ async function refreshStocks() {
 // 告警检查与通知
 // -----------------------------------------------------------
 
+function ensureSpikeRuleForWatchlist(config: AlertConfig, watchlistCodes: string[]): { config: AlertConfig; changed: boolean } {
+  const normalizedCodes = Array.from(
+    new Set(
+      watchlistCodes
+        .map((code) => normalizeStockCode(code))
+        .filter((code): code is string => Boolean(code))
+    )
+  );
+
+  if (normalizedCodes.length === 0) return { config, changed: false };
+
+  const next: AlertConfig = {
+    ...config,
+    globalEnabled: true,
+    stocks: [...config.stocks],
+  };
+  let changed = config.globalEnabled !== true;
+
+  for (const code of normalizedCodes) {
+    let stockConfig = next.stocks.find((item) => item.code === code);
+    if (!stockConfig) {
+      stockConfig = { code, scope: 'all', rules: [] };
+      next.stocks.push(stockConfig);
+      changed = true;
+    }
+
+    const spikeRule = stockConfig.rules.find((rule) => rule.type === 'spike');
+    if (!spikeRule) {
+      const newRule = createAlertRule('spike');
+      newRule.spikePctThreshold = 2;
+      newRule.spikeWindowMinutes = 5;
+      newRule.direction = 'both';
+      newRule.enabled = true;
+      newRule.cooldownSeconds = 60;
+      stockConfig.rules = [...stockConfig.rules, newRule];
+      changed = true;
+      continue;
+    }
+
+    const shouldPatch =
+      spikeRule.enabled !== true ||
+      (spikeRule.spikePctThreshold ?? 2) !== 2 ||
+      (spikeRule.spikeWindowMinutes ?? 5) !== 5 ||
+      (spikeRule.direction ?? 'both') !== 'both' ||
+      (spikeRule.cooldownSeconds ?? 300) !== 60;
+
+    if (shouldPatch) {
+      spikeRule.enabled = true;
+      spikeRule.spikePctThreshold = 2;
+      spikeRule.spikeWindowMinutes = 5;
+      spikeRule.direction = 'both';
+      spikeRule.cooldownSeconds = 60;
+      changed = true;
+    }
+  }
+
+  return { config: next, changed };
+}
+
+async function syncAutoSpikeRulesFromHoldings() {
+  const [syncResult, config] = await Promise.all([
+    chrome.storage.sync.get(['stockHoldings']),
+    loadAlertConfig(),
+  ]);
+  const holdings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
+  const watchlistCodes = holdings.map((item) => item.code);
+  const { config: nextConfig, changed } = ensureSpikeRuleForWatchlist(config, watchlistCodes);
+  if (changed) {
+    await saveAlertConfig(nextConfig);
+  }
+}
+
 async function checkAndNotifyAlerts(positions: StockPosition[]) {
   const [config, spikeResult, notifResult, workModeResult] = await Promise.all([
     loadAlertConfig(),
@@ -333,7 +413,14 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]),
     chrome.storage.sync.get([WORK_MODE_KEY]),
   ]);
-  if (!config.globalEnabled || config.stocks.length === 0) return;
+  const watchlistCodes = positions.map((item) => item.code);
+  const { config: effectiveConfig, changed: autoPatched } = ensureSpikeRuleForWatchlist(config, watchlistCodes);
+  if (!effectiveConfig.globalEnabled || effectiveConfig.stocks.length === 0) {
+    if (autoPatched) {
+      await saveAlertConfig(effectiveConfig);
+    }
+    return;
+  }
 
   const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
   const inWorkMode = isWorkModeHours(workModeConfig);
@@ -348,15 +435,20 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
       changePct: p.dailyChangePct,
     }));
 
-  if (snapshots.length === 0) return;
+  if (snapshots.length === 0) {
+    if (autoPatched) {
+      await saveAlertConfig(effectiveConfig);
+    }
+    return;
+  }
 
-  const firedHistory = pruneFiredHistory(config.firedHistory);
+  const firedHistory = pruneFiredHistory(effectiveConfig.firedHistory);
   const spikeHistory = (spikeResult[SPIKE_HISTORY_KEY] as SpikePriceHistory) || {};
   const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
 
   // Build ruleId → ruleType map for notification records
   const ruleTypeMap = new Map<string, { type: string; config: StockAlertConfig }>();
-  for (const sc of config.stocks) {
+  for (const sc of effectiveConfig.stocks) {
     for (const rule of sc.rules) {
       ruleTypeMap.set(rule.id, { type: rule.type, config: sc });
     }
@@ -364,14 +456,14 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
 
   // Evaluate regular rules
   const { triggered, spikeHistory: updatedSpikeHistory } = checkAlerts(
-    config, snapshots, firedHistory, spikeHistory
+    effectiveConfig, snapshots, firedHistory, spikeHistory
   );
 
   // Evaluate spike rules
   const spikeTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
   const finalSpikeHistory: SpikePriceHistory = { ...updatedSpikeHistory };
 
-  for (const stockConfig of config.stocks) {
+  for (const stockConfig of effectiveConfig.stocks) {
     const snapshot = snapshots.find((s) => s.code === stockConfig.code);
     if (!snapshot) continue;
 
@@ -396,7 +488,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           code: stockConfig.code,
           name: snapshot.name,
           message: result.message,
-          ruleId: spikeRule.id,
+          ruleId: result.ruleId || spikeRule.id,
         });
       }
 
@@ -415,7 +507,10 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
 
   // Write to notification history
   const newRecords: NotificationRecord[] = allTriggered.map((a) => {
-    const ruleInfo = ruleTypeMap.get(a.ruleId);
+    const directInfo = ruleTypeMap.get(a.ruleId);
+    const rulePrefix = a.ruleId.split('::')[0];
+    const prefixedInfo = directInfo ?? ruleTypeMap.get(rulePrefix);
+    const ruleInfo = prefixedInfo;
     const snapshot = snapshots.find((s) => s.code === a.code);
     return {
       id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -436,10 +531,13 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   );
 
   if (allTriggered.length === 0) {
-    await chrome.storage.local.set({
-      [SPIKE_HISTORY_KEY]: finalSpikeHistory,
-      [NOTIFICATION_HISTORY_KEY]: updatedHistory,
-    });
+    await Promise.all([
+      chrome.storage.local.set({
+        [SPIKE_HISTORY_KEY]: finalSpikeHistory,
+        [NOTIFICATION_HISTORY_KEY]: updatedHistory,
+      }),
+      autoPatched ? saveAlertConfig(effectiveConfig) : Promise.resolve(),
+    ]);
     return;
   }
 
@@ -450,9 +548,9 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
       ruleId: a.ruleId,
       firedAt: Date.now(),
     }));
-    config.firedHistory = [...firedHistory, ...newFired];
+    effectiveConfig.firedHistory = [...firedHistory, ...newFired];
     await Promise.all([
-      saveAlertConfig(config),
+      saveAlertConfig(effectiveConfig),
       chrome.storage.local.set({ [SPIKE_HISTORY_KEY]: finalSpikeHistory, [NOTIFICATION_HISTORY_KEY]: updatedHistory }),
     ]);
     return;
@@ -476,9 +574,9 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     firedAt: Date.now(),
   }));
 
-  config.firedHistory = [...firedHistory, ...newFired];
+  effectiveConfig.firedHistory = [...firedHistory, ...newFired];
   await Promise.all([
-    saveAlertConfig(config),
+    saveAlertConfig(effectiveConfig),
     chrome.storage.local.set({
       [SPIKE_HISTORY_KEY]: finalSpikeHistory,
       [NOTIFICATION_HISTORY_KEY]: updatedHistory,
@@ -507,32 +605,63 @@ async function refreshFunds() {
 async function recordDailyProfitDetail() {
   try {
     const [localResult, syncResult] = await Promise.all([
-      chrome.storage.local.get(['stockPositions', 'fundPositions', DAILY_PROFIT_DETAILS_KEY]),
+      chrome.storage.local.get([
+        'stockPositions',
+        'fundPositions',
+        DAILY_PROFIT_DETAILS_KEY,
+        DAILY_PROFIT_PENDING_SNAPSHOT_KEY,
+      ]),
       chrome.storage.sync.get(['stockHoldings', 'fundHoldings']),
     ]);
 
+    const today = getShanghaiToday();
     const stockPositions = (Array.isArray(localResult.stockPositions) ? localResult.stockPositions : []) as StockPosition[];
     const fundPositions = (Array.isArray(localResult.fundPositions) ? localResult.fundPositions : []) as FundPosition[];
     const stockHoldings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
     const fundHoldings = (Array.isArray(syncResult.fundHoldings) ? syncResult.fundHoldings : []) as FundHoldingConfig[];
     const history = normalizeDailyProfitDetailHistory(localResult[DAILY_PROFIT_DETAILS_KEY]);
+    const pending = normalizeDailyProfitDetailHistory([localResult[DAILY_PROFIT_PENDING_SNAPSHOT_KEY]])[0];
+
+    let nextHistory = history;
+    let historyChanged = false;
+
+    // 只在跨日后把“前一日快照”结转进历史，避免当天记录写入
+    if (pending && pending.date < today) {
+      nextHistory = upsertDailyProfitDetailHistory(history, pending);
+      historyChanged = JSON.stringify(nextHistory) !== JSON.stringify(history);
+    }
 
     const hasHeldStock = stockHoldings.some((item) => Number(item.shares) > 0);
     const hasHeldFund = fundHoldings.some((item) => Number(item.units) > 0);
-    if (!hasHeldStock && !hasHeldFund) {
+
+    const todaySnapshot = (hasHeldStock || hasHeldFund)
+      ? buildDailyProfitDetailRecord(
+        today,
+        stockPositions,
+        fundPositions,
+        stockHoldings,
+        fundHoldings,
+        new Date().toISOString(),
+      )
+      : null;
+
+    let nextPending: unknown = null;
+    if (todaySnapshot) {
+      nextPending = todaySnapshot;
+    } else if (pending?.date === today) {
+      // 当天已生成过快照但当前无持仓时，保留快照，避免次日丢失昨日数据
+      nextPending = pending;
+    }
+
+    const pendingChanged = JSON.stringify(nextPending ?? null) !== JSON.stringify(pending ?? null);
+    if (!historyChanged && !pendingChanged) {
       return;
     }
 
-    const record = buildDailyProfitDetailRecord(
-      getShanghaiToday(),
-      stockPositions,
-      fundPositions,
-      stockHoldings,
-      fundHoldings,
-      new Date().toISOString(),
-    );
-    const nextHistory = upsertDailyProfitDetailHistory(history, record);
-    await chrome.storage.local.set({ [DAILY_PROFIT_DETAILS_KEY]: nextHistory });
+    await chrome.storage.local.set({
+      [DAILY_PROFIT_DETAILS_KEY]: nextHistory,
+      [DAILY_PROFIT_PENDING_SNAPSHOT_KEY]: nextPending,
+    });
   } catch (error) {
     console.warn('[Portfolio Pulse] record daily profit detail failed:', error);
   }
@@ -598,6 +727,7 @@ function computeMetrics(
     fundAmount: fundHoldingAmount,
     fundHoldingProfit,
     fundEstimatedProfit,
+    combinedPnl: daily + fundEstimatedProfit,
   };
 }
 
@@ -611,54 +741,74 @@ function applyBadgeText(config: BadgeConfig, metrics: Record<string, number>) {
   let color: [number, number, number, number] = [99, 102, 241, 255];
   const isClosed = !isTradingHours();
 
+  // Modes that should keep gain/loss colors even during non-trading hours
+  const pnlModes = new Set(['stockFloatingPnl', 'stockDailyPnl', 'fundHoldingProfit', 'fundEstimatedProfit', 'combinedPnl']);
+
+  // Sanitize all metrics to prevent NaN display
+  // Fill in missing keys with 0 (e.g. combinedPnl from popup message)
+  const defaults: Record<string, number> = {
+    stockCount: 0,
+    fundCount: 0,
+    stockMarket: 0,
+    stockFloatingPnl: 0,
+    stockDailyPnl: 0,
+    fundAmount: 0,
+    fundHoldingProfit: 0,
+    fundEstimatedProfit: 0,
+    combinedPnl: 0,
+  };
+  const m: Record<string, number> = {};
+  for (const key of Object.keys(defaults)) {
+    m[key] = Number.isFinite(metrics[key]) ? metrics[key] : defaults[key];
+  }
+
   switch (config.mode) {
     case 'stockCount':
-      text = `股${metrics.stockCount || 0}`;
+      text = `股${m.stockCount || 0}`;
       color = [59, 130, 246, 255];
       break;
     case 'stockMarket': {
-      const v = metrics.stockMarket || 0;
-      text = formatBadgeNumber(v);
+      text = formatBadgeNumber(m.stockMarket || 0);
       color = [99, 102, 241, 255];
       break;
     }
     case 'stockFloatingPnl': {
-      const v = metrics.stockFloatingPnl || 0;
-      text = formatBadgeNumber(v);
-      color = isClosed ? BADGE_CLOSED_COLOR : (v >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR);
+      text = formatBadgeNumber(m.stockFloatingPnl);
+      color = m.stockFloatingPnl >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR;
       break;
     }
     case 'stockDailyPnl': {
-      const v = metrics.stockDailyPnl || 0;
-      text = formatBadgeNumber(v);
-      color = isClosed ? BADGE_CLOSED_COLOR : (v >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR);
+      text = formatBadgeNumber(m.stockDailyPnl);
+      color = m.stockDailyPnl >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR;
       break;
     }
     case 'fundCount':
-      text = `基${metrics.fundCount || 0}`;
+      text = `基${m.fundCount || 0}`;
       color = [245, 158, 11, 255];
       break;
     case 'fundAmount': {
-      const v = metrics.fundAmount || 0;
-      text = formatBadgeNumber(v);
+      text = formatBadgeNumber(m.fundAmount || 0);
       color = [245, 158, 11, 255];
       break;
     }
     case 'fundHoldingProfit': {
-      const v = metrics.fundHoldingProfit || 0;
-      text = formatBadgeNumber(v);
-      color = isClosed ? BADGE_CLOSED_COLOR : (v >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR);
+      text = formatBadgeNumber(m.fundHoldingProfit);
+      color = m.fundHoldingProfit >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR;
       break;
     }
     case 'fundEstimatedProfit': {
-      const v = metrics.fundEstimatedProfit || 0;
-      text = formatBadgeNumber(v);
-      color = isClosed ? BADGE_CLOSED_COLOR : (v >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR);
+      text = formatBadgeNumber(m.fundEstimatedProfit);
+      color = m.fundEstimatedProfit >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR;
+      break;
+    }
+    case 'combinedPnl': {
+      text = formatBadgeNumber(m.combinedPnl);
+      color = m.combinedPnl >= 0 ? BADGE_UP_COLOR : BADGE_DOWN_COLOR;
       break;
     }
   }
 
-  if (isClosed) {
+  if (isClosed && !pnlModes.has(config.mode)) {
     color = BADGE_CLOSED_COLOR;
   }
 
@@ -707,6 +857,14 @@ function updateHoverTitle(indexPositions: MarketIndexQuote[], metrics: Record<st
     const sign = fundEst > 0 ? '+' : '-';
     const arrow = fundEst > 0 ? ' ▲' : '';
     lines.push(`基金预估收益： ${sign}${formatPnlNumber(Math.abs(fundEst))}${arrow}`);
+  }
+
+  // 合并盈亏（股票当日 + 基金预估）
+  const combined = metrics.combinedPnl;
+  if (Number.isFinite(combined) && combined !== 0) {
+    const sign = combined > 0 ? '+' : '-';
+    const arrow = combined > 0 ? ' ▲' : '';
+    lines.push(`总盈亏： ${sign}${formatPnlNumber(Math.abs(combined))}${arrow}`);
   }
 
   // 未读通知数
@@ -759,6 +917,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!existing[BADGE_STORAGE_KEY]) {
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
   }
+  await syncAutoSpikeRulesFromHoldings();
   startRefreshLoop();
   // 等数据刷新后更新悬浮标题
   setTimeout(() => void updateHoverTitleFromStorage(), 3000);
@@ -766,6 +925,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // Service worker 重启后重新注册 alarms
 startRefreshLoop();
+void syncAutoSpikeRulesFromHoldings();
 // Service worker 重启后也更新标题
 setTimeout(() => void updateHoverTitleFromStorage(), 2000);
 
@@ -777,6 +937,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   // holdings 变化 → 立即刷新
   if (area === 'sync' && (changes.stockHoldings || changes.fundHoldings)) {
+    if (changes.stockHoldings) {
+      void syncAutoSpikeRulesFromHoldings();
+    }
     void refreshStocks();
     void refreshFunds();
   }
@@ -853,40 +1016,49 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (request.type === 'test-notification') {
     void (async () => {
-      const d = (message as { data?: { code: string; name: string; message: string; ruleType: string; price: number; changePct: number } }).data;
-      if (!d) return;
+      try {
+        const d = (message as { data?: { code: string; name: string; message: string; ruleType: string; price: number; changePct: number } }).data;
+        if (!d) {
+          sendResponse({ ok: false, error: 'missing notification payload' });
+          return;
+        }
 
-      const workModeResult = await chrome.storage.sync.get([WORK_MODE_KEY]);
-      const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
-      const inWorkMode = isWorkModeHours(workModeConfig);
+        const workModeResult = await chrome.storage.sync.get([WORK_MODE_KEY]);
+        const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
+        const inWorkMode = isWorkModeHours(workModeConfig);
 
-      const record: NotificationRecord = {
-        id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        code: d.code,
-        name: d.name,
-        message: d.message,
-        ruleType: (d.ruleType ?? 'spike') as NotificationRecord['ruleType'],
-        price: d.price,
-        changePct: d.changePct,
-        firedAt: Date.now(),
-        read: false,
-      };
-
-      // Write to notification history
-      const notifResult = await chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]);
-      const existingHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
-      const updatedHistory = pruneNotificationHistory([...existingHistory, record], NOTIFICATION_KEEP_HOURS);
-      await chrome.storage.local.set({ [NOTIFICATION_HISTORY_KEY]: updatedHistory });
-
-      // If not in work mode, also show system notification
-      if (!inWorkMode) {
-        chrome.notifications.create(`test_${Date.now()}`, {
-          type: 'basic',
-          iconUrl: chrome.runtime.getURL('public/icon48.png'),
-          title: `🔔 告警测试通知 — ${d.name}`,
+        const record: NotificationRecord = {
+          id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          code: d.code,
+          name: d.name,
           message: d.message,
-          priority: 2,
-        });
+          ruleType: (d.ruleType ?? 'spike') as NotificationRecord['ruleType'],
+          price: d.price,
+          changePct: d.changePct,
+          firedAt: Date.now(),
+          read: false,
+        };
+
+        // Write to notification history
+        const notifResult = await chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]);
+        const existingHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
+        const updatedHistory = pruneNotificationHistory([...existingHistory, record], NOTIFICATION_KEEP_HOURS);
+        await chrome.storage.local.set({ [NOTIFICATION_HISTORY_KEY]: updatedHistory });
+
+        // If not in work mode, also show system notification
+        if (!inWorkMode) {
+          chrome.notifications.create(`test_${Date.now()}`, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('public/icon48.png'),
+            title: `🔔 告警测试通知 — ${d.name}`,
+            message: d.message,
+            priority: 2,
+          });
+        }
+
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });
       }
     })();
     return true;

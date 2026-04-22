@@ -1,6 +1,7 @@
 import type { FundHoldingConfig, FundPosition, StockHoldingConfig, StockPosition } from './fetch';
 
 export const DAILY_PROFIT_DETAILS_KEY = 'dailyProfitDetails';
+export const DAILY_PROFIT_PENDING_SNAPSHOT_KEY = 'dailyProfitPendingSnapshot';
 export const DAILY_PROFIT_HISTORY_KEEP_DAYS = 240;
 
 export type DailyStockProfitItem = {

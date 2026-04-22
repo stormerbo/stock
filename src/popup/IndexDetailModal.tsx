@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { isTradingHours } from './stockDetail';
 
+const UP_COLOR = '#e45555';
+const DN_COLOR = '#2aa568';
+
 type Props = {
   code: string;
   fallbackLabel: string;
@@ -232,6 +235,43 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
     ? chartModel.points.map((item) => `${toX(item.minuteIndex).toFixed(2)},${toY(item.price).toFixed(2)}`).join(' ')
     : '';
 
+  const baselineY = detail ? toY(detail.prevClose) : 0;
+
+  // Build color-coded price segments: red when segment midpoint is above baseline, green when below
+  const indexPriceSegments = useMemo(() => {
+    if (!chartModel || chartModel.points.length < 2) return { up: '', dn: '' };
+
+    // Find lunch break split point
+    let lunchBreak = chartModel.points.length;
+    for (let i = 1; i < chartModel.points.length; i += 1) {
+      if (chartModel.points[i].minuteIndex <= chartModel.points[i - 1].minuteIndex) {
+        lunchBreak = i;
+        break;
+      }
+    }
+
+    const ys: number[] = chartModel.points.map((item) => toY(item.price));
+    const up: string[] = [];
+    const dn: string[] = [];
+
+    // Build segments within each continuous block (before and after lunch break)
+    for (const [start, end] of [[0, lunchBreak - 1], [lunchBreak, chartModel.points.length - 1]] as [number, number][]) {
+      if (start >= end) continue;
+      for (let i = start; i < end; i += 1) {
+        const midY = (ys[i] + ys[i + 1]) / 2;
+        const seg = `${toX(chartModel.points[i].minuteIndex).toFixed(2)},${ys[i].toFixed(2)} ${toX(chartModel.points[i + 1].minuteIndex).toFixed(2)},${ys[i + 1].toFixed(2)}`;
+        (midY <= baselineY ? up : dn).push(seg);
+      }
+    }
+
+    const toPath = (pts: string[]) =>
+      pts.map((p) => `M ${p}`).join(' ');
+    return {
+      up: toPath(up),
+      dn: toPath(dn),
+    };
+  }, [chartModel, baselineY, toX, toY]);
+
   const tooltipLayout = activePoint
     ? (() => {
         const anchorX = shellPaddingLeft + toX(activePoint.minuteIndex);
@@ -322,7 +362,15 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
                   />
                 ))}
 
-                <polyline points={linePoints} className="index-minute-line" />
+                {/* Price line (dual-color: red above baseline, green below) */}
+                {chartModel && chartModel.points.length >= 2 ? (
+                  <>
+                    <path d={indexPriceSegments.up} fill="none" stroke={UP_COLOR} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d={indexPriceSegments.dn} fill="none" stroke={DN_COLOR} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                ) : (
+                  <polyline points={linePoints} className="index-minute-line" />
+                )}
                 <line
                   x1="0"
                   x2={mainWidth}

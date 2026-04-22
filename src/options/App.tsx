@@ -39,6 +39,7 @@ const BADGE_LABELS: Record<BadgeMode, string> = {
   fundAmount: '持有总额',
   fundHoldingProfit: '持有收益',
   fundEstimatedProfit: '估算收益',
+  combinedPnl: '总盈亏',
   off: '关闭角标',
 };
 
@@ -294,7 +295,7 @@ function saveStorageItem<T>(key: string, value: T): Promise<void> {
 
 function sendTestNotification() {
   if (typeof chrome?.runtime?.sendMessage !== 'function') return;
-  chrome.runtime.sendMessage({
+  void chrome.runtime.sendMessage({
     type: 'test-notification',
     data: {
       code: '600519',
@@ -304,7 +305,7 @@ function sendTestNotification() {
       price: 1750.00,
       changePct: 2.5,
     },
-  });
+  }).catch(() => undefined);
 }
 
 // -----------------------------------------------------------
@@ -413,6 +414,9 @@ export default function App() {
     });
   }, []);
 
+  // ---- Donate ----
+  const [showDonate, setShowDonate] = useState(false);
+
   // ---- Work Mode Config ----
   const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
   const [workModeDraft, setWorkModeDraft] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
@@ -465,22 +469,32 @@ export default function App() {
     setWorkModeDraft(workModeConfig);
   }, [displayConfig, refreshConfig, workModeConfig]);
 
-  // ---- Load stock holdings (all stocks, with name resolution) ----
+  // ---- Load stock holdings (all stocks, with name + position data) ----
   const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
+  const [stockPositions, setStockPositions] = useState<Map<string, { price: number; dailyChangePct: number }>>(new Map());
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
       chrome.storage.sync.get(['stockHoldings'], (result: Record<string, unknown>) => {
         const holdings = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as Array<{ code: string; name?: string; shares: number; special?: boolean }>;
         chrome.storage.local.get(['stockPositions'], (posResult: Record<string, unknown>) => {
-          const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as Array<{ code: string; name: string }>;
-          const posMap = new Map(positions.map(p => [p.code, p.name]));
-          setAllStocks(holdings.map(h => ({
-            code: h.code,
-            name: posMap.get(h.code) || h.name || h.code,
-            shares: h.shares || 0,
-            special: h.special || false,
-          })));
+          const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as Array<{ code: string; name: string; price: number; dailyChangePct: number }>;
+          const posMap = new Map<string, { price: number; dailyChangePct: number; name: string }>();
+          for (const p of positions) {
+            if (Number.isFinite(p.price)) {
+              posMap.set(p.code, { price: p.price, dailyChangePct: p.dailyChangePct ?? 0, name: p.name });
+            }
+          }
+          setStockPositions(posMap);
+          setAllStocks(holdings.map(h => {
+            const pos = posMap.get(h.code);
+            return {
+              code: h.code,
+              name: h.name || pos?.name || h.code,
+              shares: h.shares || 0,
+              special: h.special || false,
+            };
+          }));
         });
       });
     }
@@ -508,8 +522,6 @@ export default function App() {
     .filter((s) => !allStocks.some((h) => h.code === s.code))
     .map((s) => ({ code: s.code, name: s.code, shares: 0, special: false }));
 
-  const [newStockCode, setNewStockCode] = useState('');
-
   const createDefaultStockAlertConfig = useCallback((code: string, scope: AlertScope): StockAlertConfig => ({
     code,
     scope,
@@ -519,22 +531,6 @@ export default function App() {
       createAlertRule('change_pct'),
     ],
   }), []);
-
-  const handleAddStockCode = () => {
-    const code = newStockCode.trim().replace(/^((sh|sz))/i, '');
-    if (!/^\d{6}$/.test(code)) {
-      setNewStockCode('');
-      return;
-    }
-    const exists = filteredStocks.some((s) => s.code === code) || manualStocks.some((s) => s.code === code);
-    if (exists) {
-      setNewStockCode('');
-      return;
-    }
-    const newConfig = createDefaultStockAlertConfig(code, alertDraft.scope);
-    setAlertDraft((prev) => ({ ...prev, stocks: [...prev.stocks, newConfig] }));
-    setNewStockCode('');
-  };
 
   const handleSaveAlerts = useCallback(async () => {
     setSaving(true);
@@ -557,9 +553,14 @@ export default function App() {
         <header className="options-header">
           <h1>配置中心</h1>
           <p className="desc">角标设置即时生效，其余配置需手动保存</p>
-          <button type="button" className="theme-btn" onClick={toggleTheme}>
-            {theme === 'dark' ? '🌞 浅色' : '🌙 深色'}
-          </button>
+          <div className="header-actions">
+            <button type="button" className="theme-btn" onClick={toggleTheme}>
+              {theme === 'dark' ? '🌞 浅色' : '🌙 深色'}
+            </button>
+            <button type="button" className="donate-btn" onClick={() => setShowDonate(true)}>
+              ☕ 打赏
+            </button>
+          </div>
         </header>
 
         {/* ---- 角标设置 ---- */}
@@ -599,16 +600,18 @@ export default function App() {
               </div>
               <span className="badge-group-title">其他</span>
               <div className="badge-compact-row">
-                <label className={`badge-compact-item ${badgeConfig.mode === 'off' ? 'active' : ''}`}>
-                  <input
-                    type="radio"
-                    name="badge-mode"
-                    value="off"
-                    checked={badgeConfig.mode === 'off'}
-                    onChange={() => updateBadge('off')}
-                  />
-                  <span>关闭角标</span>
-                </label>
+                {(['combinedPnl', 'off'] as const).map((mode) => (
+                  <label key={mode} className={`badge-compact-item ${badgeConfig.mode === mode ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="badge-mode"
+                      value={mode}
+                      checked={badgeConfig.mode === mode}
+                      onChange={() => updateBadge(mode)}
+                    />
+                    <span>{BADGE_LABELS[mode]}</span>
+                  </label>
+                ))}
               </div>
             </div>
           </div>
@@ -682,10 +685,10 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      stockRefreshSeconds: Math.min(60, Math.max(1, Number(e.target.value) || 1)),
+                      stockRefreshSeconds: Math.min(60, Math.max(2, Number(e.target.value) || 2)),
                     }))
                   }
-                  min={1}
+                  min={2}
                   max={60}
                   className="number-input"
                 />
@@ -705,10 +708,10 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      fundRefreshSeconds: Math.min(300, Math.max(1, Number(e.target.value) || 1)),
+                      fundRefreshSeconds: Math.min(300, Math.max(2, Number(e.target.value) || 2)),
                     }))
                   }
-                  min={1}
+                  min={2}
                   max={300}
                   className="number-input"
                 />
@@ -728,10 +731,10 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      indexRefreshSeconds: Math.min(120, Math.max(1, Number(e.target.value) || 1)),
+                      indexRefreshSeconds: Math.min(120, Math.max(2, Number(e.target.value) || 2)),
                     }))
                   }
-                  min={1}
+                  min={2}
                   max={120}
                   className="number-input"
                 />
@@ -855,28 +858,11 @@ export default function App() {
           <div className="alert-stocks-list">
             <div className="alert-stocks-header">
               <span>个股告警规则</span>
-              <span className="alert-count-hint">
-                {(filteredStocks.length + manualStocks.length) === 0 ? '当前没有股票' : `${filteredStocks.length + manualStocks.length} 只股票`}
-              </span>
+              <span className="alert-count-hint">自选股自动开通急速异动告警</span>
             </div>
 
-            {/* Manual add input */}
-            <div className="alert-add-stock-row">
-              <input
-                type="text"
-                className="alert-stock-code-input"
-                placeholder="输入股票代码，如 600519"
-                value={newStockCode}
-                onChange={(e) => setNewStockCode(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockCode(); }}
-              />
-              <button type="button" className="btn-small" onClick={handleAddStockCode}>
-                + 添加
-              </button>
-            </div>
-
-            {filteredStocks.length + manualStocks.length === 0 ? (
-              <div className="alert-empty-hint">当前范围下没有股票</div>
+            {allStocks.length === 0 ? (
+              <div className="alert-empty-hint">当前没有自选股</div>
             ) : (
               [...filteredStocks, ...manualStocks].map((stock) => {
                 const existingConfig = alertDraft.stocks.find((s) => s.code === stock.code);
@@ -926,6 +912,21 @@ export default function App() {
             恢复
           </button>
         </div>
+
+        {/* ---- Donate Modal ---- */}
+        {showDonate && (
+          <div className="donate-overlay" onClick={() => setShowDonate(false)}>
+            <div className="donate-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="donate-modal-header">
+                <span>感谢支持 ☕</span>
+                <button type="button" className="donate-close-btn" onClick={() => setShowDonate(false)}>✕</button>
+              </div>
+              <div className="donate-modal-body">
+                <img src="/donate-qr.jpg" alt="微信支付二维码" className="donate-qr-image" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

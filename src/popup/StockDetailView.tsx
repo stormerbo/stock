@@ -9,6 +9,9 @@ import {
   type StockPeriod,
 } from "./stockDetail";
 
+const UP_COLOR = "#e45555";
+const DN_COLOR = "#2aa568";
+
 type Props = {
   code: string;
   fallbackName: string;
@@ -153,6 +156,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   const [windowSize, setWindowSize] = useState<number>(isMinuteStyle ? 0 : 240);
   const [viewOffset, setViewOffset] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // Indicator visibility toggles
@@ -189,6 +193,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
     setViewOffset(0);
     setWindowSize(isMinuteStyle ? 0 : 240);
     setHoverIndex(null);
+    setHoverSvgX(null);
     dragRef.current = null;
     setIsDragging(false);
   }, [detail.period, isMinuteStyle]);
@@ -243,6 +248,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = chartAreaRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
+    if (visibleKline.length === 0) return;
 
     if (dragRef.current !== null) {
       const dx = e.clientX - dragRef.current.startX;
@@ -254,15 +260,37 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
       );
       setViewOffset(newOffset);
       setHoverIndex(null);
+      setHoverSvgX(null);
     } else {
       const relX = clamp((e.clientX - rect.left) / rect.width, 0, 0.9999);
-      setHoverIndex(clamp(Math.floor(relX * visibleKline.length), 0, visibleKline.length - 1));
+      const currentHoverX = relX * SVG_W;
+      setHoverSvgX(currentHoverX);
+
+      if (isMinuteStyle && isSingleMinute) {
+        let nearestIdx = 0;
+        let nearestDist = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < minuteXs.length; i += 1) {
+          const dist = Math.abs(minuteXs[i] - currentHoverX);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestIdx = i;
+          }
+        }
+        setHoverIndex(nearestIdx);
+      } else if (isMinuteStyle) {
+        setHoverIndex(clamp(Math.floor(relX * visibleKline.length), 0, visibleKline.length - 1));
+      } else {
+        const candleStep = SVG_W / visibleKline.length;
+        const nearestIdx = clamp(Math.round((currentHoverX - candleStep / 2) / candleStep), 0, visibleKline.length - 1);
+        setHoverIndex(nearestIdx);
+      }
     }
   };
 
   const handleMouseLeave = () => {
     if (dragRef.current !== null) return;
     setHoverIndex(null);
+    setHoverSvgX(null);
   };
 
   const handleMouseUp = () => {
@@ -356,6 +384,28 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
     return `M 0.00,${minuteBaselineY.toFixed(2)} L ${pts.join(' L ')} L ${lastX.toFixed(2)},${minuteBaselineY.toFixed(2)} Z`;
   })();
 
+  // Build color-coded price segments: red when segment midpoint is above baseline, green when below
+  const minutePriceSegments = useMemo(() => {
+    if (closes.length < 2) return { up: '', dn: '' };
+    const ys: number[] = [];
+    for (let i = 0; i < closes.length; i += 1) {
+      ys.push(mainHeight - ((closes[i] - minuteMin) / (minuteMax - minuteMin)) * mainHeight);
+    }
+    const up: string[] = [];
+    const dn: string[] = [];
+    for (let i = 0; i < ys.length - 1; i += 1) {
+      const midY = (ys[i] + ys[i + 1]) / 2;
+      const seg = `${minuteXs[i].toFixed(2)},${ys[i].toFixed(2)} ${minuteXs[i + 1].toFixed(2)},${ys[i + 1].toFixed(2)}`;
+      (midY <= minuteBaselineY ? up : dn).push(seg);
+    }
+    const toPath = (pts: string[]) =>
+      pts.map((p) => `M ${p}`).join(' ');
+    return {
+      up: toPath(up),
+      dn: toPath(dn),
+    };
+  }, [closes, minuteXs, mainHeight, minuteMin, minuteMax, minuteBaselineY]);
+
   // Noon break is always at 50% of the chart (120 / 240 = 0.5)
   const noonBreakX = isSingleMinute ? SVG_W * 0.5 : -1;
 
@@ -380,9 +430,10 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   const activeBar   = visibleKline[activeIndex];
   const prevClose = isMinuteStyle ? baseline : (activeIndex > 0 ? visibleKline[activeIndex - 1].close : activeBar.open);
   const activeChangePct = prevClose > 0 ? ((activeBar.close - prevClose) / prevClose) * 100 : Number.NaN;
-  const activeX = isMinuteStyle
+  const activePointX = isMinuteStyle
     ? minuteXs[activeIndex]
     : activeIndex * step + step / 2;
+  const activeX = hoverSvgX === null ? activePointX : clamp(hoverSvgX, 0, SVG_W);
   const activeCloseY = isMinuteStyle
     ? mainHeight - ((activeBar.close - minuteMin) / (minuteMax - minuteMin)) * mainHeight
     : mainHeight - ((activeBar.close - min) / priceRange) * mainHeight;
@@ -499,8 +550,15 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
               <path d={minuteFillPath} fill="url(#min-fill-dn)" clipPath="url(#min-clip-dn)" />
               {/* Avg line (toggleable) */}
               {showAvgLine && <path d={minuteAvgPath} className="minute-avg-line" fill="none" />}
-              {/* Price line */}
-              <path d={minutePricePath} fill="none" stroke={minuteColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Price line (dual-color: red above baseline, green below) */}
+              {closes.length >= 2 ? (
+                <>
+                  <path d={minutePriceSegments.up} fill="none" stroke={UP_COLOR} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={minutePriceSegments.dn} fill="none" stroke={DN_COLOR} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </>
+              ) : (
+                <path d={minutePricePath} fill="none" stroke={minuteColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              )}
               {/* Baseline */}
               <line x1="0" x2={SVG_W} y1={minuteBaselineY.toFixed(2)} y2={minuteBaselineY.toFixed(2)} className="minute-baseline" />
               {/* 11:30/13:00 break */}
@@ -556,7 +614,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
           {isMinuteStyle ? (
             <>
               <circle
-                cx={activeX.toFixed(2)}
+                cx={activePointX.toFixed(2)}
                 cy={activeCloseY.toFixed(2)}
                 r="4"
                 fill="white"
@@ -566,7 +624,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
               {hoverIndex !== null ? (() => {
                 const label = activeBar.date.slice(-5);
                 const bw = label.length * 6.5 + 10;
-                const bx = Math.max(bw / 2 + 2, Math.min(SVG_W - bw / 2 - 2, activeX));
+                const bx = Math.max(bw / 2 + 2, Math.min(SVG_W - bw / 2 - 2, activePointX));
                 return (
                   <g>
                     <rect x={(bx - bw / 2).toFixed(1)} y={(mainHeight - 17).toFixed(1)} width={bw.toFixed(1)} height="15" rx="3" fill="rgba(24,26,38,0.88)" />
@@ -619,7 +677,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
             const amountWan = activeBar.close * activeBar.volume * 100 / 10000;
             const label = `${formatNumber(amountWan, 2)}万`;
             const bw = label.length * 6.5 + 10;
-            const bx = Math.max(bw / 2 + 2, Math.min(SVG_W - bw / 2 - 2, activeX));
+            const bx = Math.max(bw / 2 + 2, Math.min(SVG_W - bw / 2 - 2, activePointX));
             return (
               <g>
                 <rect x={(bx - bw / 2).toFixed(1)} y={(volumeHeight - 17).toFixed(1)} width={bw.toFixed(1)} height="15" rx="3" fill="rgba(24,26,38,0.88)" />

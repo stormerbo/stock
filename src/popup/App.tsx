@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Bell, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
@@ -30,7 +30,7 @@ import {
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 
-type PageTab = 'stocks' | 'funds' | 'account' | 'notifications';
+type PageTab = 'stocks' | 'funds' | 'account' | 'profit' | 'notifications';
 type ThemeMode = 'dark' | 'light';
 
 type IndexDetailTarget = {
@@ -127,6 +127,34 @@ function formatRelativeTime(timestampMs: number): string {
   if (diffHour < 24) return `${diffHour} 小时前`;
   const d = new Date(timestampMs);
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+// Render notification message with colored prices and change percentages
+function renderNotificationMessage(message: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  // Match patterns: ¥123.45, +1.23%, -1.23%, 上涨至 ¥123.45, 上涨/下跌 1.23%
+  const regex = /([¥¥]?\d+\.\d+|\+\d+\.\d+%|-\d+\.\d+%)/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(message)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(message.slice(lastIndex, match.index));
+    }
+    const text = match[0];
+    // Determine color: negative numbers and percentages = down, positive = up
+    if (text.startsWith('-')) {
+      parts.push(<span key={match.index} className="down notif-value">{text}</span>);
+    } else if (text.startsWith('+') || text.includes('%')) {
+      parts.push(<span key={match.index} className="up notif-value">{text}</span>);
+    } else {
+      parts.push(<span key={match.index} className="notif-value">{text}</span>);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < message.length) {
+    parts.push(message.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : message;
 }
 
 function formatDetailUpdatedTime(raw: string): string {
@@ -495,10 +523,12 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
 
 function IntradayChart({
   data,
-  prevClose
+  prevClose,
+  intradayPrevClose
 }: {
   data: Array<{ time: string; price: number }>;
   prevClose?: number;
+  intradayPrevClose?: number;
 }) {
   if (!data || data.length === 0) {
     return (
@@ -534,15 +564,20 @@ function IntradayChart({
     );
   }
 
+  const maybeIntradayPrevClose: number = intradayPrevClose ?? Number.NaN;
+  const effectivePrevClose: number = Number.isFinite(maybeIntradayPrevClose)
+    ? maybeIntradayPrevClose
+    : (prevClose !== undefined && Number.isFinite(prevClose) ? prevClose : Number.NaN);
+  const hasPrevClose = Number.isFinite(effectivePrevClose);
+
   const prices = dataPoints.map(d => d.price);
   let minPrice = Math.min(...prices);
   let maxPrice = Math.max(...prices);
 
   // 如果提供了昨收价，将其纳入显示范围，确保横线始终可见
-  const hasPrevClose = prevClose !== undefined && Number.isFinite(prevClose);
   if (hasPrevClose) {
-    minPrice = Math.min(minPrice, prevClose);
-    maxPrice = Math.max(maxPrice, prevClose);
+    minPrice = Math.min(minPrice, effectivePrevClose);
+    maxPrice = Math.max(maxPrice, effectivePrevClose);
   }
 
   const rawRange = Math.max(maxPrice - minPrice, Math.max(maxPrice * 0.0002, 0.01));
@@ -588,22 +623,7 @@ function IntradayChart({
 
   const pathSegments = buildPathSegments();
 
-  const generateLinePath = (segment: IntradayDataPoint[]) => {
-    if (segment.length < 2) return '';
-    
-    return segment.map((point, idx) => {
-      const x = toX(point.minuteIndex);
-      const y = toY(point.price);
-      return `${idx === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    }).join(' ');
-  };
-
-  const lastPrice = dataPoints[dataPoints.length - 1]?.price ?? 0;
-  const firstPrice = dataPoints[0]?.price ?? 0;
-  const baselinePrice: number = hasPrevClose ? prevClose : firstPrice;
-  const isUp = lastPrice >= baselinePrice;
-  const lineColor = isUp ? '#ff5e57' : '#1fc66d';
-  // 横向虚线基于昨收价绘制（若无昨收价则 fallback 到开盘价）
+  const baselinePrice: number = hasPrevClose ? effectivePrevClose : (dataPoints[0]?.price ?? 0);
   const baselineY = toY(baselinePrice);
 
   return (
@@ -619,20 +639,30 @@ function IntradayChart({
         y2={baselineY.toFixed(2)}
         className="intraday-open-line"
       />
-      {pathSegments.map((segment, idx) => {
-        const path = generateLinePath(segment);
-        if (!path) return null;
-        return (
+      {pathSegments.flatMap((segment, idx) => {
+        // Generate individual colored sub-segments within each continuous segment
+        const subSegments: { path: string; color: string; key: string }[] = [];
+        for (let i = 0; i < segment.length - 1; i++) {
+          const subPath = `${toX(segment[i].minuteIndex).toFixed(2)} ${toY(segment[i].price).toFixed(2)} ${toX(segment[i + 1].minuteIndex).toFixed(2)} ${toY(segment[i + 1].price).toFixed(2)}`;
+          const midPrice = (segment[i].price + segment[i + 1].price) / 2;
+          subSegments.push({
+            path: subPath,
+            color: midPrice >= baselinePrice ? '#ff5e57' : '#1fc66d',
+            key: `seg-${idx}-${i}`,
+          });
+        }
+        if (subSegments.length === 0) return null;
+        return subSegments.map(({ path, color, key }) => (
           <path
-            key={`line-${idx}`}
-            d={path}
+            key={key}
+            d={`M ${path}`}
             fill="none"
-            stroke={lineColor}
+            stroke={color}
             strokeWidth="1.7"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-        );
+        ));
       })}
     </svg>
   );
@@ -858,11 +888,29 @@ export default function App() {
     ] as const;
   }, [fundPositions, stockPositions]);
 
+  const profitMetrics = useMemo(() => {
+    const latest = dailyProfitDetails[0];
+    if (!latest) {
+      return [
+        { label: '昨日股票盈亏', value: '-', tone: 'neutral' },
+        { label: '昨日基金收益', value: '-', tone: 'neutral' },
+        { label: '昨日合计收益', value: '-', tone: 'neutral' },
+      ] as const;
+    }
+    return [
+      { label: '昨日股票盈亏', value: formatNumber(latest.stockDailyPnl, 2), tone: toneClass(latest.stockDailyPnl) },
+      { label: '昨日基金收益', value: formatNumber(latest.fundDailyProfit, 2), tone: toneClass(latest.fundDailyProfit) },
+      { label: '昨日合计收益', value: formatNumber(latest.totalDailyProfit, 2), tone: toneClass(latest.totalDailyProfit) },
+    ] as const;
+  }, [dailyProfitDetails]);
+
   const metrics = activeTab === 'stocks'
     ? stockMetrics
     : activeTab === 'funds'
       ? fundMetrics
-      : accountMetrics;
+      : activeTab === 'profit'
+        ? profitMetrics
+        : accountMetrics;
 
   const accountSnapshot = useMemo(() => {
     const average = (values: number[]): number => {
@@ -1196,6 +1244,7 @@ export default function App() {
           fundAmount: fundHoldingAmount,
           fundHoldingProfit,
           fundEstimatedProfit,
+          combinedPnl: stockDaily + fundEstimatedProfit,
         },
       });
     }
@@ -1435,7 +1484,7 @@ function clearIntradayIfStale(
                 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
                   const result = await chrome.storage.local.get('stockPositions');
                   const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
-                  const updated = existing.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p));
+                  const updated = existing.map((p) => (p.code === code ? { ...p, prevClose, intraday: { data, prevClose } } : p));
                   await chrome.storage.local.set({ stockPositions: updated });
                 }
               }
@@ -1621,6 +1670,7 @@ function clearIntradayIfStale(
         prev,
         {
           code: normalizedCode,
+          name: stock.name,
           shares: 0,
           cost: 0,
           pinned: false,
@@ -1886,11 +1936,21 @@ function clearIntradayIfStale(
         const holdingProfitRate = nextCost > 0 && Number.isFinite(item.latestNav)
           ? ((item.latestNav - nextCost) / nextCost) * 100
           : Number.NaN;
-        const estimatedProfit = item.navDisclosedToday
-          ? 0
-          : (nextUnits > 0 && Number.isFinite(item.estimatedNav) && Number.isFinite(item.latestNav)
+        // estimatedProfit = 当日收益
+        // 已公布净值：用 changePct 反推昨日净值
+        // 未公布：今日 = estimatedNav，昨日 = latestNav
+        let recalcEstimated: number;
+        if (item.navDisclosedToday && Number.isFinite(item.latestNav)) {
+          if (Number.isFinite(item.changePct) && item.changePct !== 0) {
+            recalcEstimated = (item.latestNav * nextUnits * item.changePct) / (100 + item.changePct);
+          } else {
+            recalcEstimated = Number.NaN;
+          }
+        } else {
+          recalcEstimated = nextUnits > 0 && Number.isFinite(item.estimatedNav) && Number.isFinite(item.latestNav)
             ? (item.estimatedNav - item.latestNav) * nextUnits
-            : Number.NaN);
+            : Number.NaN;
+        }
 
         return {
           ...item,
@@ -1899,7 +1959,7 @@ function clearIntradayIfStale(
           holdingAmount,
           holdingProfit,
           holdingProfitRate,
-          estimatedProfit,
+          recalcEstimated,
         };
       };
 
@@ -1985,6 +2045,14 @@ function clearIntradayIfStale(
           >
             <PieChart size={12} />
             <span>账户</span>
+          </button>
+          <button
+            type="button"
+            className={`nav-btn ${activeTab === 'profit' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profit')}
+          >
+            <FileText size={12} />
+            <span>收益</span>
           </button>
           <button
             type="button"
@@ -2082,8 +2150,8 @@ function clearIntradayIfStale(
           ) : null}
 
           {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
-            <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
-              <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
+            <header className={`page-header ${(activeTab === 'account' || activeTab === 'profit') ? 'account-page-header' : ''}`}>
+              <section className={`metrics inline ${(activeTab === 'account' || activeTab === 'profit') ? 'account' : ''}`}>
                 {metrics.map((item) => (
                   <article className="metric-card compact" key={item.label}>
                     <p>{item.label}</p>
@@ -2101,6 +2169,15 @@ function clearIntradayIfStale(
                       <span>{`基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
                       <span>{`仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
                       <span>{`已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
+                    </div>
+                  </div>
+                ) : activeTab === 'profit' ? (
+                  <div className="account-header-copy">
+                    <span className="account-header-eyebrow">收益明细</span>
+                    <div className="account-header-pills">
+                      <span>{`已记录 ${recentDailyProfitDetails.length} 日`}</span>
+                      <span>{`最近交易日 ${recentDailyProfitDetails[0]?.date ?? '--'}`}</span>
+                      <span>{`总条目 ${recentDailyProfitDetails.reduce((sum, item) => sum + item.stockCount + item.fundCount, 0)}`}</span>
                     </div>
                   </div>
                 ) : (
@@ -2227,12 +2304,6 @@ function clearIntradayIfStale(
                           {formatNumber(accountSnapshot.stockDaily, 2)}
                         </strong>
                       </div>
-                      <div className="account-stat-row">
-                        <span>加入后累计收益率</span>
-                        <strong className={toneClass(accountSnapshot.totalSinceAddedRate)}>
-                          {formatPercent(accountSnapshot.totalSinceAddedRate)}
-                        </strong>
-                      </div>
                     </div>
                   </article>
 
@@ -2277,10 +2348,6 @@ function clearIntradayIfStale(
                         <span>当日盈亏</span>
                         <strong className={toneClass(accountSnapshot.stockDaily)}>{formatNumber(accountSnapshot.stockDaily, 2)}</strong>
                       </div>
-                      <div className="account-detail-item">
-                        <span>加入后累计收益率</span>
-                        <strong className={toneClass(accountSnapshot.stockSinceAddedRate)}>{formatPercent(accountSnapshot.stockSinceAddedRate)}</strong>
-                      </div>
                     </div>
                   </article>
 
@@ -2307,14 +2374,15 @@ function clearIntradayIfStale(
                         <span>估算收益</span>
                         <strong className={toneClass(accountSnapshot.fundEstimated)}>{formatNumber(accountSnapshot.fundEstimated, 2)}</strong>
                       </div>
-                      <div className="account-detail-item">
-                        <span>加入后累计收益率</span>
-                        <strong className={toneClass(accountSnapshot.fundSinceAddedRate)}>{formatPercent(accountSnapshot.fundSinceAddedRate)}</strong>
-                      </div>
                     </div>
                   </article>
                 </div>
 
+              </div>
+            ) : null}
+
+            {activeTab === 'profit' && !stockDetailTarget && !fundDetailTarget ? (
+              <div className="account-dashboard">
                 <article className="account-card account-daily-card">
                   <div className="account-daily-header">
                     <span className="account-section-label">收益明细（按交易日）</span>
@@ -2351,7 +2419,7 @@ function clearIntradayIfStale(
                       </table>
                     </div>
                   ) : (
-                    <div className="account-daily-empty">当前还没有交易日收益记录，开盘刷新后会自动生成。</div>
+                    <div className="account-daily-empty">当前还没有交易日收益记录，第二天打开应用后会自动生成。</div>
                   )}
                 </article>
               </div>
@@ -2397,7 +2465,7 @@ function clearIntradayIfStale(
                             {item.name}
                             <span className="notification-code">({item.code})</span>
                           </span>
-                          <span className="notification-message">{item.message}</span>
+                          <span className="notification-message">{renderNotificationMessage(item.message)}</span>
                         </div>
                         <span className="notification-time">{formatRelativeTime(item.firedAt)}</span>
                       </div>
@@ -2412,7 +2480,7 @@ function clearIntradayIfStale(
                 <table className="data-table stock-table">
                   <thead>
                     <tr>
-                      <th>股票/市值</th>
+                      <th>股票</th>
                       <th>分时图</th>
                       <th>盈亏</th>
                       <th>当日盈亏</th>
@@ -2480,7 +2548,7 @@ function clearIntradayIfStale(
                                   </span>
                                 ) : null}
                                 {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
-                                <span className="name-text">{item.name || item.code}</span>
+                                <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                                 {badge ? (
                                   <span className={`stock-badge ${badge.tone}`}>{badge.label}</span>
                                 ) : null}
@@ -2508,6 +2576,7 @@ function clearIntradayIfStale(
                             <IntradayChart
                               data={item.intraday?.data ?? []}
                               prevClose={item.prevClose}
+                              intradayPrevClose={item.intraday?.prevClose}
                             />
                           </td>
                           <td className="dual-value">

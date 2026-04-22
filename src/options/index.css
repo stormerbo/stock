@@ -88,10 +88,15 @@ body.theme-light {
   font-size: 14px;
 }
 
-.theme-btn {
+.header-actions {
   position: absolute;
   top: 4px;
   right: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.theme-btn {
   padding: 6px 14px;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -105,6 +110,79 @@ body.theme-light {
 .theme-btn:hover {
   background: var(--glass-bg-strong);
   color: var(--text-0);
+}
+
+.donate-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--glass-bg);
+  color: var(--text-1);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.donate-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+/* ---- Donate Modal ---- */
+
+.donate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.donate-modal {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 340px;
+  width: 90%;
+}
+
+.donate-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.donate-close-btn {
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  color: var(--text-1);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.donate-close-btn:hover {
+  color: var(--text-0);
+}
+
+.donate-modal-body {
+  display: flex;
+  justify-content: center;
+}
+
+.donate-qr-image {
+  width: 100%;
+  max-width: 300px;
+  border-radius: 8px;
 }
 
 /* ---- Section ---- */
@@ -557,6 +635,27 @@ body.theme-light .color-scheme-item.active {
 .alert-stock-code-input::placeholder {
   color: var(--text-1);
   opacity: 0.6;
+}
+
+.alert-stock-select {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text-0);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.alert-stock-select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.alert-stock-select option {
+  background: var(--bg-1);
+  color: var(--text-0);
 }
 
 /* ---- Work Mode ---- */

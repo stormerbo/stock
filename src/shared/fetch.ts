@@ -4,6 +4,7 @@
 
 export type StockHoldingConfig = {
   code: string;
+  name?: string;
   shares: number;
   cost: number;
   pinned?: boolean;
@@ -96,6 +97,33 @@ export function toTencentStockCode(code: string): string {
   const plain = normalizeStockCode(code);
   if (!plain) return '';
   return /^[689]/.test(plain) ? `sh${plain}` : `sz${plain}`;
+}
+
+function toEastmoneyStockSecid(code: string): string {
+  const plain = normalizeStockCode(code);
+  if (!plain) return '';
+  const market = /^[569]/.test(plain) ? 1 : 0;
+  return `${market}.${plain}`;
+}
+
+function toEastmoneyIndexSecid(code: string): string {
+  const normalized = code.trim().toLowerCase();
+  if (normalized === 'sz399300') {
+    // 沪深300 在东财接口中使用 1.000300
+    return '1.000300';
+  }
+  const matched = normalized.match(/^(sh|sz)(\d{6})$/);
+  if (!matched) return '';
+  const market = matched[1] === 'sh' ? 1 : 0;
+  return `${market}.${matched[2]}`;
+}
+
+function formatEastmoneyTime(raw: unknown): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return '-';
+  const date = new Date(n * 1000);
+  if (!Number.isFinite(date.getTime())) return '-';
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
 }
 
 export function normalizeFundCode(code: string): string {
@@ -202,44 +230,9 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
 
   if (valid.length === 0) return [];
 
-  const tencentCodes = valid.map((h) => toTencentStockCode(h.code));
-  const text = await fetchTextWithEncoding(
-    `https://qt.gtimg.cn/q=${tencentCodes.join(',')}`,
-    'gb18030',
-  );
-
-  return valid.map((holding) => {
-    const tencentCode = toTencentStockCode(holding.code);
-    const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
-    const parts = matched?.[1]?.split('~') ?? [];
-
-    const shares = Math.max(0, holding.shares);
-    const cost = Math.max(0, holding.cost);
-    const price = toNumber(parts[3]);
-    const prevClose = toNumber(parts[4]);
-    const change = toNumber(parts[31]);
-    const changePct = toNumber(parts[32]);
-    const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
-      ? (price - cost) * shares
-      : Number.NaN;
-    const dailyPnl = shares > 0 && Number.isFinite(change)
-      ? change * shares
-      : Number.NaN;
-
-    return {
-      code: holding.code,
-      name: parts[1] || holding.code,
-      shares,
-      cost,
-      price,
-      prevClose,
-      floatingPnl,
-      dailyPnl,
-      dailyChangePct: changePct,
-      intraday: { data: [], prevClose: Number.NaN },
-      updatedAt: formatQuoteTime(parts[30] || ''),
-    };
-  });
+  const eastmoneyRows = await fetchBatchStockQuotesFromEastmoney(valid);
+  if (eastmoneyRows.length > 0) return eastmoneyRows;
+  return fetchBatchStockQuotesFromTencent(valid);
 }
 
 export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
@@ -278,11 +271,195 @@ export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ 
 }
 
 export async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
+  const eastmoneyRows = await fetchMarketIndexesFromEastmoney();
+  if (eastmoneyRows.length > 0) return eastmoneyRows;
+  return fetchMarketIndexesFromTencent();
+}
+
+type EastmoneyUlistRow = {
+  f2?: number | string;   // latest price
+  f3?: number | string;   // pct change
+  f6?: number | string;   // turnover amount
+  f12?: string;           // code
+  f13?: number | string;  // market
+  f14?: string;           // name
+  f18?: number | string;  // prev close
+  f124?: number | string; // timestamp
+};
+
+function parseEastmoneyUlistPayload(text: string): EastmoneyUlistRow[] {
+  const raw = text.trim();
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return [];
+    try {
+      parsed = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      return [];
+    }
+  }
+
+  const json = parsed as {
+    data?: {
+      diff?: EastmoneyUlistRow[];
+    };
+  };
+
+  const diff = json.data?.diff;
+  return Array.isArray(diff) ? diff : [];
+}
+
+async function fetchEastmoneyUlistRows(secids: string[]): Promise<EastmoneyUlistRow[]> {
+  if (secids.length === 0) return [];
+  const query = encodeURIComponent(secids.join(','));
+  const text = await fetchTextViaExtension(
+    `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f2,f3,f12,f13,f14,f18,f6,f124&secids=${query}`
+  );
+  return parseEastmoneyUlistPayload(text);
+}
+
+function toEastmoneySecidFromRow(row: EastmoneyUlistRow): string {
+  const market = Number(row.f13);
+  const code = String(row.f12 ?? '').trim();
+  if (!Number.isFinite(market) || !code) return '';
+  return `${Math.trunc(market)}.${code}`;
+}
+
+async function fetchBatchStockQuotesFromEastmoney(holdings: Array<StockHoldingConfig & { code: string }>): Promise<StockPosition[]> {
+  try {
+    const secids = holdings.map((holding) => toEastmoneyStockSecid(holding.code)).filter(Boolean);
+    if (secids.length === 0) return [];
+    const rows = await fetchEastmoneyUlistRows(secids);
+    if (rows.length === 0) return [];
+
+    const rowMap = new Map<string, EastmoneyUlistRow>();
+    for (const row of rows) {
+      const secid = toEastmoneySecidFromRow(row);
+      if (secid) rowMap.set(secid, row);
+    }
+
+    return holdings.map((holding) => {
+      const secid = toEastmoneyStockSecid(holding.code);
+      const row = rowMap.get(secid);
+
+      const shares = Math.max(0, holding.shares);
+      const cost = Math.max(0, holding.cost);
+      const price = toNumber(row?.f2);
+      const prevClose = toNumber(row?.f18);
+      const change = Number.isFinite(price) && Number.isFinite(prevClose) ? price - prevClose : Number.NaN;
+      const changePct = toNumber(row?.f3);
+      const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
+        ? (price - cost) * shares
+        : Number.NaN;
+      const dailyPnl = shares > 0 && Number.isFinite(change)
+        ? change * shares
+        : Number.NaN;
+
+      return {
+        code: holding.code,
+        name: String(row?.f14 ?? '').trim() || holding.code,
+        shares,
+        cost,
+        price,
+        prevClose,
+        floatingPnl,
+        dailyPnl,
+        dailyChangePct: changePct,
+        intraday: { data: [], prevClose: Number.NaN },
+        updatedAt: formatEastmoneyTime(row?.f124),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchBatchStockQuotesFromTencent(holdings: Array<StockHoldingConfig & { code: string }>): Promise<StockPosition[]> {
+  const tencentCodes = holdings.map((h) => toTencentStockCode(h.code));
+  const text = await fetchTextWithEncoding(
+    `https://qt.gtimg.cn/q=${tencentCodes.join(',')}`,
+    'gb18030',
+  );
+
+  return holdings.map((holding) => {
+    const tencentCode = toTencentStockCode(holding.code);
+    const matched = text.match(new RegExp(`v_${tencentCode}=\"([^\"]*)\"`));
+    const parts = matched?.[1]?.split('~') ?? [];
+
+    const shares = Math.max(0, holding.shares);
+    const cost = Math.max(0, holding.cost);
+    const price = toNumber(parts[3]);
+    const prevClose = toNumber(parts[4]);
+    const change = toNumber(parts[31]);
+    const changePct = toNumber(parts[32]);
+    const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
+      ? (price - cost) * shares
+      : Number.NaN;
+    const dailyPnl = shares > 0 && Number.isFinite(change)
+      ? change * shares
+      : Number.NaN;
+
+    return {
+      code: holding.code,
+      name: parts[1] || holding.code,
+      shares,
+      cost,
+      price,
+      prevClose,
+      floatingPnl,
+      dailyPnl,
+      dailyChangePct: changePct,
+      intraday: { data: [], prevClose: Number.NaN },
+      updatedAt: formatQuoteTime(parts[30] || ''),
+    };
+  });
+}
+
+async function fetchMarketIndexesFromEastmoney(): Promise<MarketIndexQuote[]> {
+  try {
+    const secids = MARKET_INDEXES.map((item) => toEastmoneyIndexSecid(item.code)).filter(Boolean);
+    if (secids.length === 0) return [];
+    const rows = await fetchEastmoneyUlistRows(secids);
+    if (rows.length === 0) return [];
+
+    const rowMap = new Map<string, EastmoneyUlistRow>();
+    for (const row of rows) {
+      const secid = toEastmoneySecidFromRow(row);
+      if (secid) rowMap.set(secid, row);
+    }
+
+    return MARKET_INDEXES.map((item) => {
+      const secid = toEastmoneyIndexSecid(item.code);
+      const row = rowMap.get(secid);
+      const price = toNumber(row?.f2);
+      const prevClose = toNumber(row?.f18);
+      const change = Number.isFinite(price) && Number.isFinite(prevClose) ? price - prevClose : Number.NaN;
+
+      return {
+        code: item.code,
+        label: String(row?.f14 ?? '').trim() || item.label,
+        price,
+        change,
+        changePct: toNumber(row?.f3),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchMarketIndexesFromTencent(): Promise<MarketIndexQuote[]> {
   const query = MARKET_INDEXES.map((item) => `s_${item.code}`).join(',');
   const text = await fetchTextWithEncoding(`https://qt.gtimg.cn/q=${query}`, 'gb18030');
 
   return MARKET_INDEXES.map((item) => {
-    const matched = text.match(new RegExp(`v_s_${item.code}="([^"]*)";?`));
+    const matched = text.match(new RegExp(`v_s_${item.code}=\"([^\"]*)\";?`));
     const parts = matched?.[1]?.split('~') ?? [];
     return {
       code: item.code,
@@ -651,12 +828,27 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       ? ((latestNav - cost) / cost) * 100
       : Number.NaN;
 
-    const yesterdayNav = Number.isFinite(actualNav) ? actualNav : toNumber(gzData?.dwjz);
-    const estimatedProfit = navDisclosedToday
-      ? 0
-      : (units > 0 && Number.isFinite(estNav) && Number.isFinite(yesterdayNav)
-        ? (estNav - yesterdayNav) * units
-        : Number.NaN);
+    // 估算收益：始终用 (今日净值 - 昨日净值) * units
+    // navDisclosedToday 时：今日 = actualNav，昨日 = dwjz
+    // 未公布时：今日 = estNav，昨日 = latestNav（上一个交易日净值）
+    const prevNav = toNumber(gzData?.dwjz);
+    let estimatedProfit: number;
+    if (navDisclosedToday && Number.isFinite(latestNav)) {
+      // 已公布：用 actualNav - prevNav
+      if (Number.isFinite(prevNav)) {
+        estimatedProfit = (latestNav - prevNav) * units;
+      } else if (Number.isFinite(actualNavChange) && actualNavChange !== 0) {
+        // dwjz 缺失时，用 changePct 反推：profit ≈ latestNav * units * changePct / (100 + changePct)
+        estimatedProfit = (latestNav * units * actualNavChange) / (100 + actualNavChange);
+      } else {
+        estimatedProfit = Number.NaN;
+      }
+    } else {
+      // 未公布：今日 = estNav，昨日 = latestNav
+      estimatedProfit = Number.isFinite(estNav) && Number.isFinite(latestNav)
+        ? (estNav - latestNav) * units
+        : Number.NaN;
+    }
 
     return {
       code,
