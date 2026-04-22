@@ -13,7 +13,11 @@
     "https://web.ifzq.gtimg.cn/*",
     "https://smartbox.gtimg.cn/*",
     "https://fund.eastmoney.com/*",
-    "https://fundgz.1234567.com.cn/*"
+    "https://fundgz.1234567.com.cn/*",
+    "https://fundmobapi.eastmoney.com/*",
+    "https://push2.eastmoney.com/*",
+    "https://40.push2.eastmoney.com/*",
+    "https://vip.stock.finance.sina.com.cn/*"
   ],
   "action": {
     "default_popup": "src/popup/index.html",

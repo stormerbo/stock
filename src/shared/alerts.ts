@@ -3,20 +3,28 @@
 // -----------------------------------------------------------
 
 export type AlertScope = 'all' | 'special' | 'holding';
+export type AlertDirection = 'up' | 'down' | 'both';
 
-export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility';
+export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility' | 'spike';
 
 export type AlertRule = {
   id: string;
   type: AlertRuleType;
   enabled: boolean;
+  // optional label for display
+  name?: string;
   // price_up / price_down
   targetPrice?: number;
   // change_pct — threshold in percentage (e.g. 5 means 5%)
   changeThreshold?: number;
+  // change_pct / spike direction control
+  direction?: AlertDirection;
   // volatility — lookback days + threshold
   volatilityDays?: number;
   volatilityThreshold?: number;
+  // spike — rapid price movement detection
+  spikePctThreshold?: number;   // percentage threshold, default 2
+  spikeWindowMinutes?: number; // lookback window in minutes, default 5
   // cooldown in seconds (default 300 = 5 min)
   cooldownSeconds?: number;
 };
@@ -32,6 +40,13 @@ export type AlertFiredRecord = {
   ruleId: string;
   firedAt: number; // timestamp ms
 };
+
+export type SpikePriceEntry = {
+  price: number;
+  timestamp: number; // ms
+};
+
+export type SpikePriceHistory = Record<string, SpikePriceEntry[]>;
 
 export type AlertConfig = {
   globalEnabled: boolean;
@@ -49,6 +64,106 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
 
 const ALERT_STORAGE_KEY = 'alertConfig';
 
+const VALID_RULE_TYPES: AlertRuleType[] = ['price_up', 'price_down', 'change_pct', 'volatility', 'spike'];
+
+function normalizeNumber(value: unknown, fallback: number, min?: number, max?: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  let next = n;
+  if (typeof min === 'number') next = Math.max(min, next);
+  if (typeof max === 'number') next = Math.min(max, next);
+  return next;
+}
+
+function normalizeDirection(raw: unknown): AlertDirection {
+  return raw === 'up' || raw === 'down' || raw === 'both' ? raw : 'both';
+}
+
+function normalizeRule(rule: Partial<AlertRule> | undefined): AlertRule {
+  const type = VALID_RULE_TYPES.includes(rule?.type as AlertRuleType)
+    ? (rule!.type as AlertRuleType)
+    : 'change_pct';
+
+  const normalized: AlertRule = {
+    id: String(rule?.id || genRuleId()),
+    type,
+    enabled: rule?.enabled !== false,
+    cooldownSeconds: normalizeNumber(rule?.cooldownSeconds, 300, 60, 3600),
+  };
+
+  const trimmedName = String(rule?.name ?? '').trim();
+  if (trimmedName) normalized.name = trimmedName;
+
+  if (type === 'price_up' || type === 'price_down') {
+    normalized.targetPrice = normalizeNumber(rule?.targetPrice, 0, 0);
+  }
+
+  if (type === 'change_pct') {
+    normalized.changeThreshold = normalizeNumber(rule?.changeThreshold, 5, 0);
+    normalized.direction = normalizeDirection(rule?.direction);
+  }
+
+  if (type === 'volatility') {
+    normalized.volatilityDays = normalizeNumber(rule?.volatilityDays, 5, 1, 60);
+    normalized.volatilityThreshold = normalizeNumber(rule?.volatilityThreshold, 10, 0);
+  }
+
+  if (type === 'spike') {
+    normalized.spikePctThreshold = normalizeNumber(rule?.spikePctThreshold, 2, 0.1);
+    normalized.spikeWindowMinutes = normalizeNumber(rule?.spikeWindowMinutes, 5, 1, 120);
+    normalized.direction = normalizeDirection(rule?.direction);
+  }
+
+  return normalized;
+}
+
+function normalizeStockConfig(config: Partial<StockAlertConfig> | undefined, fallbackScope: AlertScope): StockAlertConfig | null {
+  const code = String(config?.code ?? '').trim();
+  if (!code) return null;
+
+  const scope = config?.scope === 'all' || config?.scope === 'special' || config?.scope === 'holding'
+    ? config.scope
+    : fallbackScope;
+
+  const sourceRules = Array.isArray(config?.rules) ? config!.rules : [];
+  const normalizedRules = sourceRules.map((rule) => normalizeRule(rule));
+
+  return {
+    code,
+    scope,
+    rules: normalizedRules,
+  };
+}
+
+function normalizeAlertConfig(raw: Partial<AlertConfig> | undefined): AlertConfig {
+  const scope = raw?.scope === 'all' || raw?.scope === 'special' || raw?.scope === 'holding'
+    ? raw.scope
+    : DEFAULT_ALERT_CONFIG.scope;
+
+  const stocks = Array.isArray(raw?.stocks)
+    ? raw.stocks
+      .map((stock) => normalizeStockConfig(stock, scope))
+      .filter((item): item is StockAlertConfig => item !== null)
+    : [];
+
+  const firedHistory = Array.isArray(raw?.firedHistory)
+    ? raw.firedHistory
+      .map((item) => ({
+        code: String(item?.code ?? '').trim(),
+        ruleId: String(item?.ruleId ?? '').trim(),
+        firedAt: normalizeNumber(item?.firedAt, 0, 0),
+      }))
+      .filter((item) => Boolean(item.code && item.ruleId && item.firedAt > 0))
+    : [];
+
+  return {
+    globalEnabled: raw?.globalEnabled === true,
+    scope,
+    stocks,
+    firedHistory,
+  };
+}
+
 // -----------------------------------------------------------
 // Persistence
 // -----------------------------------------------------------
@@ -56,21 +171,16 @@ const ALERT_STORAGE_KEY = 'alertConfig';
 export async function loadAlertConfig(): Promise<AlertConfig> {
   try {
     const result = await chrome.storage.sync.get(ALERT_STORAGE_KEY);
-    const raw = result[ALERT_STORAGE_KEY] as AlertConfig | undefined;
+    const raw = result[ALERT_STORAGE_KEY] as Partial<AlertConfig> | undefined;
     if (!raw) return DEFAULT_ALERT_CONFIG;
-    return {
-      ...DEFAULT_ALERT_CONFIG,
-      ...raw,
-      stocks: raw.stocks ?? [],
-      firedHistory: raw.firedHistory ?? [],
-    };
+    return normalizeAlertConfig(raw);
   } catch {
     return DEFAULT_ALERT_CONFIG;
   }
 }
 
 export async function saveAlertConfig(config: AlertConfig): Promise<void> {
-  await chrome.storage.sync.set({ [ALERT_STORAGE_KEY]: config });
+  await chrome.storage.sync.set({ [ALERT_STORAGE_KEY]: normalizeAlertConfig(config) });
 }
 
 // -----------------------------------------------------------
@@ -123,12 +233,22 @@ function evaluateRule(
 
     case 'change_pct': {
       const threshold = rule.changeThreshold ?? 5;
-      const absChange = Math.abs(snapshot.changePct);
-      if (Number.isFinite(absChange) && absChange >= threshold) {
+      const direction = rule.direction ?? 'both';
+
+      const triggered = direction === 'up'
+        ? snapshot.changePct >= threshold
+        : direction === 'down'
+          ? snapshot.changePct <= -threshold
+          : Math.abs(snapshot.changePct) >= threshold;
+
+      if (Number.isFinite(snapshot.changePct) && triggered) {
         const direction = snapshot.changePct >= 0 ? '上涨' : '下跌';
+        const ruleHint = (rule.direction ?? 'both') === 'both'
+          ? `波动超过阈值 ${threshold}%`
+          : `${(rule.direction ?? 'both') === 'up' ? '涨幅' : '跌幅'}超过阈值 ${threshold}%`;
         return {
           triggered: true,
-          message: `${snapshot.name}(${snapshot.code}) 今日${direction} ${snapshot.changePct.toFixed(2)}%，波动超过阈值 ${threshold}%`,
+          message: `${snapshot.name}(${snapshot.code}) 今日${direction} ${snapshot.changePct.toFixed(2)}%，${ruleHint}`,
         };
       }
       break;
@@ -191,24 +311,35 @@ export function evaluateVolatilityRule(
 export function checkAlerts(
   config: AlertConfig,
   snapshots: StockSnapshot[],
-  firedHistory: AlertFiredRecord[]
-): Array<{ code: string; name: string; message: string }> {
-  if (!config.globalEnabled) return [];
+  firedHistory: AlertFiredRecord[],
+  spikeHistory: SpikePriceHistory = {}
+): {
+  triggered: Array<{ code: string; name: string; message: string; ruleId: string }>;
+  spikeHistory: SpikePriceHistory;
+} {
+  if (!config.globalEnabled) return { triggered: [], spikeHistory };
 
-  const results: Array<{ code: string; name: string; message: string }> = [];
+  const results: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
   const newFired: AlertFiredRecord[] = [];
+  const updatedHistory = { ...spikeHistory };
 
   for (const stockConfig of config.stocks) {
     const snapshot = snapshots.find((s) => s.code === stockConfig.code);
     if (!snapshot) continue;
 
     for (const rule of stockConfig.rules) {
+      if (rule.type === 'spike' && rule.enabled) {
+        // Spike evaluation happens in background (needs price history tracking)
+        continue;
+      }
+
       const result = evaluateRule(rule, snapshot, [...firedHistory, ...newFired]);
       if (result?.triggered) {
         results.push({
           code: snapshot.code,
           name: snapshot.name,
           message: result.message,
+          ruleId: rule.id,
         });
         newFired.push({
           code: snapshot.code,
@@ -219,7 +350,56 @@ export function checkAlerts(
     }
   }
 
-  return results;
+  return { triggered: results, spikeHistory: updatedHistory };
+}
+
+// -----------------------------------------------------------
+// Spike detection — evaluates rapid price movement
+// -----------------------------------------------------------
+
+export function evaluateSpikeRule(
+  rule: AlertRule,
+  code: string,
+  name: string,
+  price: number,
+  history: SpikePriceEntry[],
+  firedHistory: AlertFiredRecord[]
+): { triggered: boolean; message: string; direction: 'up' | 'down' } | null {
+  if (!rule.enabled || rule.type !== 'spike') return null;
+
+  const cooldown = rule.cooldownSeconds ?? 300;
+  if (isInCooldown(firedHistory, code, rule.id, cooldown)) return null;
+
+  const windowMs = (rule.spikeWindowMinutes ?? 5) * 60 * 1000;
+  const threshold = rule.spikePctThreshold ?? 2;
+  const now = Date.now();
+  const expectedDirection = rule.direction ?? 'both';
+
+  // Add current price point
+  const newHistory = [...history.filter((e) => now - e.timestamp < windowMs * 2), { price, timestamp: now }];
+
+  // Find baseline: earliest price within the window
+  const windowEntries = newHistory.filter((e) => now - e.timestamp <= windowMs);
+  if (windowEntries.length < 2) return { triggered: false, message: '', direction: 'up' };
+
+  const baseline = windowEntries[0];
+  const changePct = ((price - baseline.price) / baseline.price) * 100;
+
+  if (Math.abs(changePct) >= threshold) {
+    const direction = changePct >= 0 ? 'up' : 'down';
+    if (expectedDirection !== 'both' && direction !== expectedDirection) {
+      return null;
+    }
+    const arrow = direction === 'up' ? '🚀' : '📉';
+    const label = direction === 'up' ? '急速拉升' : '急速打压';
+    return {
+      triggered: true,
+      message: `${name}(${code}) ${label}\n近${rule.spikeWindowMinutes ?? 5}分钟内${direction === 'up' ? '上涨' : '下跌'} ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%，现价 ¥${price.toFixed(2)}`,
+      direction,
+    };
+  }
+
+  return null;
 }
 
 // -----------------------------------------------------------
@@ -230,8 +410,78 @@ export function genRuleId(): string {
   return `r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function createAlertRule(type: AlertRuleType): AlertRule {
+  if (type === 'price_up' || type === 'price_down') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      targetPrice: 0,
+      cooldownSeconds: 300,
+    };
+  }
+
+  if (type === 'change_pct') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      changeThreshold: 5,
+      direction: 'both',
+      cooldownSeconds: 300,
+    };
+  }
+
+  if (type === 'volatility') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      volatilityDays: 5,
+      volatilityThreshold: 10,
+      cooldownSeconds: 600,
+    };
+  }
+
+  return {
+    id: genRuleId(),
+    type: 'spike',
+    enabled: true,
+    spikePctThreshold: 2,
+    spikeWindowMinutes: 5,
+    direction: 'both',
+    cooldownSeconds: 300,
+  };
+}
+
 // Clean old fired records (older than 24 hours)
 export function pruneFiredHistory(history: AlertFiredRecord[]): AlertFiredRecord[] {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return history.filter((r) => r.firedAt >= cutoff);
+}
+
+// -----------------------------------------------------------
+// Notification history
+// -----------------------------------------------------------
+
+export const NOTIFICATION_HISTORY_KEY = 'notificationHistory';
+
+export type NotificationRecord = {
+  id: string;
+  code: string;
+  name: string;
+  message: string;
+  ruleType: AlertRuleType;
+  price: number;
+  changePct: number;
+  firedAt: number;
+  read: boolean;
+};
+
+export function pruneNotificationHistory(
+  history: NotificationRecord[],
+  keepHours = 24
+): NotificationRecord[] {
+  const cutoff = Date.now() - keepHours * 60 * 60 * 1000;
   return history.filter((r) => r.firedAt >= cutoff);
 }

@@ -8,6 +8,9 @@ export type StockHoldingConfig = {
   cost: number;
   pinned?: boolean;
   special?: boolean;
+  // hidden metadata for watchlist performance since added
+  addedAt?: string;
+  addedPrice?: number;
 };
 
 export type FundHoldingConfig = {
@@ -17,6 +20,9 @@ export type FundHoldingConfig = {
   name?: string;
   pinned?: boolean;
   special?: boolean;
+  // hidden metadata for watchlist performance since added
+  addedAt?: string;
+  addedNav?: number;
 };
 
 export type StockPosition = {
@@ -29,7 +35,7 @@ export type StockPosition = {
   floatingPnl: number;
   dailyPnl: number;
   dailyChangePct: number;
-  intraday: Array<{ time: string; price: number }>;
+  intraday: { data: Array<{ time: string; price: number }>; prevClose: number };
   updatedAt: string;
 };
 
@@ -134,6 +140,26 @@ export function isTradingHours(): boolean {
   return totalMinutes >= MORNING_START && totalMinutes <= AFTERNOON_END;
 }
 
+/**
+ * 判断当前时间是否在 A 股交易日的数据可用时段（上海时区 09:00 - 15:00，含午休）。
+ * 用于控制侧边栏市场统计面板的显示——午休时数据仍有效，应继续显示。
+ */
+export function isMarketDataAvailable(): boolean {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  const totalMinutes = hour * 60 + minute;
+
+  // 09:00 - 15:00（含午休 11:30-13:00）
+  return totalMinutes >= 9 * 60 && totalMinutes <= AFTERNOON_END;
+}
+
 // -----------------------------------------------------------
 // Fetch helpers
 // -----------------------------------------------------------
@@ -210,25 +236,31 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
       floatingPnl,
       dailyPnl,
       dailyChangePct: changePct,
-      intraday: [],
+      intraday: { data: [], prevClose: Number.NaN },
       updatedAt: formatQuoteTime(parts[30] || ''),
     };
   });
 }
 
-export async function fetchStockIntraday(code: string): Promise<Array<{ time: string; price: number }>> {
+export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
   const tencentCode = toTencentStockCode(code);
-  if (!tencentCode) return [];
+  if (!tencentCode) return { data: [], prevClose: Number.NaN };
 
   const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
   const json = await response.json() as {
     data?: Record<string, {
+      qt?: Record<string, string[]>;
       data?: { data?: string[] };
     }>;
   };
 
-  const intradayRaw = json.data?.[tencentCode]?.data?.data ?? [];
-  return intradayRaw
+  const payload = json.data?.[tencentCode];
+  const intradayRaw = payload?.data?.data ?? [];
+  // qt[code][4] = prevClose (昨收价)
+  const quote = payload?.qt?.[tencentCode];
+  const prevClose = quote ? toNumber(quote[4]) : Number.NaN;
+
+  const data = intradayRaw
     .map((line) => {
       const parts = String(line).split(' ');
       if (parts.length < 2) return null;
@@ -241,6 +273,8 @@ export async function fetchStockIntraday(code: string): Promise<Array<{ time: st
       return { time: formattedTime, price };
     })
     .filter((item): item is { time: string; price: number } => item !== null);
+
+  return { data, prevClose };
 }
 
 export async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
@@ -258,6 +292,274 @@ export async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
       changePct: toNumber(parts[5]),
     };
   });
+}
+
+export type MarketStats = {
+  upCount: number;      // 上涨家数
+  flatCount: number;    // 平盘家数
+  downCount: number;    // 下跌家数
+  turnover: number;     // 成交额（亿）
+  prevTurnover: number; // 昨成交（亿）
+  volumeChange: number; // 缩量/放量（亿）
+};
+
+const MARKET_STATS_HOST = 'https://40.push2.eastmoney.com';
+const SINA_MARKET_HOST = 'https://vip.stock.finance.sina.com.cn';
+const MARKET_SNAPSHOT_INDEXES = ['sh000001', 'sz399001'] as const;
+
+type MarketBreadthSnapshot = {
+  upCount: number;
+  flatCount: number;
+  downCount: number;
+  turnover: number; // 亿
+};
+
+type MarketTurnoverSnapshot = {
+  turnover: number; // 亿
+  prevTurnover: number; // 亿
+};
+
+function roundTo2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function parseSinaCountText(text: string): number {
+  const parsed = JSON.parse(text) as unknown;
+  const n = Number(parsed);
+  return Number.isFinite(n) ? Math.floor(n) : 0;
+}
+
+async function fetchSinaBreadthSnapshot(): Promise<MarketBreadthSnapshot> {
+  const countText = await fetchTextViaExtension(
+    `${SINA_MARKET_HOST}/quotes_service/api/json_v2.php/Market_Center.getHQNodeStockCountSimple?node=hs_a`
+  );
+  const totalCount = parseSinaCountText(countText);
+  if (totalCount <= 0) {
+    throw new Error('invalid sina market count');
+  }
+
+  const PAGE_SIZE = 3000;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  let upCount = 0;
+  let flatCount = 0;
+  let downCount = 0;
+  let totalTurnover = 0;
+
+  for (let page = 1; page <= totalPages; page++) {
+    const text = await fetchTextViaExtension(
+      `${SINA_MARKET_HOST}/quotes_service/api/json_v2.php/Market_Center.getHQNodeDataSimple?node=hs_a&num=${PAGE_SIZE}&page=${page}&sort=changepercent&asc=0`
+    );
+    const rows = JSON.parse(text) as Array<Record<string, unknown>>;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      continue;
+    }
+
+    for (const item of rows) {
+      const change = toNumber(item.changepercent ?? item.pricechange);
+      const amount = toNumber(item.amount);
+
+      if (Number.isFinite(change)) {
+        if (change > 0.001) upCount++;
+        else if (change < -0.001) downCount++;
+        else flatCount++;
+      }
+
+      if (Number.isFinite(amount)) {
+        totalTurnover += amount;
+      }
+    }
+  }
+
+  return {
+    upCount,
+    flatCount,
+    downCount,
+    turnover: roundTo2(totalTurnover / 1e8),
+  };
+}
+
+function parseTencentSimpleAmountWan(text: string, code: string): number {
+  const matched = text.match(new RegExp(`v_s_${code}=\"([^\"]*)\";?`));
+  const parts = matched?.[1]?.split('~') ?? [];
+  // s_ quote layout: ... ~ volume ~ amount(万元) ~ ...
+  return toNumber(parts[7]);
+}
+
+function pickPrevKlineAmountWan(rows: unknown, today: string): number {
+  if (!Array.isArray(rows) || rows.length === 0) return Number.NaN;
+  const normalized = rows
+    .filter((row): row is Array<string | number> => Array.isArray(row))
+    .map((row) => ({
+      date: String(row[0] ?? ''),
+      amountWan: toNumber(row[8]),
+    }))
+    .filter((row) => row.date && Number.isFinite(row.amountWan));
+
+  if (normalized.length === 0) return Number.NaN;
+  const todayIdx = normalized.findIndex((row) => row.date === today);
+  if (todayIdx > 0) {
+    return normalized[todayIdx - 1].amountWan;
+  }
+  return normalized[normalized.length - 1].amountWan;
+}
+
+async function fetchTencentTurnoverSnapshot(): Promise<MarketTurnoverSnapshot> {
+  const quoteQuery = MARKET_SNAPSHOT_INDEXES.map((code) => `s_${code}`).join(',');
+  // Route through extension background fetch proxy to avoid popup-side CORS/encoding issues.
+  const quoteText = await fetchTextViaExtension(`https://qt.gtimg.cn/q=${quoteQuery}`);
+
+  let todayAmountWan = 0;
+  for (const code of MARKET_SNAPSHOT_INDEXES) {
+    const amountWan = parseTencentSimpleAmountWan(quoteText, code);
+    if (Number.isFinite(amountWan)) {
+      todayAmountWan += amountWan;
+    }
+  }
+  const turnover = todayAmountWan > 0 ? roundTo2(todayAmountWan / 10000) : Number.NaN;
+
+  const today = getShanghaiToday();
+  const klineResults = await Promise.all(
+    MARKET_SNAPSHOT_INDEXES.map(async (code) => {
+      const text = await fetchTextViaExtension(
+        `https://web.ifzq.gtimg.cn/appstock/app/newfqkline/get?param=${code},day,,,8,qfq`
+      );
+      const json = JSON.parse(text) as {
+        data?: Record<string, { day?: unknown }>;
+      };
+      return pickPrevKlineAmountWan(json.data?.[code]?.day, today);
+    })
+  );
+
+  const prevAmountWan = klineResults.reduce((sum, item) => {
+    if (!Number.isFinite(item)) return sum;
+    return sum + item;
+  }, 0);
+  const prevTurnover = prevAmountWan > 0 ? roundTo2(prevAmountWan / 10000) : Number.NaN;
+
+  return { turnover, prevTurnover };
+}
+
+async function fetchEastmoneyTurnoverSnapshot(): Promise<number> {
+  const secids = ['1.000001', '0.399001'];
+  const values = await Promise.all(
+    secids.map(async (secid) => {
+      const text = await fetchTextViaExtension(
+        `${MARKET_STATS_HOST}/api/qt/stock/get?secid=${secid}&fields=f48`
+      );
+      const json = JSON.parse(text) as { data?: { f48?: number | string } };
+      return toNumber(json.data?.f48);
+    })
+  );
+
+  const sum = values.reduce((acc, value) => (Number.isFinite(value) ? acc + value : acc), 0);
+  return sum > 0 ? roundTo2(sum / 1e8) : Number.NaN;
+}
+
+async function fetchEastmoneyBreadthFallback(): Promise<MarketBreadthSnapshot | null> {
+  try {
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 60;
+    let upCount = 0;
+    let flatCount = 0;
+    let downCount = 0;
+    let totalTurnover = 0;
+
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const text = await fetchTextViaExtension(
+        `${MARKET_STATS_HOST}/api/qt/clist/get?pn=${page}&pz=${PAGE_SIZE}&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f3,f6`
+      );
+      const json = JSON.parse(text) as {
+        data?: {
+          diff?: Array<{
+            f3?: string | number;
+            f6?: string | number;
+          }>;
+        };
+      };
+
+      const diffs = json.data?.diff;
+      if (!Array.isArray(diffs) || diffs.length === 0) break;
+
+      for (const item of diffs) {
+        const change = toNumber(item.f3);
+        const turnover = toNumber(item.f6);
+
+        if (Number.isFinite(change)) {
+          if (change > 0.001) upCount++;
+          else if (change < -0.001) downCount++;
+          else flatCount++;
+        }
+
+        if (Number.isFinite(turnover)) {
+          totalTurnover += turnover;
+        }
+      }
+    }
+
+    return {
+      upCount,
+      flatCount,
+      downCount,
+      turnover: roundTo2(totalTurnover / 1e8),
+    };
+  } catch (error) {
+    console.warn('[fetchMarketStats] eastmoney breadth fallback failed:', error);
+    return null;
+  }
+}
+
+/**
+ * 多源聚合市场统计：
+ * 1) 新浪：上涨/平盘/下跌家数（及成交额兜底）
+ * 2) 腾讯：成交额 + 昨成交（通过指数实时+日K）
+ * 3) 东财：成交额兜底（stock/get），并保留 breadth 兜底
+ */
+export async function fetchMarketStats(): Promise<MarketStats | null> {
+  const [sinaResult, tencentResult, eastmoneyTurnoverResult] = await Promise.allSettled([
+    fetchSinaBreadthSnapshot(),
+    fetchTencentTurnoverSnapshot(),
+    fetchEastmoneyTurnoverSnapshot(),
+  ]);
+
+  const sina = sinaResult.status === 'fulfilled' ? sinaResult.value : null;
+  const tencent = tencentResult.status === 'fulfilled' ? tencentResult.value : null;
+  const eastmoneyTurnover = eastmoneyTurnoverResult.status === 'fulfilled'
+    ? eastmoneyTurnoverResult.value
+    : Number.NaN;
+
+  if (!sina) {
+    const eastmoneyBreadth = await fetchEastmoneyBreadthFallback();
+    if (!eastmoneyBreadth) return null;
+    const turnover = Number.isFinite(eastmoneyTurnover) ? eastmoneyTurnover : eastmoneyBreadth.turnover;
+    return {
+      upCount: eastmoneyBreadth.upCount,
+      flatCount: eastmoneyBreadth.flatCount,
+      downCount: eastmoneyBreadth.downCount,
+      turnover: roundTo2(turnover),
+      prevTurnover: Number.NaN,
+      volumeChange: Number.NaN,
+    };
+  }
+
+  const tencentTurnover = tencent?.turnover ?? Number.NaN;
+  const tencentPrevTurnover = tencent?.prevTurnover ?? Number.NaN;
+
+  const turnover = Number.isFinite(tencentTurnover) ? tencentTurnover
+    : Number.isFinite(eastmoneyTurnover) ? eastmoneyTurnover
+      : sina.turnover;
+  const prevTurnover = Number.isFinite(tencentPrevTurnover) ? tencentPrevTurnover : Number.NaN;
+  const volumeChange = Number.isFinite(turnover) && Number.isFinite(prevTurnover)
+    ? turnover - prevTurnover
+    : Number.NaN;
+
+  return {
+    upCount: sina.upCount,
+    flatCount: sina.flatCount,
+    downCount: sina.downCount,
+    turnover: roundTo2(turnover),
+    prevTurnover: roundTo2(prevTurnover),
+    volumeChange: roundTo2(volumeChange),
+  };
 }
 
 export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Promise<FundPosition> {

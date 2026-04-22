@@ -3,30 +3,32 @@ import type { BadgeConfig, BadgeMode } from '../background';
 import {
   loadAlertConfig,
   saveAlertConfig,
-  genRuleId,
+  createAlertRule,
   DEFAULT_ALERT_CONFIG,
   type AlertConfig,
   type AlertRule,
   type StockAlertConfig,
   type AlertRuleType,
+  type AlertDirection,
   type AlertScope,
 } from '../shared/alerts';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const DISPLAY_STORAGE_KEY = 'displayConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
+const WORK_MODE_STORAGE_KEY = 'workModeConfig';
 
-const BADGE_OPTIONS: Array<{ value: BadgeMode; label: string }> = [
-  { value: 'stockCount', label: '持仓股数' },
-  { value: 'stockMarket', label: '股票市值' },
-  { value: 'stockFloatingPnl', label: '股票浮动盈亏' },
-  { value: 'stockDailyPnl', label: '股票当日盈亏' },
-  { value: 'fundCount', label: '持仓基金数' },
-  { value: 'fundAmount', label: '基金持有总额' },
-  { value: 'fundHoldingProfit', label: '基金持有收益' },
-  { value: 'fundEstimatedProfit', label: '基金估算收益' },
-  { value: 'off', label: '关闭角标' },
-];
+type WorkModeConfig = {
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+};
+
+const DEFAULT_WORK_MODE: WorkModeConfig = {
+  enabled: false,
+  startTime: '09:00',
+  endTime: '18:00',
+};
 
 const BADGE_LABELS: Record<BadgeMode, string> = {
   stockCount: '持仓股数',
@@ -51,10 +53,30 @@ type RefreshConfig = {
   stockRefreshSeconds: number;
   fundRefreshSeconds: number;
   indexRefreshSeconds: number;
+  marketStatsRefreshSeconds: number;
 };
 
 const DEFAULT_DISPLAY: DisplayConfig = { colorScheme: 'cn', decimalPlaces: 2 };
-const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSeconds: 60, indexRefreshSeconds: 30 };
+const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSeconds: 60, indexRefreshSeconds: 30, marketStatsRefreshSeconds: 30 };
+
+const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
+  price_up: '涨破目标价',
+  price_down: '跌破目标价',
+  change_pct: '涨跌幅波动',
+  volatility: '振幅波动',
+  spike: '急速异动',
+};
+
+const ALERT_DIRECTION_OPTIONS: Array<{ value: AlertDirection; label: string }> = [
+  { value: 'both', label: '双向' },
+  { value: 'up', label: '仅上涨' },
+  { value: 'down', label: '仅下跌' },
+];
+
+const COLOR_SCHEME_OPTIONS: Array<{ value: ColorScheme; label: string }> = [
+  { value: 'cn', label: '红涨绿跌（A 股）' },
+  { value: 'us', label: '绿涨红跌（美股）' },
+];
 
 // -----------------------------------------------------------
 // Stock Alert Editor Sub-component
@@ -62,132 +84,198 @@ const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSec
 
 type StockAlertEditorProps = {
   config: StockAlertConfig;
-  index: number;
+  stockName: string;
   onUpdate: (updated: StockAlertConfig) => void;
   onRemove: () => void;
-  stockHoldings: Array<{ code: string; name: string }>;
 };
 
-const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
-  price_up: '涨破目标价',
-  price_down: '跌破目标价',
-  change_pct: '涨跌幅波动',
-  volatility: '振幅波动',
-};
+function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertEditorProps) {
+  const [expanded, setExpanded] = useState(true);
 
-function StockAlertEditor({ config, index, onUpdate, onRemove, stockHoldings }: StockAlertEditorProps) {
-  // Look up stock name from holdings
-  const stockInfo = stockHoldings.find((h) => h.code === config.code);
-  const displayName = stockInfo ? `${stockInfo.name} (${config.code})` : config.code;
+  const updateRule = (ri: number, updater: (rule: AlertRule) => AlertRule) => {
+    const rules = [...config.rules];
+    const current = rules[ri];
+    if (!current) return;
+    rules[ri] = updater(current);
+    onUpdate({ ...config, rules });
+  };
+
+  const removeRule = (ri: number) => {
+    const nextRules = config.rules.filter((_, index) => index !== ri);
+    onUpdate({ ...config, rules: nextRules });
+  };
 
   return (
     <div className="alert-stock-card">
       <div className="alert-stock-header">
-        <span className="alert-stock-name">{displayName}</span>
-        <button type="button" className="btn-small danger" onClick={onRemove}>
-          删除
+        <button
+          type="button"
+          className="alert-stock-name-btn"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <span className={`alert-expand-arrow ${expanded ? 'open' : ''}`}>▸</span>
+          <span className="alert-stock-name">{stockName}</span>
+          <span className="alert-stock-code">{config.code}</span>
         </button>
+        <div className="alert-header-actions">
+          <span className={`alert-badge ${config.rules.some(r => r.enabled) ? 'active' : ''}`}>
+            {config.rules.filter(r => r.enabled).length} 条规则
+          </span>
+          <button type="button" className="btn-small danger" onClick={onRemove}>
+            移除
+          </button>
+        </div>
       </div>
 
-      <div className="alert-rules-list">
-        {config.rules.map((rule, ri) => (
-          <div key={rule.id} className="alert-rule-row">
-            <label className="alert-rule-toggle">
-              <input
-                type="checkbox"
-                checked={rule.enabled}
-                onChange={(e) => {
-                  const rules = [...config.rules];
-                  rules[ri] = { ...rule, enabled: e.target.checked };
-                  onUpdate({ ...config, rules });
-                }}
-              />
-              <span>{RULE_TYPE_LABELS[rule.type]}</span>
-            </label>
+      {expanded && (
+        <div className="alert-rules-list">
+          {config.rules.map((rule, ri) => (
+            <div key={rule.id} className="alert-rule-row">
+              <label className="alert-rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={rule.enabled}
+                  onChange={(e) => updateRule(ri, (prev) => ({ ...prev, enabled: e.target.checked }))}
+                />
+                <span>{RULE_TYPE_LABELS[rule.type]}</span>
+              </label>
 
-            {rule.type === 'price_up' || rule.type === 'price_down' ? (
-              <div className="alert-rule-inputs">
+              {(rule.type === 'price_up' || rule.type === 'price_down') && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.targetPrice ?? ''}
+                    placeholder="目标价"
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, targetPrice: Number(e.target.value) || 0 }))}
+                  />
+                  <span>元</span>
+                </div>
+              )}
+
+              {rule.type === 'change_pct' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.changeThreshold ?? ''}
+                    placeholder="阈值"
+                    min={0}
+                    max={100}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, changeThreshold: Number(e.target.value) || 0 }))}
+                  />
+                  <span>%</span>
+                  <select
+                    className="number-input small"
+                    value={rule.direction ?? 'both'}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, direction: e.target.value as AlertDirection }))}
+                  >
+                    {ALERT_DIRECTION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {rule.type === 'spike' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.spikePctThreshold ?? ''}
+                    placeholder="幅度"
+                    min={0.5}
+                    max={10}
+                    step={0.5}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, spikePctThreshold: Number(e.target.value) || 0 }))}
+                  />
+                  <span>%</span>
+                  <span style={{ color: 'var(--text-1)', margin: '0 4px' }}>·</span>
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.spikeWindowMinutes ?? ''}
+                    placeholder="窗口"
+                    min={1}
+                    max={30}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, spikeWindowMinutes: Number(e.target.value) || 1 }))}
+                  />
+                  <span>分钟</span>
+                  <select
+                    className="number-input small"
+                    value={rule.direction ?? 'both'}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, direction: e.target.value as AlertDirection }))}
+                  >
+                    {ALERT_DIRECTION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {rule.type === 'volatility' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.volatilityDays ?? ''}
+                    placeholder="天数"
+                    min={1}
+                    max={60}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, volatilityDays: Number(e.target.value) || 1 }))}
+                  />
+                  <span>天</span>
+                  <span style={{ color: 'var(--text-1)', margin: '0 4px' }}>·</span>
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.volatilityThreshold ?? ''}
+                    placeholder="阈值"
+                    min={0.1}
+                    max={40}
+                    step={0.1}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, volatilityThreshold: Number(e.target.value) || 0 }))}
+                  />
+                  <span>%</span>
+                </div>
+              )}
+
+              <div className="alert-rule-cooldown">
+                <span>冷却</span>
                 <input
                   type="number"
-                  className="number-input small"
-                  value={rule.targetPrice ?? ''}
-                  placeholder="目标价"
-                  onChange={(e) => {
-                    const rules = [...config.rules];
-                    rules[ri] = { ...rule, targetPrice: Number(e.target.value) || 0 };
-                    onUpdate({ ...config, rules });
-                  }}
+                  className="number-input tiny"
+                  value={rule.cooldownSeconds ?? 300}
+                  min={60}
+                  max={3600}
+                  onChange={(e) => updateRule(ri, (prev) => ({ ...prev, cooldownSeconds: Number(e.target.value) || 300 }))}
                 />
-                <span>元</span>
+                <span>秒</span>
               </div>
-            ) : rule.type === 'change_pct' ? (
-              <div className="alert-rule-inputs">
-                <input
-                  type="number"
-                  className="number-input small"
-                  value={rule.changeThreshold ?? ''}
-                  placeholder="阈值"
-                  min={0}
-                  max={100}
-                  onChange={(e) => {
-                    const rules = [...config.rules];
-                    rules[ri] = { ...rule, changeThreshold: Number(e.target.value) || 0 };
-                    onUpdate({ ...config, rules });
-                  }}
-                />
-                <span>%</span>
-              </div>
-            ) : null}
 
-            <div className="alert-rule-cooldown">
-              <span>冷却</span>
-              <input
-                type="number"
-                className="number-input tiny"
-                value={rule.cooldownSeconds ?? 300}
-                min={60}
-                max={3600}
-                onChange={(e) => {
-                  const rules = [...config.rules];
-                  rules[ri] = { ...rule, cooldownSeconds: Number(e.target.value) || 300 };
-                  onUpdate({ ...config, rules });
-                }}
-              />
-              <span>秒</span>
+              <button type="button" className="btn-tiny danger" onClick={() => removeRule(ri)}>
+                删除规则
+              </button>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {/* Add rule button */}
-        <div className="alert-add-rule">
-          {(['price_up', 'price_down', 'change_pct', 'volatility'] as AlertRuleType[]).map((type) => {
-            const exists = config.rules.some((r) => r.type === type);
-            if (exists) return null;
-            return (
+          {/* Add rule button */}
+          <div className="alert-add-rule">
+            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility'] as AlertRuleType[]).map((type) => (
               <button
                 key={type}
                 type="button"
                 className="btn-tiny"
                 onClick={() => {
-                  const newRule: AlertRule = {
-                    id: genRuleId(),
-                    type,
-                    enabled: true,
-                    targetPrice: type.startsWith('price') ? 0 : undefined,
-                    changeThreshold: type === 'change_pct' ? 5 : undefined,
-                    volatilityDays: type === 'volatility' ? 5 : undefined,
-                    volatilityThreshold: type === 'volatility' ? 10 : undefined,
-                    cooldownSeconds: 300,
-                  };
-                  onUpdate({ ...config, rules: [...config.rules, newRule] });
+                  onUpdate({ ...config, rules: [...config.rules, createAlertRule(type)] });
                 }}
               >
                 + {RULE_TYPE_LABELS[type]}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -199,6 +287,29 @@ function saveStorageItem<T>(key: string, value: T): Promise<void> {
   localStorage.setItem(key, JSON.stringify(value));
   return Promise.resolve();
 }
+
+// -----------------------------------------------------------
+// Test notification
+// -----------------------------------------------------------
+
+function sendTestNotification() {
+  if (typeof chrome?.runtime?.sendMessage !== 'function') return;
+  chrome.runtime.sendMessage({
+    type: 'test-notification',
+    data: {
+      code: '600519',
+      name: '贵州茅台',
+      message: '贵州茅台(600519) 急速拉升\n近5分钟内上涨 +2.50%，现价 ¥1750.00',
+      ruleType: 'spike',
+      price: 1750.00,
+      changePct: 2.5,
+    },
+  });
+}
+
+// -----------------------------------------------------------
+// Main App
+// -----------------------------------------------------------
 
 export default function App() {
   // ---- Badge (click-to-apply, auto-save) ----
@@ -276,77 +387,12 @@ export default function App() {
     }
   }, []);
 
-  // ---- Save ----
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      await Promise.all([
-        saveStorageItem(DISPLAY_STORAGE_KEY, displayDraft),
-        saveStorageItem(REFRESH_STORAGE_KEY, refreshDraft),
-      ]);
-      setDisplayConfig(displayDraft);
-      setRefreshConfig(refreshDraft);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
-  }, [displayDraft, refreshDraft]);
-
-  const handleReset = useCallback(() => {
-    setDisplayDraft(displayConfig);
-    setRefreshDraft(refreshConfig);
-  }, [displayConfig, refreshConfig]);
-
   const displayDirty = JSON.stringify(displayDraft) !== JSON.stringify(displayConfig);
   const refreshDirty = JSON.stringify(refreshDraft) !== JSON.stringify(refreshConfig);
 
-  // ---- Load stock holdings for alert picker ----
-  const [stockHoldings, setStockHoldings] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
-
-  useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-      chrome.storage.sync.get(['stockHoldings'], (result: Record<string, unknown>) => {
-        const holdings = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as Array<{ code: string; name?: string; shares: number; special?: boolean }>;
-        // Load positions for names
-        chrome.storage.local.get(['stockPositions'], (posResult: Record<string, unknown>) => {
-          const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as Array<{ code: string; name: string }>;
-          const posMap = new Map(positions.map(p => [p.code, p.name]));
-          setStockHoldings(holdings.map(h => ({
-            code: h.code,
-            name: posMap.get(h.code) || h.name || h.code,
-            shares: h.shares || 0,
-            special: h.special || false,
-          })));
-        });
-      });
-    }
-  }, []);
-
-  // ---- Alert helpers ----
-  const addStockAlert = useCallback((code: string, name: string) => {
-    setAlertDraft((prev) => {
-      if (prev.stocks.some(s => s.code === code)) return prev;
-      return {
-        ...prev,
-        stocks: [
-          ...prev.stocks,
-          {
-            code,
-            scope: prev.scope,
-            rules: [
-              { id: genRuleId(), type: 'price_up', enabled: true, targetPrice: 0, cooldownSeconds: 300 },
-              { id: genRuleId(), type: 'price_down', enabled: true, targetPrice: 0, cooldownSeconds: 300 },
-              { id: genRuleId(), type: 'change_pct', enabled: false, changeThreshold: 5, cooldownSeconds: 300 },
-            ],
-          },
-        ],
-      };
-    });
-  }, []);
+  // ---- Save ----
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // ---- Theme ----
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -367,6 +413,79 @@ export default function App() {
     });
   }, []);
 
+  // ---- Work Mode Config ----
+  const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
+  const [workModeDraft, setWorkModeDraft] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(WORK_MODE_STORAGE_KEY, (result: Record<string, unknown>) => {
+        const config = result[WORK_MODE_STORAGE_KEY] as WorkModeConfig | undefined;
+        const resolved = config || DEFAULT_WORK_MODE;
+        setWorkModeConfig(resolved);
+        setWorkModeDraft(resolved);
+      });
+    } else {
+      try {
+        const raw = localStorage.getItem(WORK_MODE_STORAGE_KEY);
+        const resolved = raw ? JSON.parse(raw) : DEFAULT_WORK_MODE;
+        setWorkModeConfig(resolved);
+        setWorkModeDraft(resolved);
+      } catch {
+        setWorkModeConfig(DEFAULT_WORK_MODE);
+        setWorkModeDraft(DEFAULT_WORK_MODE);
+      }
+    }
+  }, []);
+
+  const workModeDirty = JSON.stringify(workModeDraft) !== JSON.stringify(workModeConfig);
+
+  // ---- Save ----
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      await Promise.all([
+        saveStorageItem(DISPLAY_STORAGE_KEY, displayDraft),
+        saveStorageItem(REFRESH_STORAGE_KEY, refreshDraft),
+        saveStorageItem(WORK_MODE_STORAGE_KEY, workModeDraft),
+      ]);
+      setDisplayConfig(displayDraft);
+      setRefreshConfig(refreshDraft);
+      setWorkModeConfig(workModeDraft);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }, [displayDraft, refreshDraft, workModeDraft]);
+
+  const handleReset = useCallback(() => {
+    setDisplayDraft(displayConfig);
+    setRefreshDraft(refreshConfig);
+    setWorkModeDraft(workModeConfig);
+  }, [displayConfig, refreshConfig, workModeConfig]);
+
+  // ---- Load stock holdings (all stocks, with name resolution) ----
+  const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(['stockHoldings'], (result: Record<string, unknown>) => {
+        const holdings = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as Array<{ code: string; name?: string; shares: number; special?: boolean }>;
+        chrome.storage.local.get(['stockPositions'], (posResult: Record<string, unknown>) => {
+          const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as Array<{ code: string; name: string }>;
+          const posMap = new Map(positions.map(p => [p.code, p.name]));
+          setAllStocks(holdings.map(h => ({
+            code: h.code,
+            name: posMap.get(h.code) || h.name || h.code,
+            shares: h.shares || 0,
+            special: h.special || false,
+          })));
+        });
+      });
+    }
+  }, []);
+
   // ---- Alert Config ----
   const [alertConfig, setAlertConfig] = useState<AlertConfig>(DEFAULT_ALERT_CONFIG);
   const [alertDraft, setAlertDraft] = useState<AlertConfig>(DEFAULT_ALERT_CONFIG);
@@ -378,11 +497,44 @@ export default function App() {
     });
   }, []);
 
-  const filteredHoldings = stockHoldings.filter((h) => {
+  const filteredStocks = allStocks.filter((h) => {
     if (alertDraft.scope === 'special') return h.special;
     if (alertDraft.scope === 'holding') return h.shares > 0;
     return true;
   });
+
+  // Manually added stocks (in alertDraft but not in allStocks)
+  const manualStocks = alertDraft.stocks
+    .filter((s) => !allStocks.some((h) => h.code === s.code))
+    .map((s) => ({ code: s.code, name: s.code, shares: 0, special: false }));
+
+  const [newStockCode, setNewStockCode] = useState('');
+
+  const createDefaultStockAlertConfig = useCallback((code: string, scope: AlertScope): StockAlertConfig => ({
+    code,
+    scope,
+    rules: [
+      createAlertRule('price_up'),
+      createAlertRule('price_down'),
+      createAlertRule('change_pct'),
+    ],
+  }), []);
+
+  const handleAddStockCode = () => {
+    const code = newStockCode.trim().replace(/^((sh|sz))/i, '');
+    if (!/^\d{6}$/.test(code)) {
+      setNewStockCode('');
+      return;
+    }
+    const exists = filteredStocks.some((s) => s.code === code) || manualStocks.some((s) => s.code === code);
+    if (exists) {
+      setNewStockCode('');
+      return;
+    }
+    const newConfig = createDefaultStockAlertConfig(code, alertDraft.scope);
+    setAlertDraft((prev) => ({ ...prev, stocks: [...prev.stocks, newConfig] }));
+    setNewStockCode('');
+  };
 
   const handleSaveAlerts = useCallback(async () => {
     setSaving(true);
@@ -397,7 +549,7 @@ export default function App() {
   }, [alertDraft]);
 
   const alertDirty = JSON.stringify(alertDraft) !== JSON.stringify(alertConfig);
-  const hasUnsaved = displayDirty || refreshDirty || alertDirty;
+  const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty;
 
   return (
     <div className="options-root">
@@ -473,15 +625,20 @@ export default function App() {
               <div>
                 <span className="config-label">涨跌色模式</span>
               </div>
-              <select
-                value={displayDraft.colorScheme}
-                onChange={(e) =>
-                  setDisplayDraft((prev) => ({ ...prev, colorScheme: e.target.value as ColorScheme }))
-                }
-              >
-                <option value="cn">红涨绿跌（A 股）</option>
-                <option value="us">绿涨红跌（美股）</option>
-              </select>
+              <div className="color-scheme-options">
+                {COLOR_SCHEME_OPTIONS.map((opt) => (
+                  <label key={opt.value} className={`color-scheme-item ${displayDraft.colorScheme === opt.value ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="color-scheme"
+                      value={opt.value}
+                      checked={displayDraft.colorScheme === opt.value}
+                      onChange={() => setDisplayDraft(prev => ({ ...prev, colorScheme: opt.value }))}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="config-row">
@@ -581,6 +738,29 @@ export default function App() {
                 <span>秒</span>
               </div>
             </div>
+
+            <div className="config-row">
+              <div>
+                <span className="config-label">市场统计刷新间隔</span>
+                <span className="config-hint">A 股市场统计数据刷新的时间间隔</span>
+              </div>
+              <div className="number-with-unit">
+                <input
+                  type="number"
+                  value={refreshDraft.marketStatsRefreshSeconds}
+                  onChange={(e) =>
+                    setRefreshDraft((prev) => ({
+                      ...prev,
+                      marketStatsRefreshSeconds: Math.min(300, Math.max(5, Number(e.target.value) || 5)),
+                    }))
+                  }
+                  min={5}
+                  max={300}
+                  className="number-input"
+                />
+                <span>秒</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -589,6 +769,9 @@ export default function App() {
           <h2>
             告警设置
             <span className={`dirty-tag ${alertDirty ? 'dirty' : ''}`}>{alertDirty ? '未保存' : '已保存'}</span>
+            <button type="button" className="btn-tiny" style={{ marginLeft: 'auto' }} onClick={sendTestNotification}>
+              🔔 发送测试通知
+            </button>
           </h2>
           <div className="config-card">
             <div className="config-row">
@@ -627,61 +810,101 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* ---- 工作模式 ---- */}
+            <div className="work-mode-section">
+              <div className="config-row">
+                <div>
+                  <span className="config-label">工作模式</span>
+                  <span className="config-hint">工作时段内静默系统通知，告警记录到通知面板</span>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={workModeDraft.enabled}
+                    onChange={(e) => setWorkModeDraft((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
+
+              {workModeDraft.enabled && (
+                <div className="work-mode-details">
+                  <div className="work-mode-row">
+                    <span className="work-mode-label">时段</span>
+                    <input
+                      type="time"
+                      className="time-input"
+                      value={workModeDraft.startTime}
+                      onChange={(e) => setWorkModeDraft((prev) => ({ ...prev, startTime: e.target.value }))}
+                    />
+                    <span className="work-mode-sep">—</span>
+                    <input
+                      type="time"
+                      className="time-input"
+                      value={workModeDraft.endTime}
+                      onChange={(e) => setWorkModeDraft((prev) => ({ ...prev, endTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Per-stock rules */}
+          {/* Per-stock rules — auto-list + manual add */}
           <div className="alert-stocks-list">
             <div className="alert-stocks-header">
               <span>个股告警规则</span>
-              {/* Stock picker dropdown */}
-              <select
-                className="alert-stock-select"
-                value=""
-                onChange={(e) => {
-                  const code = e.target.value;
-                  if (!code) return;
-                  const stock = stockHoldings.find((s) => s.code === code);
-                  if (stock) addStockAlert(stock.code, stock.name);
-                }}
-              >
-                <option value="">+ 添加股票</option>
-                {filteredHoldings
-                  .filter((h) => !alertDraft.stocks.some((s) => s.code === h.code))
-                  .map((h) => (
-                    <option key={h.code} value={h.code}>
-                      {h.name} ({h.code}){h.shares > 0 ? ` — 持仓${h.shares}股` : ''}{h.special ? ' ⭐' : ''}
-                    </option>
-                  ))}
-              </select>
+              <span className="alert-count-hint">
+                {(filteredStocks.length + manualStocks.length) === 0 ? '当前没有股票' : `${filteredStocks.length + manualStocks.length} 只股票`}
+              </span>
             </div>
 
-            {alertDraft.stocks.length === 0 ? (
-              <div className="alert-empty-hint">
-                {filteredHoldings.length === 0
-                  ? '当前范围下没有股票'
-                  : '暂无个股告警规则，请从上方选择添加'}
-              </div>
+            {/* Manual add input */}
+            <div className="alert-add-stock-row">
+              <input
+                type="text"
+                className="alert-stock-code-input"
+                placeholder="输入股票代码，如 600519"
+                value={newStockCode}
+                onChange={(e) => setNewStockCode(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddStockCode(); }}
+              />
+              <button type="button" className="btn-small" onClick={handleAddStockCode}>
+                + 添加
+              </button>
+            </div>
+
+            {filteredStocks.length + manualStocks.length === 0 ? (
+              <div className="alert-empty-hint">当前范围下没有股票</div>
             ) : (
-              alertDraft.stocks.map((stockCfg, idx) => (
-                <StockAlertEditor
-                  key={stockCfg.code}
-                  config={stockCfg}
-                  index={idx}
-                  stockHoldings={stockHoldings}
-                  onUpdate={(updated) =>
-                    setAlertDraft((prev) => ({
-                      ...prev,
-                      stocks: prev.stocks.map((s, i) => (i === idx ? updated : s)),
-                    }))
-                  }
-                  onRemove={() =>
-                    setAlertDraft((prev) => ({
-                      ...prev,
-                      stocks: prev.stocks.filter((_, i) => i !== idx),
-                    }))
-                  }
-                />
-              ))
+              [...filteredStocks, ...manualStocks].map((stock) => {
+                const existingConfig = alertDraft.stocks.find((s) => s.code === stock.code);
+                const defaultConfig = createDefaultStockAlertConfig(stock.code, alertDraft.scope);
+                const config = existingConfig || defaultConfig;
+
+                return (
+                  <StockAlertEditor
+                    key={stock.code}
+                    config={config}
+                    stockName={stock.name}
+                    onUpdate={(updated) => {
+                      setAlertDraft((prev) => ({
+                        ...prev,
+                        stocks: prev.stocks.some((s) => s.code === updated.code)
+                          ? prev.stocks.map((s) => (s.code === updated.code ? updated : s))
+                          : [...prev.stocks, updated],
+                      }));
+                    }}
+                    onRemove={() => {
+                      setAlertDraft((prev) => ({
+                        ...prev,
+                        stocks: prev.stocks.filter((s) => s.code !== stock.code),
+                      }));
+                    }}
+                  />
+                );
+              })
             )}
           </div>
         </section>

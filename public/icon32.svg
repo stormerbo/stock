@@ -1,18 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
   <defs>
-    <linearGradient id="bg32" x1="4" y1="3" x2="28" y2="30">
-      <stop offset="0" stop-color="#707c90"/>
-      <stop offset="0.42" stop-color="#2b3341"/>
-      <stop offset="1" stop-color="#0e1218"/>
+    <linearGradient id="bg32" x1="4" y1="2" x2="29" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#171B24"/>
+      <stop offset="0.48" stop-color="#0D1017"/>
+      <stop offset="1" stop-color="#05070B"/>
     </linearGradient>
-    <linearGradient id="shine32" x1="5" y1="4" x2="20" y2="15">
-      <stop offset="0" stop-color="#dce8ff" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    <linearGradient id="line32" x1="6" y1="21.2" x2="24.8" y2="10.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#54E6FF"/>
+      <stop offset="1" stop-color="#77FFA6"/>
     </linearGradient>
+    <radialGradient id="glow32" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(24.4 10.65) rotate(90) scale(7.2)">
+      <stop offset="0" stop-color="#7DFFB4" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#7DFFB4" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="url(#bg32)"/>
-  <path d="M4.4 4.2C7 2.8 10 2.3 13.4 2.5c5 .2 9.4 2 12.9 5.3V12c-3-3.8-7.4-5.9-13.2-6.2-3.1-.1-6 .4-8.6 1.7-.9.4-1.1-1-.1-1.3Z" fill="url(#shine32)"/>
-  <path d="M6.2 20.8h19.4" stroke="#bec9db" stroke-opacity="0.4" stroke-width="1.45" stroke-linecap="round"/>
-  <path d="M6.2 21.2 10.1 16.2 13.2 18.1 16.3 13.5 20 15 25.5 10.6" fill="none" stroke="#ffffff" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="25.5" cy="10.6" r="1.95" fill="#ffffff"/>
+  <rect x="1.5" y="1.5" width="29" height="29" rx="8.5" fill="url(#bg32)"/>
+  <rect x="2.2" y="2.2" width="27.6" height="27.6" rx="7.8" stroke="rgba(255,255,255,0.10)"/>
+  <path d="M6 22.35H26.1" stroke="#9AA8C1" stroke-opacity="0.18" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M8.2 22.1V18.9" stroke="#C2CEE2" stroke-opacity="0.34" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12.1 22.1V15.7" stroke="#C2CEE2" stroke-opacity="0.34" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 22.1V17.5" stroke="#C2CEE2" stroke-opacity="0.34" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="24.4" cy="10.65" r="5.4" fill="url(#glow32)"/>
+  <path d="M6.2 20.8L10.3 17.9L13.4 18.9L16.6 15.2L19.6 16L24.4 10.65" stroke="url(#line32)" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24.4" cy="10.65" r="2.05" fill="#F1FFF8"/>
+  <path d="M24.4 10.65H26.35V12.55" stroke="#F1FFF8" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

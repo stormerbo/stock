@@ -119,6 +119,7 @@ body.theme-light {
   font-weight: 600;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -356,27 +357,79 @@ body.theme-light .scope-tab-btn.active {
   background: rgba(63, 103, 240, 0.1);
 }
 
-/* ---- Alert Stock Picker ---- */
+/* ---- Alert Stock Card ---- */
 
-.alert-stock-select {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--input-bg);
-  color: var(--text-0);
-  font-size: 12px;
+.alert-stock-name-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
   cursor: pointer;
+  color: var(--text-0);
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
 }
 
-.alert-stock-select:focus {
-  outline: none;
-  border-color: var(--brand);
+.alert-stock-name-btn:hover {
+  opacity: 0.85;
+}
+
+.alert-expand-arrow {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-1);
+  transition: transform 0.2s;
+}
+
+.alert-expand-arrow.open {
+  transform: rotate(90deg);
 }
 
 .alert-stock-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-0);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alert-stock-code {
+  font-size: 12px;
+  color: var(--text-1);
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.alert-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.alert-badge {
+  font-size: 11px;
+  color: var(--text-1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.alert-badge.active {
+  color: var(--brand);
+  border-color: rgba(107, 92, 246, 0.3);
+  background: rgba(107, 92, 246, 0.1);
+}
+
+.alert-count-hint {
+  font-size: 12px;
+  color: var(--text-1);
 }
 
 /* ---- Badge Compact Layout ---- */
@@ -436,19 +489,125 @@ body.theme-light .badge-compact-item.active {
   accent-color: var(--brand);
 }
 
-select {
+/* ---- Color Scheme Options ---- */
+
+.color-scheme-options {
+  display: flex;
+  gap: 12px;
+}
+
+.color-scheme-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--option-bg);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 12px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.color-scheme-item:hover {
+  background: var(--option-hover);
+}
+
+.color-scheme-item.active {
+  border-color: var(--brand);
+  background: rgba(107, 92, 246, 0.15);
+  color: var(--brand);
+}
+
+body.theme-light .color-scheme-item.active {
+  background: rgba(63, 103, 240, 0.1);
+}
+
+.color-scheme-item input {
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+/* ---- Alert Add Stock Row ---- */
+
+.alert-add-stock-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.alert-stock-code-input {
+  flex: 1;
   padding: 8px 12px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--input-bg);
   color: var(--text-0);
-  font-size: 14px;
+  font-size: 13px;
+  font-family: monospace;
 }
 
-select:focus {
+.alert-stock-code-input:focus {
   outline: none;
   border-color: var(--brand);
 }
+
+.alert-stock-code-input::placeholder {
+  color: var(--text-1);
+  opacity: 0.6;
+}
+
+/* ---- Work Mode ---- */
+
+.work-mode-section {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+}
+
+.work-mode-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.work-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.work-mode-label {
+  font-size: 12px;
+  color: var(--text-1);
+  min-width: 64px;
+  flex-shrink: 0;
+}
+
+.time-input {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text-0);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.work-mode-sep {
+  color: var(--text-1);
+  font-size: 12px;
+}
+
+/* ---- Number with Unit ---- */
 
 .number-with-unit {
   display: flex;
@@ -599,8 +758,10 @@ select:focus {
 .alert-stock-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+  width: 100%;
 }
 
 .alert-stock-input {
@@ -628,6 +789,7 @@ select:focus {
 .alert-rule-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 6px 8px;
   border-radius: 6px;
@@ -641,7 +803,7 @@ select:focus {
   gap: 6px;
   cursor: pointer;
   white-space: nowrap;
-  min-width: 90px;
+  min-width: 120px;
 }
 
 .alert-rule-toggle input {
@@ -724,6 +886,18 @@ select:focus {
   border-color: var(--brand);
   color: var(--brand);
   background: rgba(107, 92, 246, 0.08);
+}
+
+.btn-tiny.danger {
+  border-style: solid;
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.btn-tiny.danger:hover {
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .number-input.small {

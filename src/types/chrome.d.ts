@@ -113,5 +113,7 @@ declare namespace chrome {
     function connect(extensionIdOrInfo?: string | { name?: string }, connectInfo?: { name?: string }): Port;
 
     function openOptionsPage(): void;
+
+    function getURL(path: string): string;
   }
 }

@@ -1,26 +1,36 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
 import {
+  fetchBatchStockQuotes,
   fetchStockIntraday,
-  toTencentStockCode,
+  fetchTiantianFundPosition,
   normalizeStockCode,
   normalizeFundCode,
   formatQuoteTime,
+  getShanghaiToday,
   toNumber,
+  fetchMarketStats,
   type StockHoldingConfig,
   type FundHoldingConfig,
   type StockPosition,
   type FundPosition,
   type MarketIndexQuote,
+  type MarketStats,
   MARKET_INDEXES,
 } from '../shared/fetch';
+import { fetchTextWithEncoding } from '../shared/fetch';
+import {
+  DAILY_PROFIT_DETAILS_KEY,
+  normalizeDailyProfitDetailHistory,
+  type DailyProfitDetailRecord,
+} from '../shared/profit-details';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 
-type PageTab = 'stocks' | 'funds' | 'account';
+type PageTab = 'stocks' | 'funds' | 'account' | 'notifications';
 type ThemeMode = 'dark' | 'light';
 
 type IndexDetailTarget = {
@@ -56,6 +66,32 @@ type FundDetailTarget = {
   name: string;
 };
 
+type StockRow = StockPosition & {
+  pinned: boolean;
+  special: boolean;
+  addedPrice?: number;
+  addedAt?: string;
+};
+
+type FundRow = FundPosition & {
+  pinned: boolean;
+  special: boolean;
+  addedNav?: number;
+  addedAt?: string;
+};
+
+type NotificationRecord = {
+  id: string;
+  code: string;
+  name: string;
+  message: string;
+  ruleType: string;
+  price: number;
+  changePct: number;
+  firedAt: number;
+  read: boolean;
+};
+
 type PortfolioConfig = {
   stockHoldings: StockHoldingConfig[];
   fundHoldings: FundHoldingConfig[];
@@ -76,6 +112,74 @@ const STORAGE_KEYS = {
   stockHoldings: 'stockHoldings',
   fundHoldings: 'fundHoldings',
 };
+const MARKET_STATS_CACHE_KEY = 'marketStats';
+const MARKET_STATS_UPDATED_AT_KEY = 'marketStatsUpdatedAt';
+const MARKET_STATS_HISTORY_KEY = 'marketStatsHistory';
+const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
+
+function formatRelativeTime(timestampMs: number): string {
+  const diffMs = Date.now() - timestampMs;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec} 秒前`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} 分钟前`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour} 小时前`;
+  const d = new Date(timestampMs);
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function formatDetailUpdatedTime(raw: string): string {
+  if (!raw) return '--:--';
+  const date = new Date(raw);
+  if (!Number.isFinite(date.getTime())) return '--:--';
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function getShanghaiDateKey(timestampMs: number): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(timestampMs));
+
+  const year = parts.find((item) => item.type === 'year')?.value ?? '0000';
+  const month = parts.find((item) => item.type === 'month')?.value ?? '00';
+  const day = parts.find((item) => item.type === 'day')?.value ?? '00';
+  return `${year}-${month}-${day}`;
+}
+
+function resolvePrevTurnover(
+  history: Record<string, number>,
+  referenceDate: string,
+): number {
+  const dates = Object.keys(history)
+    .filter((date) => date < referenceDate && Number.isFinite(history[date]))
+    .sort();
+  if (dates.length === 0) return Number.NaN;
+  return history[dates[dates.length - 1]];
+}
+
+function deriveMarketStats(
+  stats: MarketStats,
+  history: Record<string, number>,
+  referenceDate: string,
+): MarketStats {
+  const historyPrev = resolvePrevTurnover(history, referenceDate);
+  const prevTurnover = Number.isFinite(stats.prevTurnover) ? stats.prevTurnover : historyPrev;
+  const volumeChange = Number.isFinite(stats.volumeChange)
+    ? stats.volumeChange
+    : Number.isFinite(prevTurnover)
+      ? stats.turnover - prevTurnover
+    : Number.NaN;
+
+  return {
+    ...stats,
+    prevTurnover: Number.isFinite(prevTurnover) ? Math.round(prevTurnover * 100) / 100 : Number.NaN,
+    volumeChange: Number.isFinite(volumeChange) ? Math.round(volumeChange * 100) / 100 : Number.NaN,
+  };
+}
 
 let fundSearchIndexPromise: Promise<FundSearchEntry[]> | null = null;
 
@@ -113,6 +217,13 @@ function formatLooseNumber(value: number, maximumFractionDigits = 4): string {
     minimumFractionDigits: 0,
     maximumFractionDigits,
   });
+}
+
+function formatMarketAmount(value: number): string {
+  if (!Number.isFinite(value)) return '--';
+  return value >= 10000
+    ? `${(value / 10000).toFixed(2)}万亿`
+    : `${formatLooseNumber(value, 0)}亿`;
 }
 
 function formatPercent(value: number): string {
@@ -225,6 +336,10 @@ function parseStockHoldings(input: unknown): StockHoldingConfig[] {
         pinned: Boolean((item as StockHoldingConfig)?.pinned),
         special: Boolean((item as StockHoldingConfig)?.special),
       };
+      const addedPrice = toNumber((item as StockHoldingConfig)?.addedPrice);
+      const addedAt = String((item as StockHoldingConfig)?.addedAt ?? '').trim();
+      if (Number.isFinite(addedPrice) && addedPrice > 0) parsed.addedPrice = addedPrice;
+      if (addedAt) parsed.addedAt = addedAt;
       return parsed;
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -247,6 +362,10 @@ function parseFundHoldings(input: unknown): FundHoldingConfig[] {
         special: Boolean((item as FundHoldingConfig)?.special),
       };
       if (name) parsed.name = name;
+      const addedNav = toNumber((item as FundHoldingConfig)?.addedNav);
+      const addedAt = String((item as FundHoldingConfig)?.addedAt ?? '').trim();
+      if (Number.isFinite(addedNav) && addedNav > 0) parsed.addedNav = addedNav;
+      if (addedAt) parsed.addedAt = addedAt;
       return parsed;
     })
     .filter((item): item is FundHoldingConfig => item !== null);
@@ -374,10 +493,12 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
   }
 }
 
-function IntradayChart({ 
-  data
-}: { 
+function IntradayChart({
+  data,
+  prevClose
+}: {
   data: Array<{ time: string; price: number }>;
+  prevClose?: number;
 }) {
   if (!data || data.length === 0) {
     return (
@@ -414,8 +535,15 @@ function IntradayChart({
   }
 
   const prices = dataPoints.map(d => d.price);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
+  let minPrice = Math.min(...prices);
+  let maxPrice = Math.max(...prices);
+
+  // 如果提供了昨收价，将其纳入显示范围，确保横线始终可见
+  const hasPrevClose = prevClose !== undefined && Number.isFinite(prevClose);
+  if (hasPrevClose) {
+    minPrice = Math.min(minPrice, prevClose);
+    maxPrice = Math.max(maxPrice, prevClose);
+  }
 
   const rawRange = Math.max(maxPrice - minPrice, Math.max(maxPrice * 0.0002, 0.01));
   const step = rawRange / 10;
@@ -472,21 +600,23 @@ function IntradayChart({
 
   const lastPrice = dataPoints[dataPoints.length - 1]?.price ?? 0;
   const firstPrice = dataPoints[0]?.price ?? 0;
-  const isUp = lastPrice >= firstPrice;
+  const baselinePrice: number = hasPrevClose ? prevClose : firstPrice;
+  const isUp = lastPrice >= baselinePrice;
   const lineColor = isUp ? '#ff5e57' : '#1fc66d';
-  const openLineY = toY(firstPrice);
+  // 横向虚线基于昨收价绘制（若无昨收价则 fallback 到开盘价）
+  const baselineY = toY(baselinePrice);
 
   return (
-    <svg 
-      className="intraday-chart" 
-      viewBox={`0 0 ${width} ${height}`} 
+    <svg
+      className="intraday-chart"
+      viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
     >
       <line
         x1={padding.left}
         x2={width - padding.right}
-        y1={openLineY.toFixed(2)}
-        y2={openLineY.toFixed(2)}
+        y1={baselineY.toFixed(2)}
+        y2={baselineY.toFixed(2)}
         className="intraday-open-line"
       />
       {pathSegments.map((segment, idx) => {
@@ -521,6 +651,79 @@ export default function App() {
   });
 
   const [badgeConfig, setBadgeConfig] = useState<{ enabled: boolean; mode: string } | null>(null);
+
+  // ---- Market Stats (trading hours only) ----
+  const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
+  const marketStatsHistoryRef = useRef<Record<string, number>>({});
+
+  // ---- Notification Panel ----
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [panelOpacity, setPanelOpacity] = useState(1.0);
+  const [dailyProfitDetails, setDailyProfitDetails] = useState<DailyProfitDetailRecord[]>([]);
+
+  useEffect(() => {
+    // Load notifications and work mode config
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['notificationHistory'], (result: Record<string, unknown>) => {
+        const history = (Array.isArray(result.notificationHistory) ? result.notificationHistory : []) as NotificationRecord[];
+        setNotifications(history.sort((a, b) => b.firedAt - a.firedAt));
+      });
+    }
+
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(['workModeConfig'], (result: Record<string, unknown>) => {
+        const wm = result['workModeConfig'] as { panelOpacity?: number } | undefined;
+        if (wm?.panelOpacity != null) setPanelOpacity(wm.panelOpacity);
+      });
+    }
+
+    // Listen for storage changes
+    const listener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      if (area === 'local' && changes['notificationHistory']) {
+        const history = (Array.isArray(changes['notificationHistory'].newValue) ? changes['notificationHistory'].newValue : []) as NotificationRecord[];
+        setNotifications(history.sort((a, b) => b.firedAt - a.firedAt));
+      }
+    };
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(listener);
+    }
+    return () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+        chrome.storage.onChanged.removeListener(listener);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get([DAILY_PROFIT_DETAILS_KEY], (result: Record<string, unknown>) => {
+        setDailyProfitDetails(normalizeDailyProfitDetailHistory(result[DAILY_PROFIT_DETAILS_KEY]));
+      });
+    }
+
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'local' || !changes[DAILY_PROFIT_DETAILS_KEY]) return;
+      setDailyProfitDetails(normalizeDailyProfitDetailHistory(changes[DAILY_PROFIT_DETAILS_KEY].newValue));
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = useCallback(() => {
+    const updated = notifications.map((n) => ({ ...n, read: true }));
+    setNotifications(updated);
+    chrome.storage.local.set({ notificationHistory: updated });
+  }, [notifications]);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+    chrome.storage.local.set({ notificationHistory: [] });
+  }, []);
 
   const [stockHoldings, setStockHoldings] = useState<StockHoldingConfig[]>([]);
   const [fundHoldings, setFundHoldings] = useState<FundHoldingConfig[]>([]);
@@ -662,10 +865,18 @@ export default function App() {
       : accountMetrics;
 
   const accountSnapshot = useMemo(() => {
+    const average = (values: number[]): number => {
+      if (values.length === 0) return Number.NaN;
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+
     const heldStockCount = stockHoldings.filter((item) => item.shares > 0).length;
     const watchStockCount = stockHoldings.filter((item) => item.shares <= 0).length;
     const heldFundCount = fundHoldings.filter((item) => item.units > 0).length;
     const watchFundCount = fundHoldings.filter((item) => item.units <= 0).length;
+
+    const stockPositionMap = new Map(stockPositions.map((item) => [item.code, item]));
+    const fundPositionMap = new Map(fundPositions.map((item) => [item.code, item]));
 
     const stockMarketValue = stockPositions.reduce((sum, item) => (
       Number.isFinite(item.price) && item.shares > 0 ? sum + item.price * item.shares : sum
@@ -692,6 +903,34 @@ export default function App() {
     const stockRatio = totalAssets > 0 ? (stockMarketValue / totalAssets) * 100 : 0;
     const fundRatio = totalAssets > 0 ? (fundHoldingAmount / totalAssets) * 100 : 0;
 
+    const stockSinceAddedRates = stockHoldings
+      .map((holding) => {
+        const entryPrice = Number(holding.addedPrice);
+        const currentPrice = Number(stockPositionMap.get(holding.code)?.price);
+        if (!Number.isFinite(entryPrice) || entryPrice <= 0) return Number.NaN;
+        if (!Number.isFinite(currentPrice)) return Number.NaN;
+        return ((currentPrice - entryPrice) / entryPrice) * 100;
+      })
+      .filter((value) => Number.isFinite(value));
+
+    const fundSinceAddedRates = fundHoldings
+      .map((holding) => {
+        const entryNav = Number(holding.addedNav);
+        const position = fundPositionMap.get(holding.code);
+        if (!position) return Number.NaN;
+        if (!Number.isFinite(entryNav) || entryNav <= 0) return Number.NaN;
+        const currentNav = position.navDisclosedToday && Number.isFinite(position.latestNav)
+          ? position.latestNav
+          : (Number.isFinite(position.estimatedNav) ? position.estimatedNav : position.latestNav);
+        if (!Number.isFinite(currentNav)) return Number.NaN;
+        return ((currentNav - entryNav) / entryNav) * 100;
+      })
+      .filter((value) => Number.isFinite(value));
+
+    const stockSinceAddedRate = average(stockSinceAddedRates);
+    const fundSinceAddedRate = average(fundSinceAddedRates);
+    const totalSinceAddedRate = average([...stockSinceAddedRates, ...fundSinceAddedRates]);
+
     return {
       totalAssets,
       stockMarketValue,
@@ -707,38 +946,55 @@ export default function App() {
       disclosedFundCount,
       stockRatio,
       fundRatio,
+      stockSinceAddedRate,
+      fundSinceAddedRate,
+      totalSinceAddedRate,
     };
   }, [fundHoldings, fundPositions, stockHoldings, stockPositions]);
   const stockPinnedCode = stockHoldings.find((item) => item.pinned)?.code ?? null;
   const fundPinnedCode = fundHoldings.find((item) => item.pinned)?.code ?? null;
-  const stockRows = useMemo(() => {
+  const stockRows = useMemo<StockRow[]>(() => {
     const positionMap = new Map(stockPositions.map((item) => [item.code, item]));
-    return stockHoldings
-      .map((holding) => {
-        const row = positionMap.get(holding.code);
-        if (!row) return null;
-        return {
-          ...row,
-          pinned: Boolean(holding.pinned),
-          special: Boolean(holding.special),
-        };
-      })
-      .filter((item): item is StockPosition & { pinned: boolean; special: boolean } => item !== null);
+    const rows: StockRow[] = [];
+    for (const holding of stockHoldings) {
+      const row = positionMap.get(holding.code);
+      if (!row) continue;
+      const next: StockRow = {
+        ...row,
+        pinned: Boolean(holding.pinned),
+        special: Boolean(holding.special),
+      };
+      if (Number.isFinite(holding.addedPrice) && (holding.addedPrice as number) > 0) {
+        next.addedPrice = holding.addedPrice;
+      }
+      if (holding.addedAt) {
+        next.addedAt = holding.addedAt;
+      }
+      rows.push(next);
+    }
+    return rows;
   }, [stockHoldings, stockPositions]);
 
-  const fundRows = useMemo(() => {
+  const fundRows = useMemo<FundRow[]>(() => {
     const positionMap = new Map(fundPositions.map((item) => [item.code, item]));
-    return fundHoldings
-      .map((holding) => {
-        const row = positionMap.get(holding.code);
-        if (!row) return null;
-        return {
-          ...row,
-          pinned: Boolean(holding.pinned),
-          special: Boolean(holding.special),
-        };
-      })
-      .filter((item): item is FundPosition & { pinned: boolean; special: boolean } => item !== null);
+    const rows: FundRow[] = [];
+    for (const holding of fundHoldings) {
+      const row = positionMap.get(holding.code);
+      if (!row) continue;
+      const next: FundRow = {
+        ...row,
+        pinned: Boolean(holding.pinned),
+        special: Boolean(holding.special),
+      };
+      if (Number.isFinite(holding.addedNav) && (holding.addedNav as number) > 0) {
+        next.addedNav = holding.addedNav;
+      }
+      if (holding.addedAt) {
+        next.addedAt = holding.addedAt;
+      }
+      rows.push(next);
+    }
+    return rows;
   }, [fundHoldings, fundPositions]);
 
   const stockDisplayRows = useMemo(() => (
@@ -759,6 +1015,62 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0)
   ), [stockDisplayRows]);
+
+  const recentDailyProfitDetails = useMemo(
+    () => dailyProfitDetails.slice(0, 40),
+    [dailyProfitDetails]
+  );
+
+  // Backfill entry snapshot for existing watchlist items that were added before this feature.
+  useEffect(() => {
+    if (!portfolioReady || stockHoldings.length === 0 || stockPositions.length === 0) return;
+    const priceMap = new Map(stockPositions.map((item) => [item.code, item.price]));
+    const now = new Date().toISOString();
+    let changed = false;
+
+    const next = stockHoldings.map((holding) => {
+      if (Number.isFinite(holding.addedPrice) && (holding.addedPrice as number) > 0) return holding;
+      const price = Number(priceMap.get(holding.code));
+      if (!Number.isFinite(price) || price <= 0) return holding;
+      changed = true;
+      return {
+        ...holding,
+        addedPrice: Math.round(price * 1000) / 1000,
+        addedAt: holding.addedAt || now,
+      };
+    });
+
+    if (changed) {
+      setStockHoldings(next);
+    }
+  }, [portfolioReady, stockHoldings, stockPositions]);
+
+  useEffect(() => {
+    if (!portfolioReady || fundHoldings.length === 0 || fundPositions.length === 0) return;
+    const fundMap = new Map(fundPositions.map((item) => [item.code, item]));
+    const now = new Date().toISOString();
+    let changed = false;
+
+    const next = fundHoldings.map((holding) => {
+      if (Number.isFinite(holding.addedNav) && (holding.addedNav as number) > 0) return holding;
+      const position = fundMap.get(holding.code);
+      if (!position) return holding;
+      const currentNav = position.navDisclosedToday && Number.isFinite(position.latestNav)
+        ? position.latestNav
+        : (Number.isFinite(position.estimatedNav) ? position.estimatedNav : position.latestNav);
+      if (!Number.isFinite(currentNav) || currentNav <= 0) return holding;
+      changed = true;
+      return {
+        ...holding,
+        addedNav: Math.round(currentNav * 10000) / 10000,
+        addedAt: holding.addedAt || now,
+      };
+    });
+
+    if (changed) {
+      setFundHoldings(next);
+    }
+  }, [portfolioReady, fundHoldings, fundPositions]);
 
   useEffect(() => {
     // 初始化面板透明度
@@ -889,17 +1201,141 @@ export default function App() {
     }
   }, [portfolioReady, badgeConfig, stockPositions, fundPositions, stockHoldings, fundHoldings]);
 
+  // ---- Market Stats: always visible, refresh only during trading hours ----
+  // 非交易时段保留最后一次获取的数据，不刷新
+  useEffect(() => {
+    let cancelled = false;
+    const cacheKey = MARKET_STATS_CACHE_KEY;
+    const historyKey = MARKET_STATS_HISTORY_KEY;
+    const updatedAtKey = MARKET_STATS_UPDATED_AT_KEY;
+
+    void (async () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const result = await chrome.storage.local.get([cacheKey, historyKey, updatedAtKey]);
+        const cached = result[cacheKey] as MarketStats | undefined;
+        const history = (result[historyKey] as Record<string, number> | undefined) ?? {};
+        const updatedAt = result[updatedAtKey];
+        if (cached && Number.isFinite(cached.turnover) && typeof updatedAt === 'string' && updatedAt) {
+          const updatedAtMs = Date.parse(updatedAt);
+          if (Number.isFinite(updatedAtMs)) {
+            history[getShanghaiDateKey(updatedAtMs)] = cached.turnover;
+          }
+        }
+        marketStatsHistoryRef.current = history;
+        if (!cancelled && cached && Number.isFinite(cached.turnover)) {
+          setMarketStats(deriveMarketStats(cached, history, getShanghaiToday()));
+        }
+      }
+    })();
+
+    const fetchOnce = async () => {
+      const stats = await fetchMarketStats();
+      if (!cancelled && stats) {
+        const today = getShanghaiToday();
+        const history = marketStatsHistoryRef.current;
+        const displayStats = deriveMarketStats(stats, history, today);
+        history[today] = stats.turnover;
+        marketStatsHistoryRef.current = history;
+        setMarketStats(displayStats);
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          void chrome.storage.local.set({
+            [cacheKey]: stats,
+            [historyKey]: history,
+            [updatedAtKey]: new Date().toISOString(),
+          });
+        }
+      }
+    };
+
+    // 首次加载：始终尝试获取一次，避免缓存缺失时直接空白
+    const initialFetch = async () => {
+      const stats = await fetchMarketStats();
+      if (!cancelled && stats) {
+        const today = getShanghaiToday();
+        const history = marketStatsHistoryRef.current;
+        const displayStats = deriveMarketStats(stats, history, today);
+        history[today] = stats.turnover;
+        marketStatsHistoryRef.current = history;
+        setMarketStats(displayStats);
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          void chrome.storage.local.set({
+            [cacheKey]: stats,
+            [historyKey]: history,
+            [updatedAtKey]: new Date().toISOString(),
+          });
+        }
+      }
+    };
+    void initialFetch();
+
+    // 读取刷新间隔配置
+    let refreshSeconds = 30;
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get('refreshConfig', (result: Record<string, unknown>) => {
+        const config = result['refreshConfig'] as { marketStatsRefreshSeconds?: number } | undefined;
+        if (config?.marketStatsRefreshSeconds) {
+          refreshSeconds = config.marketStatsRefreshSeconds;
+        }
+      });
+    }
+
+    // 定时刷新
+    const timer = setInterval(() => {
+      void fetchOnce();
+    }, refreshSeconds * 1000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   // 打开设置页
   const openSettings = () => {
     chrome.runtime.openOptionsPage();
   };
 
-  // ---- 从 storage.local 读取后台缓存数据 ----
+  // Normalize intraday data from old format (array) to new format ({ data, prevClose })
+function normalizeIntraday(intraday: unknown): { data: Array<{ time: string; price: number }>; prevClose: number } {
+  if (!intraday) return { data: [], prevClose: Number.NaN };
+  // New format
+  if (typeof intraday === 'object' && 'data' in intraday && 'prevClose' in intraday) {
+    return intraday as { data: Array<{ time: string; price: number }>; prevClose: number };
+  }
+  // Old format (array)
+  if (Array.isArray(intraday)) {
+    return { data: intraday, prevClose: Number.NaN };
+  }
+  return { data: [], prevClose: Number.NaN };
+}
+
+function clearIntradayIfStale(
+  rows: StockPosition[],
+  intradayDate: string | null | undefined,
+): StockPosition[] {
+  const today = getShanghaiToday();
+  if (intradayDate === today) return rows;
+  return rows.map((row) => ({
+    ...row,
+    intraday: { data: [], prevClose: Number.NaN },
+  }));
+}
+
+// ---- 从 storage.local 读取后台缓存数据 ----
   useEffect(() => {
     // 初始加载
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['stockPositions', 'fundPositions', 'indexPositions'], (result: Record<string, unknown>) => {
-        if (Array.isArray(result.stockPositions)) setStockPositions(result.stockPositions as StockPosition[]);
+      chrome.storage.local.get(['stockPositions', 'fundPositions', 'indexPositions', STOCK_INTRADAY_DATE_KEY], (result: Record<string, unknown>) => {
+        if (Array.isArray(result.stockPositions)) {
+          const normalizedRows = (result.stockPositions as StockPosition[]).map((p) => ({
+            ...p,
+            intraday: normalizeIntraday((p as unknown as { intraday: unknown }).intraday),
+          }));
+          const intradayDate = typeof result[STOCK_INTRADAY_DATE_KEY] === 'string'
+            ? (result[STOCK_INTRADAY_DATE_KEY] as string)
+            : null;
+          setStockPositions(clearIntradayIfStale(normalizedRows, intradayDate));
+        }
         if (Array.isArray(result.fundPositions)) setFundPositions(result.fundPositions as FundPosition[]);
         if (Array.isArray(result.indexPositions)) {
           const cached = result.indexPositions as MarketIndexQuote[];
@@ -914,7 +1350,16 @@ export default function App() {
     // 监听后台刷新写入
     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local') return;
-      if (changes.stockPositions?.newValue) setStockPositions(changes.stockPositions.newValue as StockPosition[]);
+      if (changes.stockPositions?.newValue) {
+        const normalizedRows = (changes.stockPositions.newValue as StockPosition[]).map((p) => ({
+          ...p,
+          intraday: normalizeIntraday((p as unknown as { intraday: unknown }).intraday),
+        }));
+        const intradayDate = typeof changes[STOCK_INTRADAY_DATE_KEY]?.newValue === 'string'
+          ? (changes[STOCK_INTRADAY_DATE_KEY].newValue as string)
+          : getShanghaiToday();
+        setStockPositions(clearIntradayIfStale(normalizedRows, intradayDate));
+      }
       if (changes.fundPositions?.newValue) setFundPositions(changes.fundPositions.newValue as FundPosition[]);
       if (changes.indexPositions?.newValue) {
         const cached = changes.indexPositions.newValue as MarketIndexQuote[];
@@ -947,8 +1392,10 @@ export default function App() {
       setStocksLoading(false);
       return;
     }
-    // 检查是否已有缓存数据
-    if (stockPositions.length > 0) {
+    // 检查是否所有持仓股都已有缓存数据
+    const positionCodes = new Set(stockPositions.map((p) => p.code));
+    const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(h.code));
+    if (missingHoldings.length === 0) {
       setStocksLoading(false);
       return;
     }
@@ -958,26 +1405,37 @@ export default function App() {
       setStocksLoading(true);
       try {
         const { fetchBatchStockQuotes, fetchStockIntraday } = await import('../shared/fetch');
-        const rows = await fetchBatchStockQuotes(stockHoldings);
+        // 只拉取缺失的股票
+        const newRows = await fetchBatchStockQuotes(missingHoldings);
         if (!cancelled) {
-          setStockPositions(rows);
+          // 追加到现有 positions
+          setStockPositions((prev) => {
+            const existingCodes = new Set(prev.map((p) => p.code));
+            const appended = [...prev];
+            for (const row of newRows) {
+              if (!existingCodes.has(row.code)) {
+                appended.push(row);
+              }
+            }
+            return appended;
+          });
           setStocksError('');
           // 并行拉分时图
-          const codes = stockHoldings
+          const codes = missingHoldings
             .map((h) => normalizeStockCode(h.code))
             .filter(Boolean);
           codes.forEach(async (code) => {
             try {
-              const intraday = await fetchStockIntraday(code);
+              const { data, prevClose } = await fetchStockIntraday(code);
               if (!cancelled) {
                 setStockPositions((prev) =>
-                  prev.map((p) => (p.code === code ? { ...p, intraday } : p)),
+                  prev.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p)),
                 );
                 // 写回 storage.local 让后台刷新能保留 intraday
                 if (typeof chrome !== 'undefined' && chrome.storage?.local) {
                   const result = await chrome.storage.local.get('stockPositions');
                   const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
-                  const updated = existing.map((p) => (p.code === code ? { ...p, intraday } : p));
+                  const updated = existing.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p));
                   await chrome.storage.local.set({ stockPositions: updated });
                 }
               }
@@ -1142,31 +1600,71 @@ export default function App() {
     }
   }, [sortingMode, stockHoldings, fundHoldings]);
 
-  const addStockToPortfolio = useCallback((stock: SearchStock) => {
+  const addStockToPortfolio = useCallback(async (stock: SearchStock) => {
     const normalizedCode = normalizeStockCode(stock.code);
     if (!normalizedCode) return;
 
+    let addedPrice = stockPositions.find((item) => item.code === normalizedCode && Number.isFinite(item.price))?.price ?? Number.NaN;
+    if (!Number.isFinite(addedPrice)) {
+      try {
+        const rows = await fetchBatchStockQuotes([{ code: normalizedCode, shares: 0, cost: 0 }]);
+        addedPrice = rows.find((item) => item.code === normalizedCode)?.price ?? Number.NaN;
+      } catch {
+        addedPrice = Number.NaN;
+      }
+    }
+
+    const addedAt = new Date().toISOString();
     setStockHoldings((prev) => {
       if (prev.some((item) => item.code === normalizedCode)) return prev;
       return insertAfterPinned(
         prev,
-        { code: normalizedCode, shares: 0, cost: 0, pinned: false, special: false }
+        {
+          code: normalizedCode,
+          shares: 0,
+          cost: 0,
+          pinned: false,
+          special: false,
+          addedAt,
+          addedPrice: Number.isFinite(addedPrice) && addedPrice > 0 ? Math.round(addedPrice * 1000) / 1000 : undefined,
+        }
       );
     });
-  }, []);
+  }, [stockPositions]);
 
-  const addFundToPortfolio = useCallback((fund: SearchStock) => {
+  const addFundToPortfolio = useCallback(async (fund: SearchStock) => {
     const code = normalizeFundCode(fund.code);
     if (!code) return;
 
+    let addedNav = fundPositions.find((item) => item.code === code && Number.isFinite(item.estimatedNav))?.estimatedNav ?? Number.NaN;
+    if (!Number.isFinite(addedNav)) {
+      try {
+        const row = await fetchTiantianFundPosition({ code, units: 0, cost: 0, name: fund.name });
+        const candidate = row.navDisclosedToday && Number.isFinite(row.latestNav) ? row.latestNav : row.estimatedNav;
+        addedNav = Number.isFinite(candidate) ? candidate : row.latestNav;
+      } catch {
+        addedNav = Number.NaN;
+      }
+    }
+
+    const addedAt = new Date().toISOString();
     setFundHoldings((prev) => {
       if (prev.some((item) => item.code === code)) return prev;
       return insertAfterPinned(
         prev,
-        { code, units: 0, cost: 0, name: fund.name, pinned: false, special: false }
+        {
+          code,
+          units: 0,
+          cost: 0,
+          name: fund.name,
+          pinned: false,
+          special: false,
+          addedAt,
+          addedNav: Number.isFinite(addedNav) && addedNav > 0 ? Math.round(addedNav * 10000) / 10000 : undefined,
+        }
       );
     });
-  }, []);
+  }, [fundPositions]);
 
   const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string) => {
     if (sortingMode) return;
@@ -1278,9 +1776,9 @@ export default function App() {
 
   const onSelectSuggestion = (item: SearchStock) => {
     if (activeTab === 'funds') {
-      addFundToPortfolio(item);
+      void addFundToPortfolio(item);
     } else {
-      addStockToPortfolio(item);
+      void addStockToPortfolio(item);
     }
     setKeyword('');
     setIsSearchOpen(false);
@@ -1469,7 +1967,7 @@ export default function App() {
             className={`nav-btn ${activeTab === 'stocks' ? 'active' : ''}`}
             onClick={() => setActiveTab('stocks')}
           >
-            <BarChart3 size={11} />
+            <BarChart3 size={12} />
             <span>股票</span>
           </button>
           <button
@@ -1477,7 +1975,7 @@ export default function App() {
             className={`nav-btn ${activeTab === 'funds' ? 'active' : ''}`}
             onClick={() => setActiveTab('funds')}
           >
-            <WalletCards size={11} />
+            <WalletCards size={12} />
             <span>基金</span>
           </button>
           <button
@@ -1485,35 +1983,82 @@ export default function App() {
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
             onClick={() => setActiveTab('account')}
           >
-            <PieChart size={11} />
+            <PieChart size={12} />
             <span>账户</span>
+          </button>
+          <button
+            type="button"
+            className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+            style={{ position: 'relative' }}
+          >
+            <Bell size={12} />
+            <span>通知</span>
+            {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
           </button>
 
           <div className="nav-spacer" />
 
-          <button
-            type="button"
-            className="nav-btn theme-toggle-btn"
-            onClick={openSettings}
-            aria-label="打开设置"
-          >
-            <Settings size={11} />
-            <span>设置</span>
-          </button>
+          <div className="side-nav-footer">
+            <div className="market-stats-panel" aria-label="市场统计">
+              <div className="market-stats-entry">
+                <span className="market-stats-label">上涨</span>
+                <span className="market-stats-value up">{marketStats ? formatNumber(marketStats.upCount, 0) : '--'}</span>
+              </div>
+              <div className="market-stats-entry">
+                <span className="market-stats-label">平盘</span>
+                <span className="market-stats-value flat">{marketStats ? formatNumber(marketStats.flatCount, 0) : '--'}</span>
+              </div>
+              <div className="market-stats-entry">
+                <span className="market-stats-label">下跌</span>
+                <span className="market-stats-value down">{marketStats ? formatNumber(marketStats.downCount, 0) : '--'}</span>
+              </div>
+              <div className="market-stats-entry">
+                <span className="market-stats-label">成交额</span>
+                <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.turnover) : '--'}</span>
+              </div>
+              <div className="market-stats-entry">
+                <span className="market-stats-label">
+                  {marketStats && Number.isFinite(marketStats.volumeChange)
+                    ? (marketStats.volumeChange >= 0 ? '放量' : '缩量')
+                    : '缩量'}
+                </span>
+                <span className={`market-stats-value ${marketStats && Number.isFinite(marketStats.volumeChange) ? (marketStats.volumeChange >= 0 ? 'up' : 'down') : ''}`}>
+                  {marketStats && Number.isFinite(marketStats.volumeChange)
+                    ? formatMarketAmount(Math.abs(marketStats.volumeChange))
+                    : '--'}
+                </span>
+              </div>
+              <div className="market-stats-entry">
+                <span className="market-stats-label">昨成交</span>
+                <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.prevTurnover) : '--'}</span>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            className="nav-btn theme-toggle-btn"
-            onClick={toggleTheme}
-            aria-label="切换主题"
-          >
-            {theme === 'dark' ? <Sun size={11} /> : <Moon size={11} />}
-            <span>{theme === 'dark' ? '浅色' : '深色'}</span>
-          </button>
+            <button
+              type="button"
+              className="nav-btn theme-toggle-btn"
+              onClick={openSettings}
+              aria-label="打开设置"
+            >
+              <Settings size={12} />
+              <span>设置</span>
+            </button>
+
+            <button
+              type="button"
+              className="nav-btn theme-toggle-btn"
+              onClick={toggleTheme}
+              aria-label="切换主题"
+            >
+              {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+              <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+            </button>
+          </div>
         </aside>
 
-        <main className={`main-area ${stockDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -1536,7 +2081,7 @@ export default function App() {
           </section>
           ) : null}
 
-          {!stockDetailTarget ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -1682,6 +2227,12 @@ export default function App() {
                           {formatNumber(accountSnapshot.stockDaily, 2)}
                         </strong>
                       </div>
+                      <div className="account-stat-row">
+                        <span>加入后累计收益率</span>
+                        <strong className={toneClass(accountSnapshot.totalSinceAddedRate)}>
+                          {formatPercent(accountSnapshot.totalSinceAddedRate)}
+                        </strong>
+                      </div>
                     </div>
                   </article>
 
@@ -1726,6 +2277,10 @@ export default function App() {
                         <span>当日盈亏</span>
                         <strong className={toneClass(accountSnapshot.stockDaily)}>{formatNumber(accountSnapshot.stockDaily, 2)}</strong>
                       </div>
+                      <div className="account-detail-item">
+                        <span>加入后累计收益率</span>
+                        <strong className={toneClass(accountSnapshot.stockSinceAddedRate)}>{formatPercent(accountSnapshot.stockSinceAddedRate)}</strong>
+                      </div>
                     </div>
                   </article>
 
@@ -1752,9 +2307,53 @@ export default function App() {
                         <span>估算收益</span>
                         <strong className={toneClass(accountSnapshot.fundEstimated)}>{formatNumber(accountSnapshot.fundEstimated, 2)}</strong>
                       </div>
+                      <div className="account-detail-item">
+                        <span>加入后累计收益率</span>
+                        <strong className={toneClass(accountSnapshot.fundSinceAddedRate)}>{formatPercent(accountSnapshot.fundSinceAddedRate)}</strong>
+                      </div>
                     </div>
                   </article>
                 </div>
+
+                <article className="account-card account-daily-card">
+                  <div className="account-daily-header">
+                    <span className="account-section-label">收益明细（按交易日）</span>
+                    <span className="account-daily-count">
+                      {recentDailyProfitDetails.length > 0 ? `最近 ${recentDailyProfitDetails.length} 日` : '暂无记录'}
+                    </span>
+                  </div>
+
+                  {recentDailyProfitDetails.length > 0 ? (
+                    <div className="account-daily-table-wrap">
+                      <table className="account-daily-table">
+                        <thead>
+                          <tr>
+                            <th>交易日</th>
+                            <th>股票日盈亏</th>
+                            <th>基金日收益</th>
+                            <th>当日合计</th>
+                            <th>持仓只数</th>
+                            <th>记录时间</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentDailyProfitDetails.map((record) => (
+                            <tr key={record.date}>
+                              <td className="text-left">{record.date}</td>
+                              <td className={`text-right ${toneClass(record.stockDailyPnl)}`}>{formatNumber(record.stockDailyPnl, 2)}</td>
+                              <td className={`text-right ${toneClass(record.fundDailyProfit)}`}>{formatNumber(record.fundDailyProfit, 2)}</td>
+                              <td className={`text-right ${toneClass(record.totalDailyProfit)}`}>{formatNumber(record.totalDailyProfit, 2)}</td>
+                              <td className="text-right">{`${record.stockCount + record.fundCount}`}</td>
+                              <td className="text-right">{formatDetailUpdatedTime(record.updatedAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="account-daily-empty">当前还没有交易日收益记录，开盘刷新后会自动生成。</div>
+                  )}
+                </article>
               </div>
             ) : null}
 
@@ -1765,6 +2364,46 @@ export default function App() {
                   <button type="button" onClick={cancelSorting}>取消</button>
                   <button type="button" className="primary" onClick={completeSorting}>完成排序</button>
                 </div>
+              </div>
+            ) : null}
+
+            {/* ---- Notification Panel ---- */}
+            {activeTab === 'notifications' ? (
+              <div className="notification-panel" style={{ opacity: panelOpacity }}>
+                <div className="notification-header">
+                  <span className="notification-title">消息通知</span>
+                  <div className="notification-actions">
+                    {unreadCount > 0 && (
+                      <button type="button" className="notif-btn" onClick={markAllRead}>
+                        全部已读
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button type="button" className="notif-btn danger" onClick={clearNotifications}>
+                        清空
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {notifications.length === 0 ? (
+                  <div className="notification-empty">暂无通知</div>
+                ) : (
+                  <div className="notification-list">
+                    {notifications.map((item) => (
+                      <div key={item.id} className={`notification-item ${item.read ? '' : 'unread'}`}>
+                        <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
+                        <div className="notification-text">
+                          <span className="notification-stock">
+                            {item.name}
+                            <span className="notification-code">({item.code})</span>
+                          </span>
+                          <span className="notification-message">{item.message}</span>
+                        </div>
+                        <span className="notification-time">{formatRelativeTime(item.firedAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -1866,8 +2505,9 @@ export default function App() {
                               }
                             }}
                           >
-                            <IntradayChart 
-                              data={item.intraday} 
+                            <IntradayChart
+                              data={item.intraday?.data ?? []}
+                              prevClose={item.prevClose}
                             />
                           </td>
                           <td className="dual-value">
