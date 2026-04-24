@@ -595,7 +595,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     // 标题：股票名称(代码) + spike 类型描述
     const spikeLabel = spikeDirection === 'up' ? '急速拉升' : spikeDirection === 'down' ? '急速打压' : '';
     const titleSuffix = spikeLabel ? ` ${spikeLabel}` : '';
-    const notifTitle = `${alert.name}(${alert.code})${titleSuffix}`;
+    const notifTitle = `🔔 ${alert.name}(${alert.code})${titleSuffix}`;
 
     if (isSpike) {
       // 第一行：近X分钟 上涨/下跌 X.XX% + 箭头
