@@ -484,16 +484,44 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
   const intradayValuation = intradayResult.status === 'fulfilled' ? intradayResult.value : [];
   const { holdings: topHoldings, reportDate: holdingReportDate } = holdingsResult.status === 'fulfilled' ? holdingsResult.value : { holdings: [], reportDate: '' };
 
+  // 缓存分时估值数据，非交易时段可回退使用
+  let effectiveIntraday = intradayValuation;
+  let effectivePrevDayNav = estimate.prevDayNav;
+  if (intradayValuation.length > 0 && Number.isFinite(estimate.prevDayNav)) {
+    try {
+      await chrome.storage.local.set({
+        [`fundIntradayCache_${code}`]: {
+          points: intradayValuation,
+          prevDayNav: estimate.prevDayNav,
+          updatedAt: Date.now(),
+        },
+      });
+    } catch { /* ignore */ }
+  } else if (intradayValuation.length === 0) {
+    try {
+      const cached: Record<string, unknown> = await chrome.storage.local.get(`fundIntradayCache_${code}`);
+      const cacheData = cached[`fundIntradayCache_${code}`] as { points?: IntradayValPoint[]; prevDayNav?: number } | undefined;
+      if (cacheData?.points && cacheData.points.length > 0) {
+        effectiveIntraday = cacheData.points;
+        const cachedNav = cacheData.prevDayNav;
+        if (typeof cachedNav === 'number' && Number.isFinite(cachedNav)) {
+          effectivePrevDayNav = cachedNav;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   return {
     info,
     navHistory,
     navHistory3m,
     navHistory5y,
     yieldHistory,
-    intradayValuation,
+    intradayValuation: effectiveIntraday,
     topHoldings,
     holdingReportDate,
     ...estimate,
+    prevDayNav: effectivePrevDayNav,
   };
 }
 
