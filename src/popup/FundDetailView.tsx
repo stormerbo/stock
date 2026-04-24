@@ -728,6 +728,7 @@ function NavTrendChart({ data, daysLimit }: { data: FundNavPoint[]; daysLimit?: 
 
 function YieldChart({ data }: { data: FundYieldPoint[] }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
   const width = 580;
   const height = 140;
   const padding = { top: 12, right: 10, bottom: 20, left: 10 };
@@ -763,6 +764,7 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
 
   const activeIndex = hoverIndex === null ? validData.length - 1 : Math.max(0, Math.min(hoverIndex, validData.length - 1));
   const activeItem = validData[activeIndex];
+  const activeX = hoverSvgX === null ? toX(activeIndex) : Math.max(toX(0), Math.min(toX(validData.length - 1), hoverSvgX));
 
   const yTicks = 4;
   const yLabels = Array.from({ length: yTicks + 1 }, (_, i) => {
@@ -779,8 +781,12 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
         if (rect.width <= 0) return;
         const relX = Math.max(0, Math.min((event.clientX - rect.left) / rect.width, 0.9999));
         setHoverIndex(Math.round(relX * (validData.length - 1)));
+        setHoverSvgX(relX * width);
       }}
-      onMouseLeave={() => setHoverIndex(null)}
+      onMouseLeave={() => {
+        setHoverIndex(null);
+        setHoverSvgX(null);
+      }}
     >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         {/* Zero line */}
@@ -825,12 +831,36 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
         <span><span className="fund-legend-dot" style={{ background: indexColor, opacity: 0.7 }} />{activeItem.benchmarkName || '基准指数'} {formatPercent(activeItem.indexYield)}</span>
       </div>
 
-      {/* Tooltip */}
-      <div className="fund-nav-tooltip">
-        <span className="fund-nav-tooltip-date">{activeItem.date}</span>
-        <span>本基金 <span className={toneClass(activeItem.yield)}>{formatPercent(activeItem.yield)}</span></span>
-        <span>基准 <span className={toneClass(activeItem.indexYield)}>{formatPercent(activeItem.indexYield)}</span></span>
-      </div>
+      {/* Floating tooltip popup（类似走势图弹窗） */}
+      {hoverIndex !== null ? (() => {
+        const pct = activeX / width;
+        const isRight = pct > 0.6;
+        const style: React.CSSProperties = {
+          position: 'absolute',
+          top: '4px',
+          zIndex: 25,
+          pointerEvents: 'none',
+          ...(isRight
+            ? { right: `${((1 - pct) * 100).toFixed(1)}%` }
+            : { left: `calc(${(pct * 100).toFixed(1)}% + 10px)` }),
+        };
+        return (
+          <div className="chart-tooltip" style={style}>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">日期</span>
+              <span className="chart-tooltip-value">{activeItem.date}</span>
+            </div>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">本基金</span>
+              <span className={`chart-tooltip-value ${toneClass(activeItem.yield)}`}>{formatPercent(activeItem.yield)}</span>
+            </div>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">{activeItem.benchmarkName || '基准指数'}</span>
+              <span className={`chart-tooltip-value ${toneClass(activeItem.indexYield)}`}>{formatPercent(activeItem.indexYield)}</span>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
