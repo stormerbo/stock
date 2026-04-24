@@ -518,6 +518,7 @@ const CHART_RANGE_LABELS: Array<{ label: string; value: FundChartRange; days: nu
 
 function NavTrendChart({ data, daysLimit }: { data: FundNavPoint[]; daysLimit?: number }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
   const width = 580;
   const height = 120;
   const padding = { top: 8, right: 10, bottom: 20, left: 10 };
@@ -578,6 +579,7 @@ function NavTrendChart({ data, daysLimit }: { data: FundNavPoint[]; daysLimit?: 
 
   const activeIndex = hoverIndex === null ? validData.length - 1 : Math.max(0, Math.min(hoverIndex, validData.length - 1));
   const activeItem = validData[activeIndex];
+  const activeX = hoverSvgX === null ? toX(activeIndex) : Math.max(toX(0), Math.min(toX(validData.length - 1), hoverSvgX));
 
   // Y-axis labels
   const yTicks = 4;
@@ -595,8 +597,12 @@ function NavTrendChart({ data, daysLimit }: { data: FundNavPoint[]; daysLimit?: 
         if (rect.width <= 0) return;
         const relX = Math.max(0, Math.min((event.clientX - rect.left) / rect.width, 0.9999));
         setHoverIndex(Math.round(relX * (validData.length - 1)));
+        setHoverSvgX(relX * width);
       }}
-      onMouseLeave={() => setHoverIndex(null)}
+      onMouseLeave={() => {
+        setHoverIndex(null);
+        setHoverSvgX(null);
+      }}
     >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <defs>
@@ -650,12 +656,40 @@ function NavTrendChart({ data, daysLimit }: { data: FundNavPoint[]; daysLimit?: 
         <circle cx={toX(activeIndex).toFixed(2)} cy={toY(activeItem.nav).toFixed(2)} r="3.5" fill="white" stroke={lineColor} strokeWidth="2" />
       </svg>
 
-      {/* Hover tooltip */}
-      <div className="fund-nav-tooltip">
-        <span className="fund-nav-tooltip-date">{activeItem.date}</span>
-        <span className="fund-nav-tooltip-nav">{formatNumber(activeItem.nav, 4)}</span>
-        <span className={toneClass(activeItem.dailyReturn)}>{formatPercent(activeItem.dailyReturn)}</span>
-      </div>
+      {/* Floating tooltip popup（类似股票K线图弹窗） */}
+      {hoverIndex !== null ? (() => {
+        const pct = activeX / width;
+        const isRight = pct > 0.6;
+        const style: React.CSSProperties = {
+          position: 'absolute',
+          top: '4px',
+          zIndex: 25,
+          pointerEvents: 'none',
+          ...(isRight
+            ? { right: `${((1 - pct) * 100).toFixed(1)}%` }
+            : { left: `calc(${(pct * 100).toFixed(1)}% + 10px)` }),
+        };
+        return (
+          <div className="chart-tooltip" style={style}>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">日期</span>
+              <span className="chart-tooltip-value">{activeItem.date}</span>
+            </div>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">单位净值</span>
+              <span className="chart-tooltip-value">{formatNumber(activeItem.nav, 4)}</span>
+            </div>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">累计净值</span>
+              <span className="chart-tooltip-value">{formatNumber(activeItem.accumulatedNav, 4)}</span>
+            </div>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">日涨跌幅</span>
+              <span className={`chart-tooltip-value ${toneClass(activeItem.dailyReturn)}`}>{formatPercent(activeItem.dailyReturn)}</span>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
