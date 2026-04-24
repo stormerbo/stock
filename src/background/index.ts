@@ -647,55 +647,11 @@ async function refreshFunds() {
     await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
     void recordDailyProfitDetail();
     void updateHoverTitleFromStorage();
-
-    // 缓存基金分时估值数据，供非交易时段使用
-    void cacheFundIntradayData(funds);
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
   }
 }
 
-/** 缓存基金分时估值数据到 local storage */
-async function cacheFundIntradayData(funds: FundHoldingConfig[]) {
-  for (const fund of funds) {
-    try {
-      const code = fund.code;
-      const params = new URLSearchParams({
-        FCODE: code,
-        deviceid: 'Wap',
-        plat: 'Wap',
-        product: 'EFund',
-        version: '2.0.0',
-        _: String(Date.now()),
-      });
-      const url = `https://fundmobapi.eastmoney.com/FundMApi/FundVarietieValuationDetail.ashx?${params}`;
-      const resp = await fetch(url);
-      const text = await resp.text();
-      const data = JSON.parse(text) as { Datas?: string[] };
-      const items = data.Datas ?? [];
-      const points: Array<{ time: string; changePct: number }> = [];
-      for (const item of items) {
-        const parts = item.split(',');
-        if (parts.length < 3) continue;
-        const time = parts[0];
-        const changePct = Number(parts[2]);
-        if (!Number.isFinite(changePct)) continue;
-        points.push({ time, changePct });
-      }
-      if (points.length > 0) {
-        await chrome.storage.local.set({
-          [`fundIntradayCache_${code}`]: {
-            points,
-            prevDayNav: Number.NaN, // background 不获取 prevDayNav，popup 会补充
-            updatedAt: Date.now(),
-          },
-        });
-      }
-    } catch {
-      // ignore individual fund failures
-    }
-  }
-}
 
 async function recordDailyProfitDetail() {
   try {

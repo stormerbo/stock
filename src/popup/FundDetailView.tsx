@@ -85,6 +85,7 @@ type FundYieldPoint = {
 type IntradayValPoint = {
   time: string;
   changePct: number;
+  nav?: number;
 };
 
 type FundHoldingStock = {
@@ -302,30 +303,62 @@ async function fetchYieldDiagram(code: string): Promise<{ points: FundYieldPoint
   }
 }
 
-/** 5. 分时估值明细 (FundVarietieValuationDetail.ashx) */
+/** 5. 分时估值明细 — 优先调用 FundValuationDetail API（仅支持指数/ETF），无数据时回退到 fundgz 单点 */
 async function fetchIntradayValuation(code: string): Promise<IntradayValPoint[]> {
+  // 1) 尝试 FundValuationDetail（支持指数基金、ETF 等，返回完整分时数据）
   try {
     const params = new URLSearchParams({
       FCODE: code,
-      ...API_COMMON,
-      _: String(Date.now()),
+      deviceid: 'Wap',
+      plat: 'Wap',
+      product: 'EFund',
+      version: '2.0.0',
     });
-    const url = `https://fundmobapi.eastmoney.com/FundMApi/FundVarietieValuationDetail.ashx?${params}`;
+    const url = `https://fundcomapi.tiantianfunds.com/mm/fundTrade/FundValuationDetail?${params}`;
     const text = await proxyFetchText(url);
-    const data = JSON.parse(text) as { Datas?: string[] };
-    const items = data.Datas ?? [];
-    // Each item: "09:30,,0.01" -> [time, ?, changePct]
-    return items
-      .map((item) => {
-        const parts = item.split(',');
-        if (parts.length < 3) return null;
-        const time = parts[0];
-        const changePct = toNumber(parts[2]);
-        if (!Number.isFinite(changePct)) return null;
-        return { time, changePct };
-      })
-      .filter((p): p is IntradayValPoint => p !== null);
-  } catch {
+    const data = JSON.parse(text) as { data?: string | null };
+    if (data.data) {
+      // data.data 是嵌套的 JSON 字符串，需要二次解析
+      const inner = JSON.parse(data.data) as {
+        Datas?: string[];
+        ErrCode?: number;
+        Expansion?: { GZTIME?: string; DWJZ?: string; GSZZL?: string };
+      };
+      const items = inner.Datas ?? [];
+      if (items.length > 0) {
+        const points: IntradayValPoint[] = [];
+        for (const item of items) {
+          const parts = item.split(',');
+          if (parts.length >= 3) {
+            const time = parts[1];
+            const changePct = Number(parts[2]);
+            if (time && Number.isFinite(changePct)) {
+              points.push({ time, changePct });
+            }
+          }
+        }
+        if (points.length > 0) return points;
+      }
+    }
+  } catch (e) {
+    console.warn('[fundIntraday] FundValuationDetail API failed:', e);
+  }
+
+  // 2) 回退：从 fundgz 获取当前单点估值（所有基金都支持）
+  try {
+    const text = await proxyFetchText(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`);
+    const match = text.match(/jsonpgz\((.*)\);?/);
+    if (!match) return [];
+    const gzData = JSON.parse(match[1]) as { gszzl?: string; gztime?: string };
+    const gszzl = toNumber(gzData.gszzl);
+    const gztime = (gzData.gztime || '').trim();
+    if (!Number.isFinite(gszzl) || !gztime) return [];
+    const timeMatch = gztime.match(/(\d{1,2}:\d{2})/);
+    const timeStr = timeMatch ? timeMatch[1] : '';
+    if (!timeStr) return [];
+    return [{ time: timeStr, changePct: gszzl }];
+  } catch (e) {
+    console.warn('[fundIntraday] fundgz fallback failed:', e);
     return [];
   }
 }
@@ -452,7 +485,7 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
   const baseInfo = baseResult.status === 'fulfilled' ? baseResult.value : {};
 
   const info: FundDetailInfo = {
-    name: holding?.name || baseInfo.name || code,
+    name: baseInfo.name || holding?.name || code,
     code,
     type: baseInfo.type || '-',
     manager: baseInfo.manager || '-',
@@ -484,44 +517,17 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
   const intradayValuation = intradayResult.status === 'fulfilled' ? intradayResult.value : [];
   const { holdings: topHoldings, reportDate: holdingReportDate } = holdingsResult.status === 'fulfilled' ? holdingsResult.value : { holdings: [], reportDate: '' };
 
-  // 缓存分时估值数据，非交易时段可回退使用
-  let effectiveIntraday = intradayValuation;
-  let effectivePrevDayNav = estimate.prevDayNav;
-  if (intradayValuation.length > 0 && Number.isFinite(estimate.prevDayNav)) {
-    try {
-      await chrome.storage.local.set({
-        [`fundIntradayCache_${code}`]: {
-          points: intradayValuation,
-          prevDayNav: estimate.prevDayNav,
-          updatedAt: Date.now(),
-        },
-      });
-    } catch { /* ignore */ }
-  } else if (intradayValuation.length === 0) {
-    try {
-      const cached: Record<string, unknown> = await chrome.storage.local.get(`fundIntradayCache_${code}`);
-      const cacheData = cached[`fundIntradayCache_${code}`] as { points?: IntradayValPoint[]; prevDayNav?: number } | undefined;
-      if (cacheData?.points && cacheData.points.length > 0) {
-        effectiveIntraday = cacheData.points;
-        const cachedNav = cacheData.prevDayNav;
-        if (typeof cachedNav === 'number' && Number.isFinite(cachedNav)) {
-          effectivePrevDayNav = cachedNav;
-        }
-      }
-    } catch { /* ignore */ }
-  }
-
   return {
     info,
     navHistory,
     navHistory3m,
     navHistory5y,
     yieldHistory,
-    intradayValuation: effectiveIntraday,
+    intradayValuation,
     topHoldings,
     holdingReportDate,
     ...estimate,
-    prevDayNav: effectivePrevDayNav,
+    prevDayNav: estimate.prevDayNav,
   };
 }
 
@@ -871,6 +877,7 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
 
 function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prevDayNav: number }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
 
   // A股交易时段：09:30-11:30（120分钟）+ 13:00-15:00（120分钟）
   const MORNING_START = 9 * 60 + 30;
@@ -902,6 +909,24 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
 
   if (data.length === 0) {
     return <div className="fund-chart-empty">暂无分时估值数据</div>;
+  }
+
+  if (data.length < 2) {
+    // 只有1个点时无法绘制折线，展示单点信息
+    const point = data[0];
+    const estNav = Number.isFinite(prevDayNav) && prevDayNav > 0
+      ? prevDayNav * (1 + point.changePct / 100)
+      : Number.NaN;
+    return (
+      <div className="fund-chart-empty">
+        <div style={{ fontSize: 13, marginBottom: 6 }}>仅1个估值数据点，无法绘制折线</div>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>
+          时间：{point.time}
+          {Number.isFinite(estNav) && <> · 估算净值：{estNav.toFixed(4)}</>}
+          {Number.isFinite(point.changePct) && <> · 涨跌幅：{point.changePct >= 0 ? '+' : ''}{point.changePct.toFixed(2)}%</>}
+        </div>
+      </div>
+    );
   }
 
   const pcts = data.map((d) => d.changePct);
@@ -965,8 +990,12 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
           if (dist < nearestDist) { nearestDist = dist; nearest = i; }
         }
         setHoverIndex(nearest);
+        setHoverSvgX(targetX);
       }}
-      onMouseLeave={() => setHoverIndex(null)}
+      onMouseLeave={() => {
+        setHoverIndex(null);
+        setHoverSvgX(null);
+      }}
     >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <defs>
@@ -1022,12 +1051,38 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
         <circle cx={xs[activeIndex].toFixed(2)} cy={toY(activeItem.changePct).toFixed(2)} r="3.5" fill="white" stroke={lineColor} strokeWidth="2" />
       </svg>
 
-      {/* Tooltip */}
-      <div className="fund-nav-tooltip">
-        <span className="fund-nav-tooltip-date">{activeItem.time}</span>
-        {Number.isFinite(estNav) && <span>估算净值 <strong className={toneClass(activeItem.changePct)}>{estNav.toFixed(4)}</strong></span>}
-        <span className={toneClass(activeItem.changePct)}>{formatPercent(activeItem.changePct)}</span>
-      </div>
+      {/* Floating tooltip popup（类似股票分时图弹窗） */}
+      {hoverIndex !== null ? (() => {
+        const pct = xs[activeIndex] / width;
+        const isRight = pct > 0.58;
+        const style: React.CSSProperties = {
+          position: 'absolute',
+          top: '4px',
+          zIndex: 25,
+          pointerEvents: 'none',
+          ...(isRight
+            ? { right: `${((1 - pct) * 100).toFixed(1)}%` }
+            : { left: `calc(${(pct * 100).toFixed(1)}% + 10px)` }),
+        };
+        return (
+          <div className="chart-tooltip" style={style}>
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">时间</span>
+              <span className="chart-tooltip-value">{activeItem.time}</span>
+            </div>
+            {Number.isFinite(estNav) && (
+              <div className="chart-tooltip-row">
+                <span className="chart-tooltip-label">估算净值</span>
+                <span className={`chart-tooltip-value ${toneClass(activeItem.changePct)}`}>{estNav.toFixed(4)}</span>
+              </div>
+            )}
+            <div className="chart-tooltip-row">
+              <span className="chart-tooltip-label">涨跌幅</span>
+              <span className={`chart-tooltip-value ${toneClass(activeItem.changePct)}`}>{formatPercent(activeItem.changePct)}</span>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
