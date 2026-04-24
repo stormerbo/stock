@@ -6,17 +6,23 @@ declare namespace chrome {
     }
 
     type StorageAreaSync = {
-      get(keys: string | string[]): Promise<Record<string, unknown>>;
+      get(keys?: string | string[] | null): Promise<Record<string, unknown>>;
       get(callback?: (items: Record<string, unknown>) => void): void;
+      get(keys: null, callback: (items: Record<string, unknown>) => void): void;
       get(keys: string | string[], callback: (items: Record<string, unknown>) => void): void;
       set(items: Record<string, unknown>): Promise<void>;
+      remove(keys: string | string[]): Promise<void>;
+      clear(): Promise<void>;
     };
 
     type StorageAreaLocal = {
-      get(keys: string | string[]): Promise<Record<string, unknown>>;
+      get(keys?: string | string[] | null): Promise<Record<string, unknown>>;
       get(callback?: (items: Record<string, unknown>) => void): void;
+      get(keys: null, callback: (items: Record<string, unknown>) => void): void;
       get(keys: string | string[], callback: (items: Record<string, unknown>) => void): void;
       set(items: Record<string, unknown>): Promise<void>;
+      remove(keys: string | string[]): Promise<void>;
+      clear(): Promise<void>;
     };
 
     const sync: StorageAreaSync;

@@ -1051,6 +1051,7 @@ export default function App() {
       : stockRows
   ), [sortingMode, stockRows, stockSortDraft]);
 
+
   const fundDisplayRows = useMemo(() => (
     sortingMode === 'funds' && fundSortDraft
       ? sortRowsByCodes(fundRows, fundSortDraft)
@@ -1441,10 +1442,22 @@ function clearIntradayIfStale(
       setStocksLoading(false);
       return;
     }
-    // 检查是否所有持仓股都已有缓存数据
+
+    const normalizedHoldings = stockHoldings
+      .map((holding) => normalizeStockCode(holding.code))
+      .filter(Boolean);
+
+    // 检查是否所有持仓股都已有缓存行情
     const positionCodes = new Set(stockPositions.map((p) => p.code));
     const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(h.code));
-    if (missingHoldings.length === 0) {
+    const intradayMissingCodes = normalizedHoldings.filter((code) => {
+      const position = stockPositions.find((row) => row.code === code);
+      if (!position) return true;
+      const intradayData = position.intraday?.data;
+      return !Array.isArray(intradayData) || intradayData.length === 0;
+    });
+
+    if (missingHoldings.length === 0 && intradayMissingCodes.length === 0) {
       setStocksLoading(false);
       return;
     }
@@ -1454,42 +1467,49 @@ function clearIntradayIfStale(
       setStocksLoading(true);
       try {
         const { fetchBatchStockQuotes, fetchStockIntraday } = await import('../shared/fetch');
-        // 只拉取缺失的股票
-        const newRows = await fetchBatchStockQuotes(missingHoldings);
-        if (!cancelled) {
-          // 追加到现有 positions
-          setStockPositions((prev) => {
-            const existingCodes = new Set(prev.map((p) => p.code));
-            const appended = [...prev];
-            for (const row of newRows) {
-              if (!existingCodes.has(row.code)) {
-                appended.push(row);
-              }
-            }
-            return appended;
-          });
-          setStocksError('');
-          // 并行拉分时图
-          const codes = missingHoldings
-            .map((h) => normalizeStockCode(h.code))
-            .filter(Boolean);
-          codes.forEach(async (code) => {
-            try {
-              const { data, prevClose } = await fetchStockIntraday(code);
-              if (!cancelled) {
-                setStockPositions((prev) =>
-                  prev.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p)),
-                );
-                // 写回 storage.local 让后台刷新能保留 intraday
-                if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                  const result = await chrome.storage.local.get('stockPositions');
-                  const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
-                  const updated = existing.map((p) => (p.code === code ? { ...p, prevClose, intraday: { data, prevClose } } : p));
-                  await chrome.storage.local.set({ stockPositions: updated });
+        // 只拉取缺失的股票行情
+        if (missingHoldings.length > 0) {
+          const newRows = await fetchBatchStockQuotes(missingHoldings);
+          if (!cancelled) {
+            setStockPositions((prev) => {
+              const existingCodes = new Set(prev.map((p) => p.code));
+              const appended = [...prev];
+              for (const row of newRows) {
+                if (!existingCodes.has(row.code)) {
+                  appended.push(row);
                 }
               }
-            } catch { /* ignore */ }
+              return appended;
+            });
+          }
+        }
+
+        if (!cancelled && intradayMissingCodes.length > 0) {
+          // 补拉空白分时图（包括已有持仓但 intraday 为空的情况）
+          intradayMissingCodes.forEach(async (code) => {
+            try {
+              const { data, prevClose } = await fetchStockIntraday(code);
+              if (cancelled) return;
+              if (!Array.isArray(data) || data.length === 0) return;
+
+              setStockPositions((prev) =>
+                prev.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p)),
+              );
+
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                const result = await chrome.storage.local.get('stockPositions');
+                const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
+                const updated = existing.map((p) => (p.code === code ? { ...p, prevClose, intraday: { data, prevClose } } : p));
+                await chrome.storage.local.set({ stockPositions: updated });
+              }
+            } catch {
+              // ignore single code failure
+            }
           });
+        }
+
+        if (!cancelled) {
+          setStocksError('');
         }
       } catch {
         if (!cancelled) setStocksError('股票行情获取失败');
@@ -1500,7 +1520,7 @@ function clearIntradayIfStale(
 
     void loadStocks();
     return () => { cancelled = true; };
-  }, [portfolioReady, stockHoldings]);
+  }, [portfolioReady, stockHoldings, stockPositions]);
 
   useEffect(() => {
     if (!portfolioReady) return;
@@ -2396,12 +2416,12 @@ function clearIntradayIfStale(
                       <table className="account-daily-table">
                         <thead>
                           <tr>
-                            <th>交易日</th>
-                            <th>股票日盈亏</th>
-                            <th>基金日收益</th>
-                            <th>当日合计</th>
-                            <th>持仓只数</th>
-                            <th>记录时间</th>
+                            <th className="text-left">交易日</th>
+                            <th className="text-right">股票日盈亏</th>
+                            <th className="text-right">基金日收益</th>
+                            <th className="text-right">当日合计</th>
+                            <th className="text-right">持仓只数</th>
+                            <th className="text-right">记录时间</th>
                           </tr>
                         </thead>
                         <tbody>

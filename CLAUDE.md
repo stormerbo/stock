@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Stock Tracker 是一个 Chrome 扩展，用于管理 A 股股票和基金持仓。基于 React 18 + TypeScript + Vite + Tailwind CSS + CRXJS 构建。
+赚钱助手 是一个 Chrome 扩展，用于管理 A 股股票和基金持仓。基于 React 18 + TypeScript + Vite + Tailwind CSS + CRXJS 构建。
 
 ## 常用命令
 

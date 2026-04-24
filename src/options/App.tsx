@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BadgeConfig, BadgeMode } from '../background';
 import {
   loadAlertConfig,
@@ -59,6 +59,15 @@ type RefreshConfig = {
 
 const DEFAULT_DISPLAY: DisplayConfig = { colorScheme: 'cn', decimalPlaces: 2 };
 const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSeconds: 60, indexRefreshSeconds: 30, marketStatsRefreshSeconds: 30 };
+const BACKUP_SCHEMA_VERSION = 1;
+
+type BackupPayload = {
+  schemaVersion: number;
+  exportedAt: string;
+  app: string;
+  sync: Record<string, unknown>;
+  local: Record<string, unknown>;
+};
 
 const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
   price_up: '涨破目标价',
@@ -287,6 +296,13 @@ function saveStorageItem<T>(key: string, value: T): Promise<void> {
   }
   localStorage.setItem(key, JSON.stringify(value));
   return Promise.resolve();
+}
+
+function ensureRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }
 
 // -----------------------------------------------------------
@@ -546,6 +562,116 @@ export default function App() {
 
   const alertDirty = JSON.stringify(alertDraft) !== JSON.stringify(alertConfig);
   const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty;
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
+  const [backupError, setBackupError] = useState('');
+
+  const exportAllData = useCallback(async () => {
+    setBackupBusy(true);
+    setBackupError('');
+    setBackupMessage('');
+    try {
+      let syncData: Record<string, unknown> = {};
+      let localData: Record<string, unknown> = {};
+
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync && chrome.storage?.local) {
+        const [syncResult, localResult] = await Promise.all([
+          chrome.storage.sync.get(null),
+          chrome.storage.local.get(null),
+        ]);
+        syncData = ensureRecord(syncResult);
+        localData = ensureRecord(localResult);
+      } else {
+        const localFallback: Record<string, unknown> = {};
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+          const raw = localStorage.getItem(key);
+          try {
+            localFallback[key] = raw ? JSON.parse(raw) : raw;
+          } catch {
+            localFallback[key] = raw;
+          }
+        }
+        localData = localFallback;
+      }
+
+      const payload: BackupPayload = {
+        schemaVersion: BACKUP_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        app: 'money-helper',
+        sync: syncData,
+        local: localData,
+      };
+
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\..+$/, '')
+        .replace('T', '-');
+      const fileName = `money-helper-backup-${stamp}.json`;
+      const text = JSON.stringify(payload, null, 2);
+      const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      setBackupMessage(`已导出：sync ${Object.keys(syncData).length} 项，local ${Object.keys(localData).length} 项`);
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : '导出失败');
+    } finally {
+      setBackupBusy(false);
+    }
+  }, []);
+
+  const triggerImport = useCallback(() => {
+    importInputRef.current?.click();
+  }, []);
+
+  const importAllData = useCallback(async (file: File) => {
+    setBackupBusy(true);
+    setBackupError('');
+    setBackupMessage('');
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<BackupPayload>;
+      const syncData = ensureRecord(parsed.sync);
+      const localData = ensureRecord(parsed.local);
+
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync && chrome.storage?.local) {
+        await Promise.all([
+          chrome.storage.sync.clear(),
+          chrome.storage.local.clear(),
+        ]);
+        if (Object.keys(syncData).length > 0) {
+          await chrome.storage.sync.set(syncData);
+        }
+        if (Object.keys(localData).length > 0) {
+          await chrome.storage.local.set(localData);
+        }
+      } else {
+        localStorage.clear();
+        Object.entries(localData).forEach(([key, value]) => {
+          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        });
+      }
+
+      setBackupMessage('导入成功，正在刷新页面应用新数据...');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 450);
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : '导入失败');
+    } finally {
+      setBackupBusy(false);
+    }
+  }, []);
 
   return (
     <div className="options-root">
@@ -892,6 +1018,48 @@ export default function App() {
                 );
               })
             )}
+          </div>
+        </section>
+
+        {/* ---- 数据迁移 ---- */}
+        <section className="options-section">
+          <h2>数据迁移</h2>
+          <p className="section-desc">用于跨扩展 ID 迁移全部数据（自选、持仓、告警、通知、收益明细、显示设置等）。</p>
+          <div className="config-card">
+            <div className="backup-actions-row">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => void exportAllData()}
+                disabled={backupBusy}
+              >
+                {backupBusy ? '处理中...' : '导出全部数据'}
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={triggerImport}
+                disabled={backupBusy}
+              >
+                {backupBusy ? '处理中...' : '导入并覆盖数据'}
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="backup-file-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    void importAllData(file);
+                  }
+                  e.currentTarget.value = '';
+                }}
+              />
+            </div>
+            <div className="backup-hint-text">导入会先清空当前扩展数据，再按备份恢复；建议先导出一份当前数据。</div>
+            {backupMessage ? <div className="backup-status success">{backupMessage}</div> : null}
+            {backupError ? <div className="backup-status error">{backupError}</div> : null}
           </div>
         </section>
 

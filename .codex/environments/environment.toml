@@ -9,3 +9,8 @@ script = ""
 name = "运行"
 icon = "run"
 command = "npm run build"
+
+[[actions]]
+name = "打包"
+icon = "tool"
+command = "npm run package"

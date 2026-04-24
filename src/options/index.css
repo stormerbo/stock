@@ -207,6 +207,42 @@ body.theme-light {
   font-size: 13px;
 }
 
+.backup-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.backup-file-input {
+  display: none;
+}
+
+.backup-hint-text {
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.backup-status {
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+}
+
+.backup-status.success {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+.backup-status.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
 /* ---- Tags ---- */
 
 .badge-tag {

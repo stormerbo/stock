@@ -69,6 +69,7 @@ const ALARM_STOCK = 'refresh-stocks';
 const ALARM_FUND = 'refresh-funds';
 const ALARM_INDEX = 'refresh-indexes';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
+let refreshStocksInFlight = false;
 
 const DEFAULT_BADGE_CONFIG: BadgeConfig = {
   enabled: true,
@@ -261,13 +262,18 @@ function startRefreshLoop() {
 
 async function refreshStocks() {
   if (!isTradingHours()) return;
+  if (refreshStocksInFlight) return;
+  refreshStocksInFlight = true;
   try {
     const result = await chrome.storage.sync.get('stockHoldings');
     const stocks = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as StockHoldingConfig[];
     if (stocks.length === 0) return;
 
     const positions = await fetchBatchStockQuotes(stocks);
-    const existing = await chrome.storage.local.get(['stockPositions', STOCK_INTRADAY_DATE_KEY]);
+    const existing = await chrome.storage.local.get([
+      'stockPositions',
+      STOCK_INTRADAY_DATE_KEY,
+    ]);
     const existingPositions = (Array.isArray(existing.stockPositions) ? existing.stockPositions : []) as StockPosition[];
     const existingMap = new Map(existingPositions.map((p) => [p.code, p]));
     const intradayDate = typeof existing[STOCK_INTRADAY_DATE_KEY] === 'string'
@@ -281,13 +287,13 @@ async function refreshStocks() {
       intraday: existingMap.get(p.code)?.intraday ?? { data: [], prevClose: Number.NaN },
     }));
 
+    const allCodes = stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean);
     const codesToRefresh = shouldRefreshAllIntraday
-      ? stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean)
-      : stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean)
-        .filter((code) => {
-          const pos = merged.find((p) => p.code === code);
-          return pos && pos.intraday.data.length === 0;
-        });
+      ? allCodes
+      : allCodes.filter((code) => {
+        const pos = merged.find((p) => p.code === code);
+        return pos && pos.intraday.data.length === 0;
+      });
 
     if (codesToRefresh.length > 0) {
       const intradayResults = await Promise.all(
@@ -327,6 +333,8 @@ async function refreshStocks() {
     }
   } catch (e) {
     console.warn('[Portfolio Pulse] stock refresh failed:', e);
+  } finally {
+    refreshStocksInFlight = false;
   }
 }
 
@@ -462,16 +470,26 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   // Evaluate spike rules
   const spikeTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
   const finalSpikeHistory: SpikePriceHistory = { ...updatedSpikeHistory };
+  const spikeFiredInRun: Array<{ code: string; ruleId: string; firedAt: number }> = [];
 
   for (const stockConfig of effectiveConfig.stocks) {
     const snapshot = snapshots.find((s) => s.code === stockConfig.code);
     if (!snapshot) continue;
 
-    const spikeRules = stockConfig.rules.filter((r) => r.type === 'spike' && r.enabled);
+    const spikeRulesRaw = stockConfig.rules.filter((r) => r.type === 'spike' && r.enabled);
+    const seenSpikeRuleKey = new Set<string>();
+    const spikeRules = spikeRulesRaw.filter((rule) => {
+      const key = `${rule.spikePctThreshold ?? 2}|${rule.spikeWindowMinutes ?? 5}|${rule.direction ?? 'both'}`;
+      if (seenSpikeRuleKey.has(key)) return false;
+      seenSpikeRuleKey.add(key);
+      return true;
+    });
     if (spikeRules.length === 0) continue;
 
+    const now = Date.now();
+    const maxWindowMs = Math.max(...spikeRules.map((rule) => (rule.spikeWindowMinutes ?? 5) * 60 * 1000));
     const baseCodeHistory = spikeHistory[stockConfig.code] || [];
-    let rollingHistory = baseCodeHistory;
+    const rollingHistory = baseCodeHistory.filter((entry) => now - entry.timestamp < maxWindowMs * 2);
 
     for (const spikeRule of spikeRules) {
       const result = evaluateSpikeRule(
@@ -480,7 +498,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
         snapshot.name,
         snapshot.price,
         rollingHistory,
-        firedHistory
+        [...firedHistory, ...spikeFiredInRun]
       );
 
       if (result?.triggered) {
@@ -490,17 +508,15 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           message: result.message,
           ruleId: result.ruleId || spikeRule.id,
         });
+        spikeFiredInRun.push({
+          code: stockConfig.code,
+          ruleId: result.ruleId || spikeRule.id,
+          firedAt: now,
+        });
       }
-
-      const now = Date.now();
-      const windowMs = (spikeRule.spikeWindowMinutes ?? 5) * 60 * 1000 * 2; // 2x window for safety
-      rollingHistory = [
-        ...rollingHistory.filter((e) => now - e.timestamp < windowMs),
-        { price: snapshot.price, timestamp: now },
-      ];
     }
 
-    finalSpikeHistory[stockConfig.code] = rollingHistory;
+    finalSpikeHistory[stockConfig.code] = [...rollingHistory, { price: snapshot.price, timestamp: now }];
   }
 
   const allTriggered = [...triggered, ...spikeTriggered];
@@ -873,7 +889,7 @@ function updateHoverTitle(indexPositions: MarketIndexQuote[], metrics: Record<st
     lines.push(`未读通知： ${unreadNotifCount} 条`);
   }
 
-  void chrome.action.setTitle({ title: lines.join('\n') || 'Stock Tracker' });
+  void chrome.action.setTitle({ title: lines.join('\n') || '赚钱助手' });
 }
 
 function formatPnlNumber(value: number): string {

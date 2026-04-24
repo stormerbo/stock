@@ -1,4 +1,4 @@
-# Stock Tracker - 股票持仓管理 Chrome 扩展
+# 赚钱助手 - 股票持仓管理 Chrome 扩展
 
 基于 React + TypeScript + Vite + Tailwind CSS 开发的股票持仓管理工具。
 

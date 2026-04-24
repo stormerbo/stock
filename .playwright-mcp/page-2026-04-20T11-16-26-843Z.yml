@@ -1,0 +1,749 @@
+- generic [ref=e2]:
+  - region
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - link "Homepage" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e13]:
+          - navigation "Global" [ref=e16]:
+            - list [ref=e17]:
+              - listitem [ref=e18]:
+                - button "Platform" [ref=e20] [cursor=pointer]:
+                  - text: Platform
+                  - img [ref=e21]
+              - listitem [ref=e23]:
+                - button "Solutions" [ref=e25] [cursor=pointer]:
+                  - text: Solutions
+                  - img [ref=e26]
+              - listitem [ref=e28]:
+                - button "Resources" [ref=e30] [cursor=pointer]:
+                  - text: Resources
+                  - img [ref=e31]
+              - listitem [ref=e33]:
+                - button "Open Source" [ref=e35] [cursor=pointer]:
+                  - text: Open Source
+                  - img [ref=e36]
+              - listitem [ref=e38]:
+                - button "Enterprise" [ref=e40] [cursor=pointer]:
+                  - text: Enterprise
+                  - img [ref=e41]
+              - listitem [ref=e43]:
+                - link "Pricing" [ref=e44] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+                  - generic [ref=e45]: Pricing
+          - generic [ref=e46]:
+            - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+              - img [ref=e51]
+            - link "Sign in" [ref=e54] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fx2rr%2Ffunds
+            - link "Sign up" [ref=e55] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E&source=header-repo&source_repo=x2rr%2Ffunds
+            - button "Appearance settings" [disabled] [ref=e58]:
+              - img
+  - main [ref=e62]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e66]:
+          - img [ref=e67]
+          - link "x2rr" [ref=e70] [cursor=pointer]:
+            - /url: /x2rr
+          - generic [ref=e71]: /
+          - strong [ref=e72]:
+            - link "funds" [ref=e73] [cursor=pointer]:
+              - /url: /x2rr/funds
+          - generic [ref=e74]: Public
+        - generic [ref=e75]:
+          - list:
+            - listitem [ref=e76]:
+              - link "You must be signed in to change notification settings" [ref=e77] [cursor=pointer]:
+                - /url: /login?return_to=%2Fx2rr%2Ffunds
+                - img [ref=e78]
+                - text: Notifications
+            - listitem [ref=e80]:
+              - link "Fork 388" [ref=e81] [cursor=pointer]:
+                - /url: /login?return_to=%2Fx2rr%2Ffunds
+                - img [ref=e82]
+                - text: Fork
+                - generic "388" [ref=e84]
+            - listitem [ref=e85]:
+              - link "You must be signed in to star a repository" [ref=e87] [cursor=pointer]:
+                - /url: /login?return_to=%2Fx2rr%2Ffunds
+                - img [ref=e88]
+                - text: Star
+                - generic "3017 users starred this repository" [ref=e90]: 3k
+      - navigation "Repository" [ref=e91]:
+        - list [ref=e92]:
+          - listitem [ref=e93]:
+            - link "Code" [ref=e94] [cursor=pointer]:
+              - /url: /x2rr/funds
+              - img [ref=e95]
+              - generic [ref=e97]: Code
+          - listitem [ref=e98]:
+            - link "Issues 102" [ref=e99] [cursor=pointer]:
+              - /url: /x2rr/funds/issues
+              - img [ref=e100]
+              - generic [ref=e103]: Issues
+              - generic "102" [ref=e104]
+          - listitem [ref=e105]:
+            - link "Pull requests 34" [ref=e106] [cursor=pointer]:
+              - /url: /x2rr/funds/pulls
+              - img [ref=e107]
+              - generic [ref=e109]: Pull requests
+              - generic "34" [ref=e110]
+          - listitem [ref=e111]:
+            - link "Discussions" [ref=e112] [cursor=pointer]:
+              - /url: /x2rr/funds/discussions
+              - img [ref=e113]
+              - generic [ref=e115]: Discussions
+          - listitem [ref=e116]:
+            - link "Actions" [ref=e117] [cursor=pointer]:
+              - /url: /x2rr/funds/actions
+              - img [ref=e118]
+              - generic [ref=e120]: Actions
+          - listitem [ref=e121]:
+            - link "Projects" [ref=e122] [cursor=pointer]:
+              - /url: /x2rr/funds/projects
+              - img [ref=e123]
+              - generic [ref=e125]: Projects
+          - listitem [ref=e126]:
+            - link "Security and quality" [ref=e127] [cursor=pointer]:
+              - /url: /x2rr/funds/security
+              - img [ref=e128]
+              - generic [ref=e130]: Security and quality
+          - listitem [ref=e131]:
+            - link "Insights" [ref=e132] [cursor=pointer]:
+              - /url: /x2rr/funds/pulse
+              - img [ref=e133]
+              - generic [ref=e135]: Insights
+    - generic [ref=e148]:
+      - heading "x2rr/funds" [level=1] [ref=e150]
+      - generic [ref=e151]:
+        - generic [ref=e154]:
+          - generic [ref=e155]:
+            - generic [ref=e156]:
+              - button "master branch" [ref=e158] [cursor=pointer]:
+                - generic [ref=e159]:
+                  - generic [ref=e161]:
+                    - img [ref=e163]
+                    - generic [ref=e166]: master
+                  - generic:
+                    - img
+              - generic [ref=e167]:
+                - link "Branches" [ref=e168] [cursor=pointer]:
+                  - /url: /x2rr/funds/branches
+                  - generic [ref=e169]:
+                    - generic:
+                      - img
+                    - generic [ref=e170]: Branches
+                - link "Tags" [ref=e171] [cursor=pointer]:
+                  - /url: /x2rr/funds/tags
+                  - generic [ref=e172]:
+                    - generic:
+                      - img
+                    - generic [ref=e173]: Tags
+            - generic [ref=e174]:
+              - generic [ref=e178]:
+                - img [ref=e180]
+                - combobox "Go to file" [ref=e182]
+              - button "Code" [ref=e183] [cursor=pointer]:
+                - generic [ref=e184]:
+                  - generic:
+                    - img
+                  - generic [ref=e185]: Code
+                  - generic:
+                    - img
+          - generic [ref=e186]:
+            - generic [ref=e187]:
+              - heading "Folders and files" [level=2] [ref=e188]
+              - table "Folders and files" [ref=e189]:
+                - rowgroup:
+                  - row "Name Last commit message Last commit date":
+                    - columnheader "Name"
+                    - columnheader "Last commit message":
+                      - generic "Last commit message"
+                    - columnheader "Last commit date":
+                      - generic "Last commit date"
+                - rowgroup [ref=e190]:
+                  - row "Latest commit History 238 Commits" [ref=e191]:
+                    - cell "Latest commit History 238 Commits" [ref=e192]:
+                      - generic [ref=e193]:
+                        - heading "Latest commit" [level=2] [ref=e194]
+                        - generic [ref=e197]:
+                          - heading "History" [level=2] [ref=e198]
+                          - link "238 Commits" [ref=e199] [cursor=pointer]:
+                            - /url: /x2rr/funds/commits/master/
+                            - generic [ref=e200]:
+                              - generic:
+                                - img
+                              - generic [ref=e201]: 238 Commits
+                  - row "docs, (Directory)" [ref=e202]:
+                    - cell "docs, (Directory)" [ref=e203]:
+                      - generic [ref=e204]:
+                        - img [ref=e205]
+                        - link "docs, (Directory)" [ref=e210] [cursor=pointer]:
+                          - /url: /x2rr/funds/tree/master/docs
+                          - text: docs
+                    - cell [ref=e211]
+                    - cell [ref=e213]
+                  - row "image, (Directory)" [ref=e216]:
+                    - cell "image, (Directory)" [ref=e217]:
+                      - generic [ref=e218]:
+                        - img [ref=e219]
+                        - link "image, (Directory)" [ref=e224] [cursor=pointer]:
+                          - /url: /x2rr/funds/tree/master/image
+                          - text: image
+                    - cell [ref=e225]
+                    - cell [ref=e227]
+                  - row "lib, (Directory)" [ref=e230]:
+                    - cell "lib, (Directory)" [ref=e231]:
+                      - generic [ref=e232]:
+                        - img [ref=e233]
+                        - link "lib, (Directory)" [ref=e238] [cursor=pointer]:
+                          - /url: /x2rr/funds/tree/master/lib
+                          - text: lib
+                    - cell [ref=e239]
+                    - cell [ref=e241]
+                  - row "scripts, (Directory)" [ref=e244]:
+                    - cell "scripts, (Directory)" [ref=e245]:
+                      - generic [ref=e246]:
+                        - img [ref=e247]
+                        - link "scripts, (Directory)" [ref=e252] [cursor=pointer]:
+                          - /url: /x2rr/funds/tree/master/scripts
+                          - text: scripts
+                    - cell [ref=e253]
+                    - cell [ref=e255]
+                  - row "src, (Directory)" [ref=e258]:
+                    - cell "src, (Directory)" [ref=e259]:
+                      - generic [ref=e260]:
+                        - img [ref=e261]
+                        - link "src, (Directory)" [ref=e266] [cursor=pointer]:
+                          - /url: /x2rr/funds/tree/master/src
+                          - text: src
+                    - cell [ref=e267]
+                    - cell [ref=e269]
+                  - row ".DS_Store, (File)" [ref=e272]:
+                    - cell ".DS_Store, (File)" [ref=e273]:
+                      - generic [ref=e274]:
+                        - img [ref=e275]
+                        - link ".DS_Store, (File)" [ref=e280] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/.DS_Store
+                          - text: .DS_Store
+                    - cell [ref=e281]
+                    - cell [ref=e283]
+                  - row ".babelrc, (File)" [ref=e286]:
+                    - cell ".babelrc, (File)" [ref=e287]:
+                      - generic [ref=e288]:
+                        - img [ref=e289]
+                        - link ".babelrc, (File)" [ref=e294] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/.babelrc
+                          - text: .babelrc
+                    - cell [ref=e295]
+                    - cell [ref=e297]
+                  - row ".gitignore, (File)" [ref=e300]:
+                    - cell ".gitignore, (File)" [ref=e301]:
+                      - generic [ref=e302]:
+                        - img [ref=e303]
+                        - link ".gitignore, (File)" [ref=e308] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/.gitignore
+                          - text: .gitignore
+                    - cell [ref=e309]
+                    - cell [ref=e311]
+                  - row "LICENSE, (File)" [ref=e314]:
+                    - cell "LICENSE, (File)" [ref=e315]:
+                      - generic [ref=e316]:
+                        - img [ref=e317]
+                        - link "LICENSE, (File)" [ref=e322] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/LICENSE
+                          - text: LICENSE
+                    - cell [ref=e323]
+                    - cell [ref=e325]
+                  - row "README.md, (File)" [ref=e328]:
+                    - cell "README.md, (File)" [ref=e329]:
+                      - generic [ref=e330]:
+                        - img [ref=e331]
+                        - link "README.md, (File)" [ref=e336] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/README.md
+                          - text: README.md
+                    - cell [ref=e337]
+                    - cell [ref=e339]
+                  - row "edge.html, (File)" [ref=e342]:
+                    - cell "edge.html, (File)" [ref=e343]:
+                      - generic [ref=e344]:
+                        - img [ref=e345]
+                        - link "edge.html, (File)" [ref=e350] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/edge.html
+                          - text: edge.html
+                    - cell [ref=e351]
+                    - cell [ref=e353]
+                  - row "favicon.ico, (File)" [ref=e356]:
+                    - cell "favicon.ico, (File)" [ref=e357]:
+                      - generic [ref=e358]:
+                        - img [ref=e359]
+                        - link "favicon.ico, (File)" [ref=e364] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/favicon.ico
+                          - text: favicon.ico
+                    - cell [ref=e365]
+                    - cell [ref=e367]
+                  - row "google1d337c9745584f1d.html, (File)" [ref=e370]:
+                    - cell "google1d337c9745584f1d.html, (File)" [ref=e371]:
+                      - generic [ref=e372]:
+                        - img [ref=e373]
+                        - link "google1d337c9745584f1d.html, (File)" [ref=e378] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/google1d337c9745584f1d.html
+                          - text: google1d337c9745584f1d.html
+                    - cell [ref=e379]
+                    - cell [ref=e381]
+                  - row "holiday.json, (File)" [ref=e384]:
+                    - cell "holiday.json, (File)" [ref=e385]:
+                      - generic [ref=e386]:
+                        - img [ref=e387]
+                        - link "holiday.json, (File)" [ref=e392] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/holiday.json
+                          - text: holiday.json
+                    - cell [ref=e393]
+                    - cell [ref=e395]
+                  - row "index.html, (File)" [ref=e398]:
+                    - cell "index.html, (File)" [ref=e399]:
+                      - generic [ref=e400]:
+                        - img [ref=e401]
+                        - link "index.html, (File)" [ref=e406] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/index.html
+                          - text: index.html
+                    - cell [ref=e407]
+                    - cell [ref=e409]
+                  - row "package-lock.json, (File)" [ref=e412]:
+                    - cell "package-lock.json, (File)" [ref=e413]:
+                      - generic [ref=e414]:
+                        - img [ref=e415]
+                        - link "package-lock.json, (File)" [ref=e420] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/package-lock.json
+                          - text: package-lock.json
+                    - cell [ref=e421]
+                    - cell [ref=e423]
+                  - row "package.json, (File)" [ref=e426]:
+                    - cell "package.json, (File)" [ref=e427]:
+                      - generic [ref=e428]:
+                        - img [ref=e429]
+                        - link "package.json, (File)" [ref=e434] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/package.json
+                          - text: package.json
+                    - cell [ref=e435]
+                    - cell [ref=e437]
+                  - row "privacy.html, (File)" [ref=e440]:
+                    - cell "privacy.html, (File)" [ref=e441]:
+                      - generic [ref=e442]:
+                        - img [ref=e443]
+                        - link "privacy.html, (File)" [ref=e448] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/privacy.html
+                          - text: privacy.html
+                    - cell [ref=e449]
+                    - cell [ref=e451]
+                  - row "webpack.config.js, (File)" [ref=e454]:
+                    - cell "webpack.config.js, (File)" [ref=e455]:
+                      - generic [ref=e456]:
+                        - img [ref=e457]
+                        - link "webpack.config.js, (File)" [ref=e462] [cursor=pointer]:
+                          - /url: /x2rr/funds/blob/master/webpack.config.js
+                          - text: webpack.config.js
+                    - cell [ref=e463]
+                    - cell [ref=e465]
+            - generic [ref=e469]:
+              - generic [ref=e470]:
+                - heading "Repository files navigation" [level=2] [ref=e471]
+                - navigation "Repository files" [ref=e472]:
+                  - list [ref=e473]:
+                    - listitem [ref=e474]:
+                      - link "README" [ref=e475] [cursor=pointer]:
+                        - /url: "#"
+                        - img [ref=e477]
+                        - generic [ref=e479]: README
+                    - listitem [ref=e480]:
+                      - link "GPL-3.0 license" [ref=e481] [cursor=pointer]:
+                        - /url: "#"
+                        - img [ref=e483]
+                        - generic [ref=e485]: GPL-3.0 license
+                - button "Outline" [ref=e486] [cursor=pointer]:
+                  - img [ref=e487]
+              - article [ref=e490]:
+                - generic [ref=e491]:
+                  - heading "自选基金助手" [level=1] [ref=e492]
+                  - 'link "Permalink: 自选基金助手" [ref=e493] [cursor=pointer]':
+                    - /url: "#自选基金助手"
+                    - img [ref=e494]
+                - paragraph [ref=e496]: 自选基金助手，实时查看您关注的基金，助您快速获取实时数据。
+                - paragraph [ref=e497]: 可以用来查看您的自选基金的实时估值情况，可以自由的增减自选基金。您的自选基金数据会跟随账号同步。
+                - generic [ref=e498]:
+                  - heading "介绍" [level=2] [ref=e499]
+                  - 'link "Permalink: 介绍" [ref=e500] [cursor=pointer]':
+                    - /url: "#介绍"
+                    - img [ref=e501]
+                - paragraph [ref=e503]: 买了基金后，一直想找一款 pc 端的 chrome 扩展插件，毕竟股票的交易时间都是在工作日进行的，可惜找不到，便打算自己写一个，忍痛花费 5 美刀上架扩展商店。扩展的形式很适合上班族，不用打开网站，仅以小窗口的形式展示，不会引起 BOSS 的注意，方便上班摸鱼。
+                - paragraph [ref=e504]: 首先输入基金代码添加基金，涨跌幅信息和收益信息可以以角标的形式展示在浏览器中，更加简便直观。可以在设置中单独开启显示份额与收益选项，在编辑中输入持有的份额，可以计算出每个基金的实时估值与收益，以及总收益。
+                - generic [ref=e505]:
+                  - heading "主要功能" [level=2] [ref=e506]
+                  - 'link "Permalink: 主要功能" [ref=e507] [cursor=pointer]':
+                    - /url: "#主要功能"
+                    - img [ref=e508]
+                - list [ref=e510]:
+                  - listitem [ref=e511]: 实时角标提醒
+                  - listitem [ref=e512]: 单个基金特别关注
+                  - listitem [ref=e513]: 角标内容自定义，单个与全部基金，收益额与收益率
+                  - listitem [ref=e514]: 支持标准与暗色两种主题
+                  - listitem [ref=e515]: 基金列表与配置信息支持导入与导出
+                  - listitem [ref=e516]: 智能判断节假日，切换休市状态
+                  - listitem [ref=e517]: 支持设置份额或金额，查看当日估值收益
+                  - listitem [ref=e518]: 支持设置持仓成本价，查看持有收益
+                  - listitem [ref=e519]: 支持手动加仓减仓功能
+                  - listitem [ref=e520]: 支持账号登录功能，方便跨平台同步
+                  - listitem [ref=e521]: 交易日更新当日实际净值后，对应基金有 √ 提示
+                  - listitem [ref=e522]: 支持查看估值走势图，净值、收益等走势图
+                  - listitem [ref=e523]: 支持支持查看基金的股票持仓明细
+                  - listitem [ref=e524]: 支持查看基金基本信息与基金经理信息
+                  - listitem [ref=e525]: 支持基金分组功能
+                  - listitem [ref=e526]: 自定义顶部指数内容
+                  - listitem [ref=e527]: 自定义基金列表展示内容
+                  - listitem [ref=e528]: 指数与基金拖拽排序功能
+                  - listitem [ref=e529]: 基金按照指定项排序功能
+                  - listitem [ref=e530]: 添加基金时支持按拼音、汉字、编码模糊搜索，支持批量添加
+                  - listitem [ref=e531]: 行情中心展示，两市资金、行业板块、北向资金、南向资金
+                - generic [ref=e532]:
+                  - heading "截图识别导入功能推荐" [level=2] [ref=e533]
+                  - 'link "Permalink: 截图识别导入功能推荐" [ref=e534] [cursor=pointer]':
+                    - /url: "#截图识别导入功能推荐"
+                    - img [ref=e535]
+                - paragraph [ref=e537]: 小程序端已支持截图一键导入功能，欢迎使用！
+                - generic [ref=e538]:
+                  - heading "如何使用" [level=2] [ref=e539]
+                  - 'link "Permalink: 如何使用" [ref=e540] [cursor=pointer]':
+                    - /url: "#如何使用"
+                    - img [ref=e541]
+                - paragraph [ref=e543]:
+                  - strong [ref=e544]: 强烈推荐使用 Chrome 商店安装
+                  - text: （这样才能获得自动更新）：
+                  - link "点击跳转至 Chrome 扩展商店" [ref=e545] [cursor=pointer]:
+                    - /url: https://chrome.google.com/webstore/detail/dhdelcemeednchdmijiocipbjlknndff
+                - paragraph [ref=e546]:
+                  - text: 若因网络问题，可以下载 CRX 文件手动安装（无法自动更新最新版）：
+                  - link "下载地址 1" [ref=e547] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/funds/releases
+                  - link "下载地址 2" [ref=e548] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/funds/releases
+                - paragraph [ref=e549]:
+                  - text: 插件已上架 Microsoft Edge 扩展商店：
+                  - link "点击跳转至 Microsoft Edge 扩展商店" [ref=e550] [cursor=pointer]:
+                    - /url: https://microsoftedge.microsoft.com/addons/detail/kophadiajpobbfoobhclbobddkoindoi
+                - paragraph [ref=e551]:
+                  - text: Firefox 扩展商店暂已下架
+                  - deletion [ref=e552]:
+                    - text: 插件已上架火狐 Firefox 扩展商店：
+                    - link "点击跳转至火狐 Firefox 扩展商店" [ref=e553] [cursor=pointer]:
+                      - /url: https://addons.mozilla.org/zh-CN/firefox/addon/funds/
+                - paragraph [ref=e554]: 插件推出小程序版‘韭菜计算助手’欢迎使用！
+                - paragraph [ref=e555]:
+                  - link "小程序" [ref=e556] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/mp.jpg
+                    - img "小程序" [ref=e557]
+                - paragraph [ref=e558]:
+                  - link "主界面1" [ref=e559] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/20200717165330.png
+                    - img "主界面1" [ref=e560]
+                - paragraph [ref=e561]:
+                  - link "主界面2" [ref=e562] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/20200916120011.png
+                    - img "主界面2" [ref=e563]
+                - paragraph [ref=e564]:
+                  - link "主界面3" [ref=e565] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/20200916120012.png
+                    - img "主界面3" [ref=e566]
+                - paragraph [ref=e567]:
+                  - link "主界面4" [ref=e568] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/20200907111218.png
+                    - img "主界面4" [ref=e569]
+                - paragraph [ref=e570]:
+                  - link "主界面5" [ref=e571] [cursor=pointer]:
+                    - /url: https://github.com/x2rr/Picture/raw/master/img/20200907111226.png
+                    - img "主界面5" [ref=e572]
+                - generic [ref=e573]:
+                  - heading "框架介绍" [level=2] [ref=e574]
+                  - 'link "Permalink: 框架介绍" [ref=e575] [cursor=pointer]':
+                    - /url: "#框架介绍"
+                    - img [ref=e576]
+                - paragraph [ref=e578]:
+                  - text: 基于
+                  - link "Vue" [ref=e579] [cursor=pointer]:
+                    - /url: https://github.com/vuejs/vue
+                  - text: +
+                  - link "Webpack" [ref=e580] [cursor=pointer]:
+                    - /url: https://github.com/webpack/webpack
+                  - text: 构建的 vue 项目，使用了
+                  - link "vue-web-extension" [ref=e581] [cursor=pointer]:
+                    - /url: https://github.com/Kocal/vue-web-extension/tree/v1
+                  - text: 模板快速构建Chrome扩展项目，用到了
+                  - link "Element UI" [ref=e582] [cursor=pointer]:
+                    - /url: https://github.com/ElemeFE/element
+                  - text: 样式库与
+                  - link "ECharts" [ref=e583] [cursor=pointer]:
+                    - /url: https://github.com/apache/echarts
+                  - text: 图表库。
+                - generic [ref=e584]:
+                  - heading "运行调试开发" [level=2] [ref=e585]
+                  - 'link "Permalink: 运行调试开发" [ref=e586] [cursor=pointer]':
+                    - /url: "#运行调试开发"
+                    - img [ref=e587]
+                - paragraph [ref=e589]:
+                  - text: 需要 node 环境，先执行
+                  - code [ref=e590]: npm i
+                  - text: 安装依赖
+                - paragraph [ref=e591]:
+                  - text: 调试模式执行
+                  - code [ref=e592]: npm run watch:dev
+                  - text: 生成 dist 文件夹，浏览器选择“加载已解压的扩展程序”
+                - paragraph [ref=e593]:
+                  - text: 打包与发布先执行
+                  - code [ref=e594]: npm run build
+                  - text: 生成 dist 文件夹，再执行
+                  - code [ref=e595]: npm run build-zip
+                  - text: "通过从 manifest.json 文件中读取 name 和 version 字段,构建{name}-v{version}.zip 这种格式的压缩文件。"
+                - generic [ref=e596]:
+                  - heading "更新说明" [level=2] [ref=e597]
+                  - 'link "Permalink: 更新说明" [ref=e598] [cursor=pointer]':
+                    - /url: "#更新说明"
+                    - img [ref=e599]
+                - generic [ref=e601]:
+                  - heading "v3.4.1" [level=3] [ref=e602]
+                  - 'link "Permalink: v3.4.1" [ref=e603] [cursor=pointer]':
+                    - /url: "#v341"
+                    - img [ref=e604]
+                - list [ref=e606]:
+                  - listitem [ref=e607]: 优化收益计算方式。
+                - generic [ref=e608]:
+                  - heading "v3.4.0" [level=3] [ref=e609]
+                  - 'link "Permalink: v3.4.0" [ref=e610] [cursor=pointer]':
+                    - /url: "#v340"
+                    - img [ref=e611]
+                - list [ref=e613]:
+                  - listitem [ref=e614]: 账号服务请求地址调整，旧版本未来将无法登录，请尽快更新。
+                - generic [ref=e615]:
+                  - heading "v3.3.7" [level=3] [ref=e616]
+                  - 'link "Permalink: v3.3.7" [ref=e617] [cursor=pointer]':
+                    - /url: "#v337"
+                    - img [ref=e618]
+                - list [ref=e620]:
+                  - listitem [ref=e621]: 优化估值计算方式。
+                - generic [ref=e622]:
+                  - heading "v3.3.6" [level=3] [ref=e623]
+                  - 'link "Permalink: v3.3.6" [ref=e624] [cursor=pointer]':
+                    - /url: "#v336"
+                    - img [ref=e625]
+                - list [ref=e627]:
+                  - listitem [ref=e628]: 优化基金估值数据与小程序端一致。
+                - generic [ref=e629]:
+                  - heading "v3.3.5" [level=3] [ref=e630]
+                  - 'link "Permalink: v3.3.5" [ref=e631] [cursor=pointer]':
+                    - /url: "#v335"
+                    - img [ref=e632]
+                - list [ref=e634]:
+                  - listitem [ref=e635]: 优化账号与同步相关操作体验。
+                  - listitem [ref=e636]: 独立窗口模式表格滚动与展示优化。
+                - generic [ref=e637]:
+                  - heading "v3.3.4" [level=3] [ref=e638]
+                  - 'link "Permalink: v3.3.4" [ref=e639] [cursor=pointer]':
+                    - /url: "#v334"
+                    - img [ref=e640]
+                - list [ref=e642]:
+                  - listitem [ref=e643]: 优化日收益计算方式。
+                - generic [ref=e644]:
+                  - heading "v3.3.3" [level=3] [ref=e645]
+                  - 'link "Permalink: v3.3.3" [ref=e646] [cursor=pointer]':
+                    - /url: "#v333"
+                    - img [ref=e647]
+                - list [ref=e649]:
+                  - listitem [ref=e650]: 修复休市后角标数值错误问题。
+                  - listitem [ref=e651]: 角标收益支持全部分组选项。
+                  - listitem [ref=e652]: 优化代码，精简无关权限。
+                - generic [ref=e653]:
+                  - heading "v3.3.2" [level=3] [ref=e654]
+                  - 'link "Permalink: v3.3.2" [ref=e655] [cursor=pointer]':
+                    - /url: "#v332"
+                    - img [ref=e656]
+                - list [ref=e658]:
+                  - listitem [ref=e659]: 行情中心，板块功能优化。
+                - generic [ref=e660]:
+                  - heading "v3.3.1" [level=3] [ref=e661]
+                  - 'link "Permalink: v3.3.1" [ref=e662] [cursor=pointer]':
+                    - /url: "#v331"
+                    - img [ref=e663]
+                - list [ref=e665]:
+                  - listitem [ref=e666]: 修复暗色模式样式问题。
+                - generic [ref=e667]:
+                  - heading "v3.3.0" [level=3] [ref=e668]
+                  - 'link "Permalink: v3.3.0" [ref=e669] [cursor=pointer]':
+                    - /url: "#v330"
+                    - img [ref=e670]
+                - list [ref=e672]:
+                  - listitem [ref=e673]: 增加分组功能。
+                  - listitem [ref=e674]: 增加更多指数。
+                  - listitem [ref=e675]: 增加最大可展示指数数量。
+                  - listitem [ref=e676]: 增加总金额展示。
+                - group [ref=e677]:
+                  - generic "点击这里展开/折叠历史更新说明" [ref=e678] [cursor=pointer]
+                - generic [ref=e679]:
+                  - heading "Star History" [level=2] [ref=e680]
+                  - 'link "Permalink: Star History" [ref=e681] [cursor=pointer]':
+                    - /url: "#star-history"
+                    - img [ref=e682]
+                - link [ref=e684] [cursor=pointer]:
+                  - /url: https://www.star-history.com/#x2rr/funds&type=date&legend=top-left
+                - generic [ref=e685]:
+                  - heading "隐私协议" [level=2] [ref=e686]
+                  - 'link "Permalink: 隐私协议" [ref=e687] [cursor=pointer]':
+                    - /url: "#隐私协议"
+                    - img [ref=e688]
+                - paragraph [ref=e690]:
+                  - link "点击跳转" [ref=e691] [cursor=pointer]:
+                    - /url: https://x2rr.github.io/funds/privacy.html
+        - generic [ref=e695]:
+          - generic [ref=e698]:
+            - heading "About" [level=2] [ref=e699]
+            - paragraph [ref=e700]: 自选基金助手是一款Chrome扩展，用来快速获取关注基金的实时数据，查看自选基金的实时估值情况
+            - generic [ref=e701]:
+              - img [ref=e702]
+              - link "x2rr.github.io/funds/docs/dist/index.html" [ref=e705] [cursor=pointer]:
+                - /url: https://x2rr.github.io/funds/docs/dist/index.html
+            - heading "Topics" [level=3] [ref=e706]
+            - generic [ref=e708]:
+              - link "chrome-extension" [ref=e709] [cursor=pointer]:
+                - /url: /topics/chrome-extension
+              - link "chrome" [ref=e710] [cursor=pointer]:
+                - /url: /topics/chrome
+              - link "vue" [ref=e711] [cursor=pointer]:
+                - /url: /topics/vue
+              - link "echarts" [ref=e712] [cursor=pointer]:
+                - /url: /topics/echarts
+              - link "fund" [ref=e713] [cursor=pointer]:
+                - /url: /topics/fund
+            - heading "Resources" [level=3] [ref=e714]
+            - link "Readme" [ref=e716] [cursor=pointer]:
+              - /url: "#readme-ov-file"
+              - img [ref=e717]
+              - text: Readme
+            - heading "License" [level=3] [ref=e719]
+            - link "GPL-3.0 license" [ref=e721] [cursor=pointer]:
+              - /url: "#GPL-3.0-1-ov-file"
+              - img [ref=e722]
+              - text: GPL-3.0 license
+            - link "Activity" [ref=e725] [cursor=pointer]:
+              - /url: /x2rr/funds/activity
+              - img [ref=e726]
+              - text: Activity
+            - heading "Stars" [level=3] [ref=e728]
+            - link "3k stars" [ref=e730] [cursor=pointer]:
+              - /url: /x2rr/funds/stargazers
+              - img [ref=e731]
+              - strong [ref=e733]: 3k
+              - text: stars
+            - heading "Watchers" [level=3] [ref=e734]
+            - link "24 watching" [ref=e736] [cursor=pointer]:
+              - /url: /x2rr/funds/watchers
+              - img [ref=e737]
+              - strong [ref=e739]: "24"
+              - text: watching
+            - heading "Forks" [level=3] [ref=e740]
+            - link "388 forks" [ref=e742] [cursor=pointer]:
+              - /url: /x2rr/funds/forks
+              - img [ref=e743]
+              - strong [ref=e745]: "388"
+              - text: forks
+            - link "Report repository" [ref=e747] [cursor=pointer]:
+              - /url: /contact/report-content?content_url=https%3A%2F%2Fgithub.com%2Fx2rr%2Ffunds&report=x2rr+%28user%29
+          - generic [ref=e749]:
+            - heading "Releases 51" [level=2] [ref=e750]:
+              - link "Releases 51" [ref=e751] [cursor=pointer]:
+                - /url: /x2rr/funds/releases
+                - text: Releases
+                - generic "51" [ref=e752]
+            - link "v3.4.1 Latest Apr 9, 20262 weeks ago" [ref=e753] [cursor=pointer]:
+              - /url: /x2rr/funds/releases/tag/3.4.1
+              - img [ref=e754]
+              - generic [ref=e756]:
+                - generic [ref=e757]:
+                  - generic [ref=e758]: v3.4.1
+                  - 'generic "Label: Latest" [ref=e759]': Latest
+                - generic [ref=e760]: Apr 9, 20262 weeks ago
+            - link "+ 50 releases" [ref=e762] [cursor=pointer]:
+              - /url: /x2rr/funds/releases
+          - generic "Loading latest packages" [ref=e765]:
+            - heading "Packages" [level=2] [ref=e766]:
+              - link "Packages" [ref=e767] [cursor=pointer]:
+                - /url: /users/x2rr/packages?repo_name=funds
+          - generic "Loading contributors" [ref=e779]:
+            - generic:
+              - heading "Contributors" [level=2] [ref=e780]:
+                - link "Contributors" [ref=e781] [cursor=pointer]:
+                  - /url: /x2rr/funds/graphs/contributors
+              - list [ref=e782]:
+                - listitem [ref=e783]
+                - listitem [ref=e785]
+                - listitem [ref=e787]
+          - generic [ref=e790]:
+            - heading "Languages" [level=2] [ref=e791]
+            - list [ref=e797]:
+              - listitem [ref=e798]:
+                - link "Vue 73.5%" [ref=e799] [cursor=pointer]:
+                  - /url: /x2rr/funds/search?l=vue
+                  - img [ref=e800]
+                  - generic [ref=e802]: Vue
+                  - generic [ref=e803]: 73.5%
+              - listitem [ref=e804]:
+                - link "JavaScript 19.7%" [ref=e805] [cursor=pointer]:
+                  - /url: /x2rr/funds/search?l=javascript
+                  - img [ref=e806]
+                  - generic [ref=e808]: JavaScript
+                  - generic [ref=e809]: 19.7%
+              - listitem [ref=e810]:
+                - link "HTML 6.8%" [ref=e811] [cursor=pointer]:
+                  - /url: /x2rr/funds/search?l=html
+                  - img [ref=e812]
+                  - generic [ref=e814]: HTML
+                  - generic [ref=e815]: 6.8%
+  - contentinfo [ref=e817]:
+    - heading "Footer" [level=2] [ref=e818]
+    - generic [ref=e819]:
+      - generic [ref=e820]:
+        - link "GitHub Homepage" [ref=e821] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e822]
+        - generic [ref=e824]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e825]:
+        - heading "Footer navigation" [level=3] [ref=e826]
+        - list "Footer navigation" [ref=e827]:
+          - listitem [ref=e828]:
+            - link "Terms" [ref=e829] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e830]:
+            - link "Privacy" [ref=e831] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e832]:
+            - link "Security" [ref=e833] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e834]:
+            - link "Status" [ref=e835] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e836]:
+            - link "Community" [ref=e837] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e838]:
+            - link "Docs" [ref=e839] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e840]:
+            - link "Contact" [ref=e841] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e842]:
+            - button "Manage cookies" [ref=e844] [cursor=pointer]
+          - listitem [ref=e845]:
+            - button "Do not share my personal information" [ref=e847] [cursor=pointer]

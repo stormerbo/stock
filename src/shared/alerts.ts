@@ -366,6 +366,7 @@ export function evaluateSpikeRule(
   firedHistory: AlertFiredRecord[]
 ): { triggered: boolean; message: string; direction: 'up' | 'down'; ruleId: string } | null {
   if (!rule.enabled || rule.type !== 'spike') return null;
+  if (!Number.isFinite(price) || price <= 0) return null;
 
   const windowMs = (rule.spikeWindowMinutes ?? 5) * 60 * 1000;
   const threshold = rule.spikePctThreshold ?? 2;
@@ -375,38 +376,64 @@ export function evaluateSpikeRule(
   // Add current price point
   const newHistory = [...history.filter((e) => now - e.timestamp < windowMs * 2), { price, timestamp: now }];
 
-  // Find baseline: earliest price within the window
+  // Keep only points in the evaluation window
   const windowEntries = newHistory.filter((e) => now - e.timestamp <= windowMs);
   if (windowEntries.length < 2) return null;
 
-  const baseline = windowEntries[0];
-  const changePct = ((price - baseline.price) / baseline.price) * 100;
-
-  if (Math.abs(changePct) >= threshold) {
-    const direction = changePct >= 0 ? 'up' : 'down';
-    if (expectedDirection !== 'both' && direction !== expectedDirection) {
-      return null;
-    }
-    // 阶梯告警：达到 2%/4%/6%... 会分别触发一次
-    const level = Math.floor(Math.abs(changePct) / threshold);
-    if (level < 1) return null;
-
-    // 使用 level + direction 作为 ruleId 后缀，让每一档都可独立冷却判定
-    const effectiveRuleId = `${rule.id}::${direction}::L${level}`;
-    const cooldown = rule.cooldownSeconds ?? 300;
-    if (isInCooldown(firedHistory, code, effectiveRuleId, cooldown)) return null;
-
-    const arrow = direction === 'up' ? '🚀' : '📉';
-    const label = direction === 'up' ? '急速拉升' : '急速打压';
-    return {
-      triggered: true,
-      message: `${name}(${code}) ${label}\n近${rule.spikeWindowMinutes ?? 5}分钟内${direction === 'up' ? '上涨' : '下跌'} ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%，触发第${level}档(${(threshold * level).toFixed(2)}%)，现价 ¥${price.toFixed(2)}`,
-      direction,
-      ruleId: effectiveRuleId,
-    };
+  // 使用窗口极值做基线，减少“同一档位轻微抖动”反复提示
+  let minPrice = Number.POSITIVE_INFINITY;
+  let maxPrice = Number.NEGATIVE_INFINITY;
+  for (const entry of windowEntries) {
+    if (!Number.isFinite(entry.price) || entry.price <= 0) continue;
+    if (entry.price < minPrice) minPrice = entry.price;
+    if (entry.price > maxPrice) maxPrice = entry.price;
   }
 
-  return null;
+  if (!Number.isFinite(minPrice) || !Number.isFinite(maxPrice) || minPrice <= 0 || maxPrice <= 0) {
+    return null;
+  }
+
+  const upChangePct = ((price - minPrice) / minPrice) * 100;
+  const downChangePct = ((price - maxPrice) / maxPrice) * 100;
+
+  const candidates: Array<{ direction: 'up' | 'down'; changePct: number }> = [];
+  if (expectedDirection !== 'down' && upChangePct >= threshold) {
+    candidates.push({ direction: 'up', changePct: upChangePct });
+  }
+  if (expectedDirection !== 'up' && Math.abs(downChangePct) >= threshold) {
+    candidates.push({ direction: 'down', changePct: downChangePct });
+  }
+
+  if (candidates.length === 0) return null;
+
+  const best = candidates.reduce((prev, curr) => (
+    Math.abs(curr.changePct) > Math.abs(prev.changePct) ? curr : prev
+  ));
+
+  const level = Math.floor(Math.abs(best.changePct) / threshold);
+  if (level < 1) return null;
+
+  // 使用 level + direction 作为 ruleId 后缀，让每一档都可独立判定
+  const effectiveRuleId = `${rule.id}::${best.direction}::L${level}`;
+  const levelSuffix = `::${best.direction}::L${level}`;
+  const sameLevelInWindow = firedHistory.some(
+    (record) => record.code === code && record.ruleId.endsWith(levelSuffix) && now - record.firedAt <= windowMs
+  );
+  if (sameLevelInWindow) return null;
+
+  const cooldown = rule.cooldownSeconds ?? 300;
+  const sameLevelInCooldown = firedHistory.some(
+    (record) => record.code === code && record.ruleId.endsWith(levelSuffix) && now - record.firedAt <= cooldown * 1000
+  );
+  if (sameLevelInCooldown) return null;
+
+  const label = best.direction === 'up' ? '急速拉升' : '急速打压';
+  return {
+    triggered: true,
+    message: `${name}(${code}) ${label}\n近${rule.spikeWindowMinutes ?? 5}分钟内${best.direction === 'up' ? '上涨' : '下跌'} ${best.changePct >= 0 ? '+' : ''}${best.changePct.toFixed(2)}%，触发第${level}档(${(threshold * level).toFixed(2)}%)，现价 ¥${price.toFixed(2)}`,
+    direction: best.direction,
+    ruleId: effectiveRuleId,
+  };
 }
 
 // -----------------------------------------------------------

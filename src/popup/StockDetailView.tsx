@@ -152,6 +152,7 @@ function IndicatorToggle({ label, value, color, active, onClick }: IndicatorTogg
 function KlineChart({ detail }: { detail: StockDetailData }) {
   const isMinuteStyle = detail.period === "minute" || detail.period === "fiveDay";
   const isSingleMinute = detail.period === "minute";
+  const MIN_WINDOW_SIZE = 24;
 
   const [windowSize, setWindowSize] = useState<number>(isMinuteStyle ? 0 : 240);
   const [viewOffset, setViewOffset] = useState(0);
@@ -170,7 +171,12 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   const [showDea, setShowDea] = useState(true);
 
   const dragRef = useRef<{ startX: number; startOffset: number } | null>(null);
-  const rangeBarDragRef = useRef<{ startX: number; startOffset: number } | null>(null);
+  const rangeBarDragRef = useRef<{
+    startX: number;
+    startOffset: number;
+    startSize: number;
+    mode: "move" | "resize-left" | "resize-right";
+  } | null>(null);
   const chartAreaRef = useRef<HTMLDivElement>(null);
   const rangeBarRef = useRef<HTMLDivElement>(null);
   const [chartAreaH, setChartAreaH] = useState(360);
@@ -299,26 +305,111 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   };
 
   const handleRangeMouseDown = (e: React.MouseEvent) => {
+    if (isMinuteStyle) return;
     e.preventDefault();
-    rangeBarDragRef.current = { startX: e.clientX, startOffset: clampedOffset };
+    rangeBarDragRef.current = {
+      startX: e.clientX,
+      startOffset: clampedOffset,
+      startSize: effectiveSize,
+      mode: "move",
+    };
+  };
+
+  const handleRangeLeftHandleMouseDown = (e: React.MouseEvent) => {
+    if (isMinuteStyle) return;
+    e.preventDefault();
+    e.stopPropagation();
+    rangeBarDragRef.current = {
+      startX: e.clientX,
+      startOffset: clampedOffset,
+      startSize: effectiveSize,
+      mode: "resize-left",
+    };
+  };
+
+  const handleRangeRightHandleMouseDown = (e: React.MouseEvent) => {
+    if (isMinuteStyle) return;
+    e.preventDefault();
+    e.stopPropagation();
+    rangeBarDragRef.current = {
+      startX: e.clientX,
+      startOffset: clampedOffset,
+      startSize: effectiveSize,
+      mode: "resize-right",
+    };
   };
 
   const handleRangeMouseMove = (e: React.MouseEvent) => {
     if (!rangeBarDragRef.current) return;
     const rect = rangeBarRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
+
+    const start = rangeBarDragRef.current;
     const dx = e.clientX - rangeBarDragRef.current.startX;
-    const barsPerPixel = total / rect.width;
-    const newOffset = clamp(
-      rangeBarDragRef.current.startOffset - Math.round(dx * barsPerPixel),
-      0,
-      maxOffset,
-    );
-    setViewOffset(newOffset);
+    const barsPerPixel = total > 0 ? total / rect.width : 1;
+    const deltaBars = Math.round(dx * barsPerPixel);
+
+    if (start.mode === "move") {
+      const newOffset = clamp(start.startOffset - deltaBars, 0, maxOffset);
+      setViewOffset(newOffset);
+      return;
+    }
+
+    const startRight = total - start.startOffset;
+    const startLeft = startRight - start.startSize;
+
+    if (start.mode === "resize-left") {
+      const nextLeft = clamp(startLeft + deltaBars, 0, Math.max(0, startRight - MIN_WINDOW_SIZE));
+      const nextSize = clamp(startRight - nextLeft, MIN_WINDOW_SIZE, total);
+      const nextOffset = clamp(total - startRight, 0, Math.max(0, total - nextSize));
+      setWindowSize(nextSize);
+      setViewOffset(nextOffset);
+      return;
+    }
+
+    const nextRight = clamp(startRight + deltaBars, Math.min(total, startLeft + MIN_WINDOW_SIZE), total);
+    const nextSize = clamp(nextRight - startLeft, MIN_WINDOW_SIZE, total);
+    const nextOffset = clamp(total - nextRight, 0, Math.max(0, total - nextSize));
+    setWindowSize(nextSize);
+    setViewOffset(nextOffset);
   };
 
   const handleRangeMouseUp = () => {
     rangeBarDragRef.current = null;
+  };
+
+  const handleChartWheel = (e: React.WheelEvent) => {
+    if (isMinuteStyle || total <= MIN_WINDOW_SIZE) return;
+    e.preventDefault();
+
+    const rect = chartAreaRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+
+    const relX = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const currentRight = total - clampedOffset;
+    const currentLeft = currentRight - effectiveSize;
+    const anchor = clamp(
+      Math.round(currentLeft + relX * Math.max(effectiveSize - 1, 0)),
+      0,
+      Math.max(0, total - 1),
+    );
+
+    const scale = e.deltaY < 0 ? 0.86 : 1.16;
+    const nextSize = clamp(
+      Math.round(effectiveSize * scale),
+      MIN_WINDOW_SIZE,
+      total,
+    );
+    const nextLeft = clamp(
+      Math.round(anchor - relX * Math.max(nextSize - 1, 0)),
+      0,
+      Math.max(0, total - nextSize),
+    );
+    const nextRight = nextLeft + nextSize;
+    const nextOffset = clamp(total - nextRight, 0, Math.max(0, total - nextSize));
+
+    setWindowSize(nextSize);
+    setViewOffset(nextOffset);
   };
 
   if (visibleKline.length === 0) {
@@ -476,6 +567,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onWheel={handleChartWheel}
       >
         {/* ─── K-line OHLC floating tooltip ─── */}
         {!isMinuteStyle && hoverIndex !== null ? (() => {
@@ -781,8 +873,18 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
                 className="range-bar-window"
                 style={{ left: `${thumbLeft.toFixed(2)}%`, width: `${thumbWidth.toFixed(2)}%` }}
               >
+                <span
+                  className="range-resize-handle left"
+                  onMouseDown={handleRangeLeftHandleMouseDown}
+                  title="拖拽缩小/放大左边界"
+                />
                 <span className="range-date-label">{visibleKline[0].date.slice(0, 10)}</span>
                 <span className="range-date-label">{visibleKline[last].date.slice(0, 10)}</span>
+                <span
+                  className="range-resize-handle right"
+                  onMouseDown={handleRangeRightHandleMouseDown}
+                  title="拖拽缩小/放大右边界"
+                />
               </div>
             </div>
           </div>

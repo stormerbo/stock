@@ -1,0 +1,153 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e5]:
+      - generic [ref=e7]:
+        - link "新浪网" [ref=e8] [cursor=pointer]:
+          - /url: http://www.sina.com.cn/
+          - img "新浪网" [ref=e9]
+        - link "新浪财经" [ref=e10] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/
+          - img "新浪财经" [ref=e11]
+      - generic [ref=e12]:
+        - link "财经首页" [ref=e13] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/
+        - text: "|"
+        - link "新浪首页" [ref=e14] [cursor=pointer]:
+          - /url: http://www.sina.com.cn/
+        - text: "|"
+        - link "新浪导航" [ref=e15] [cursor=pointer]:
+          - /url: http://news.sina.com.cn/guide/
+    - generic [ref=e16]:
+      - term [ref=e17]:
+        - link "财经首页" [ref=e18] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/
+      - definition [ref=e19]:
+        - link "股票" [ref=e20] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/stock/
+        - link "基金" [ref=e21] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/fund/
+        - link "港股" [ref=e22] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/stock/hkstock/
+        - link "美股" [ref=e23] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/stock/usstock/
+        - link "期货" [ref=e24] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/futuremarket/
+        - link "外汇" [ref=e25] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/forex/
+        - link "贵金属" [ref=e26] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/nmetal/
+        - link "债券" [ref=e27] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/bond/
+        - link "期指" [ref=e28] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/stock/indexfuture
+        - link "权证" [ref=e29] [cursor=pointer]:
+          - /url: http://finance.sina.com.cn/stock/warrant/
+        - link "我的自选" [ref=e30] [cursor=pointer]:
+          - /url: http://vip.stock.finance.sina.com.cn/portfolio/main.php
+      - term [ref=e31]:
+        - link "行情中心" [ref=e32] [cursor=pointer]:
+          - /url: http://money.finance.sina.com.cn/mkt
+    - generic [ref=e33]:
+      - link "数据中心" [ref=e34] [cursor=pointer]:
+        - /url: "##"
+      - link "意见反馈" [ref=e36] [cursor=pointer]:
+        - /url: http://comment4.news.sina.com.cn/comment/comment4.html?channel=ly&newsid=212
+      - generic [ref=e38]:
+        - combobox [ref=e39]:
+          - option "全部" [selected]
+          - option "沪深"
+          - option "基金"
+          - option "港股"
+          - option "美股"
+        - textbox [ref=e40]: 代码/名称/拼音
+        - button "查询" [ref=e41]
+      - link "新浪财经全新行情数据中心上线" [ref=e43] [cursor=pointer]:
+        - /url: http://finance.sina.com.cn/data/
+    - generic [ref=e45]:
+      - generic [ref=e47]:
+        - term [ref=e48] [cursor=pointer]:
+          - link "投资参考" [ref=e49]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vInvestConsult/kind/jyts/index.phtml
+        - term [ref=e50] [cursor=pointer]:
+          - link "机构荐股池" [ref=e51]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vIR_RatingNewest/index.phtml
+        - term [ref=e52] [cursor=pointer]:
+          - link "龙虎榜" [ref=e53]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vInvestConsult/kind/lhb/index.phtml
+          - img [ref=e54]
+        - term [ref=e55] [cursor=pointer]:
+          - link "市场表现" [ref=e56]:
+            - /url: http://vip.stock.finance.sina.com.cn/datacenter/hqstat.html#jdgd
+        - term [ref=e57] [cursor=pointer]:
+          - link "财务分析" [ref=e58]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vFinanceAnalyze/kind/profit/index.phtml
+        - term [ref=e59] [cursor=pointer]:
+          - link "业绩预测" [ref=e60]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vPerformancePrediction/kind/eps/index.phtml
+        - definition [ref=e61]:
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "每股收益预测" [ref=e64] [cursor=pointer]:
+                - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vPerformancePrediction/kind/eps/index.phtml
+            - listitem [ref=e65]:
+              - link "营业收入预测" [ref=e66] [cursor=pointer]:
+                - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vPerformancePrediction/kind/sales/index.phtml
+            - listitem [ref=e67]:
+              - link "净利润预测" [ref=e68] [cursor=pointer]:
+                - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vPerformancePrediction/kind/np/index.phtml
+            - listitem [ref=e69]:
+              - link "净资产收益率预测" [ref=e70] [cursor=pointer]:
+                - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vPerformancePrediction/kind/roe/index.phtml
+        - term [ref=e71] [cursor=pointer]:
+          - link "机构持股" [ref=e72]:
+            - /url: http://vip.stock.finance.sina.com.cn/q/go.php/vComStockHold/kind/jgcg/index.phtml
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]: 每股收益预测
+          - generic [ref=e78]: 截止日期：读取中... 注:数据每日18点更新
+        - generic [ref=e82]:
+          - separator [ref=e83]
+          - paragraph
+  - img [ref=e84]
+  - img [ref=e85]
+  - generic [ref=e86]:
+    - text: 客户服务热线：4006900000 欢迎批评指正
+    - link "常见问题解答" [ref=e87] [cursor=pointer]:
+      - /url: http://tech.sina.com.cn/focus/sinahelp.shtml
+    - link "互联网违法和不良信息举报" [ref=e88] [cursor=pointer]:
+      - /url: http://net.china.cn/chinese/index.htm
+    - link "新浪财经意见反馈留言板" [ref=e89] [cursor=pointer]:
+      - /url: http://comment4.news.sina.com.cn/comment/skin/feedback.html?channel=ly&newsid=5
+    - link "新浪简介" [ref=e90] [cursor=pointer]:
+      - /url: http://corp.sina.com.cn/chn/
+    - text: "|"
+    - link "About Sina" [ref=e91] [cursor=pointer]:
+      - /url: http://corp.sina.com.cn/eng/
+    - text: "|"
+    - link "广告服务" [ref=e92] [cursor=pointer]:
+      - /url: http://emarketing.sina.com.cn/
+    - text: "|"
+    - link "联系我们" [ref=e93] [cursor=pointer]:
+      - /url: http://www.sina.com.cn/contactus.html
+    - text: "|"
+    - link "招聘信息" [ref=e94] [cursor=pointer]:
+      - /url: http://corp.sina.com.cn/chn/sina_job.html
+    - text: "|"
+    - link "网站律师" [ref=e95] [cursor=pointer]:
+      - /url: http://www.sina.com.cn/intro/lawfirm.shtml
+    - text: "|"
+    - link "SINA English" [ref=e96] [cursor=pointer]:
+      - /url: http://english.sina.com
+    - text: "|"
+    - link "通行证注册" [ref=e97] [cursor=pointer]:
+      - /url: http://members.sina.com.cn/apply/
+    - text: "|"
+    - link "产品答疑" [ref=e98] [cursor=pointer]:
+      - /url: http://help.sina.com.cn/
+    - text: Copyright © 1996-2012 SINA Corporation, All Rights Reserved
+    - text: 新浪公司
+    - link "版权所有" [ref=e99] [cursor=pointer]:
+      - /url: http://www.sina.com.cn/intro/copyright.shtml
+    - generic [ref=e100]:
+      - text: 新浪财经免费提供股票、基金、债券、外汇等行情数据以及其他资料均来自相关合作方，仅作为用户获取信息之目的，并不构成投资建议。
+      - text: 新浪财经以及其合作机构不为本页面提供信息的错误、残缺、延迟或因依靠此信息所采取的任何行动负责。市场有风险，投资需谨慎。

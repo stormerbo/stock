@@ -193,24 +193,39 @@ export function isMarketDataAvailable(): boolean {
 // -----------------------------------------------------------
 
 export async function fetchTextViaExtension(url: string): Promise<string> {
-  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-    const result = await chrome.runtime.sendMessage<
-      { type: 'fetch-text'; url: string },
-      { ok: boolean; status: number; text?: string; error?: string }
-    >({
-      type: 'fetch-text',
-      url,
-    });
+  const directFetch = async () => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Direct fetch failed: ${response.status}`);
+    }
+    if (url.includes('qt.gtimg.cn')) {
+      const buffer = await response.arrayBuffer();
+      return new TextDecoder('gb18030').decode(buffer);
+    }
+    return response.text();
+  };
 
-    if (!result?.ok || typeof result.text !== 'string') {
-      throw new Error(result?.error || `request failed: ${result?.status ?? 0}`);
+  if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    try {
+      const result = await chrome.runtime.sendMessage<
+        { type: 'fetch-text'; url: string },
+        { ok: boolean; status: number; text?: string; error?: string }
+      >({
+        type: 'fetch-text',
+        url,
+      });
+
+      if (result?.ok && typeof result.text === 'string') {
+        return result.text;
+      }
+    } catch {
+      // Fall through to direct fetch when the service worker channel is unavailable.
     }
 
-    return result.text;
+    return directFetch();
   }
 
-  const response = await fetch(url);
-  return response.text();
+  return directFetch();
 }
 
 export async function fetchTextWithEncoding(url: string, encoding: string): Promise<string> {
@@ -236,38 +251,82 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
 }
 
 export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
-  const tencentCode = toTencentStockCode(code);
+  const plain = normalizeStockCode(code);
+  const tencentCode = toTencentStockCode(plain);
   if (!tencentCode) return { data: [], prevClose: Number.NaN };
 
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
-  const json = await response.json() as {
-    data?: Record<string, {
-      qt?: Record<string, string[]>;
-      data?: { data?: string[] };
-    }>;
-  };
+  // 先走腾讯分时（与详情页同接口、同直连模式），失败或空数据再兜底东财分时
+  try {
+    const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
+    if (!response.ok) {
+      throw new Error(`Tencent minute fetch failed: ${response.status}`);
+    }
+    const json = await response.json() as {
+      data?: Record<string, {
+        qt?: Record<string, string[]>;
+        data?: { data?: string[] };
+      }>;
+    };
 
-  const payload = json.data?.[tencentCode];
-  const intradayRaw = payload?.data?.data ?? [];
-  // qt[code][4] = prevClose (昨收价)
-  const quote = payload?.qt?.[tencentCode];
-  const prevClose = quote ? toNumber(quote[4]) : Number.NaN;
+    const payload = json.data?.[tencentCode];
+    const intradayRaw = payload?.data?.data ?? [];
+    const quote = payload?.qt?.[tencentCode];
+    const prevClose = quote ? toNumber(quote[4]) : Number.NaN;
 
-  const data = intradayRaw
-    .map((line) => {
-      const parts = String(line).split(' ');
-      if (parts.length < 2) return null;
-      const time = parts[0];
-      const price = toNumber(parts[1]);
-      if (!Number.isFinite(price)) return null;
-      const formattedTime = /^\d{4}$/.test(time)
-        ? `${time.slice(0, 2)}:${time.slice(2, 4)}`
-        : time;
-      return { time: formattedTime, price };
-    })
-    .filter((item): item is { time: string; price: number } => item !== null);
+    const data = intradayRaw
+      .map((line) => {
+        const parts = String(line).split(' ');
+        if (parts.length < 2) return null;
+        const time = parts[0];
+        const price = toNumber(parts[1]);
+        if (!Number.isFinite(price)) return null;
+        const formattedTime = /^\d{4}$/.test(time)
+          ? `${time.slice(0, 2)}:${time.slice(2, 4)}`
+          : time;
+        if (!/^\d{2}:\d{2}$/.test(formattedTime) || formattedTime > '15:00') return null;
+        return { time: formattedTime, price };
+      })
+      .filter((item): item is { time: string; price: number } => item !== null);
 
-  return { data, prevClose };
+    if (data.length > 0) {
+      return { data, prevClose };
+    }
+  } catch {
+    // ignore and fallback
+  }
+
+  try {
+    const secid = toEastmoneyStockSecid(plain);
+    if (!secid) return { data: [], prevClose: Number.NaN };
+    const text = await fetchTextViaExtension(
+      `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f53,f56,f58&ut=fa5fd1943c7b386f172d6893dbfba10b&iscr=0&iscca=0&ndays=1`
+    );
+    const json = JSON.parse(text) as {
+      data?: {
+        preClose?: number | string;
+        trends?: string[];
+      };
+    };
+
+    const prevClose = toNumber(json.data?.preClose);
+    const trends = Array.isArray(json.data?.trends) ? json.data?.trends : [];
+    const data = trends
+      .map((line) => {
+        // format: YYYY-MM-DD HH:MM,price,volume,avg
+        const parts = String(line).split(',');
+        if (parts.length < 2) return null;
+        const dateTime = parts[0].trim();
+        const time = dateTime.slice(-5);
+        const price = toNumber(parts[1]);
+        if (!/^\d{2}:\d{2}$/.test(time) || !Number.isFinite(price)) return null;
+        return { time, price };
+      })
+      .filter((item): item is { time: string; price: number } => item !== null);
+
+    return { data, prevClose };
+  } catch {
+    return { data: [], prevClose: Number.NaN };
+  }
 }
 
 export async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
@@ -764,7 +823,7 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
   try {
     const [mobRes, gzRes] = await Promise.allSettled([
       fetch(
-        `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=1&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=stock-tracker-ext&Fcodes=${code}`
+        `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=1&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=money-helper-ext&Fcodes=${code}`
       ).then(r => r.json()) as Promise<{
         Datas?: Array<{
           FCODE?: string;

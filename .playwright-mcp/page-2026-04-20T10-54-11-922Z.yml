@@ -1,0 +1,2024 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - list:
+          - listitem [ref=e8]:
+            - link "收藏本站" [ref=e9] [cursor=pointer]:
+              - /url: javascript:void(0);
+          - listitem [ref=e10]:
+            - generic [ref=e11]: "|"
+            - link "安全登录" [ref=e12] [cursor=pointer]:
+              - /url: https://login.1234567.com.cn/login
+            - generic [ref=e13]: "|"
+          - listitem [ref=e14]:
+            - link "免费开户" [ref=e15] [cursor=pointer]:
+              - /url: https://register.1234567.com.cn/reg/step1
+          - listitem [ref=e16]:
+            - link "忘记密码" [ref=e17] [cursor=pointer]:
+              - /url: https://register.1234567.com.cn/forgetpwd
+          - listitem [ref=e18]:
+            - generic [ref=e19]: "|"
+            - link "手机客户端" [ref=e20] [cursor=pointer]:
+              - /url: http://fundact.eastmoney.com/app/
+      - generic [ref=e21]:
+        - list:
+          - listitem [ref=e22]:
+            - link "返回天天基金网" [ref=e23] [cursor=pointer]:
+              - /url: http://www.1234567.com.cn/
+              - text: 返回天天基金网
+          - listitem [ref=e25]:
+            - generic [ref=e26]: "|"
+            - link "基金交易" [ref=e27] [cursor=pointer]:
+              - /url: https://trade.1234567.com.cn/
+              - text: 基金交易
+            - generic [ref=e29]: "|"
+          - listitem [ref=e30]:
+            - link "产品导购" [ref=e31] [cursor=pointer]:
+              - /url: http://fund.eastmoney.com/daogou/
+              - text: 产品导购
+            - generic [ref=e33]: "|"
+          - listitem [ref=e34]:
+            - link "自选基金" [ref=e35] [cursor=pointer]:
+              - /url: http://favor.fund.eastmoney.com/
+          - listitem:
+            - generic [ref=e36]: "|"
+          - listitem [ref=e37]:
+            - link "帮助中心" [ref=e38] [cursor=pointer]:
+              - /url: http://help.1234567.com.cn/
+          - listitem [ref=e39]:
+            - link "无障碍阅读" [ref=e40] [cursor=pointer]:
+              - /url: javascript:void(0);
+          - listitem [ref=e41]:
+            - generic [ref=e42]: "|"
+            - link "网站导航" [ref=e43] [cursor=pointer]:
+              - /url: javascript:void(0)
+              - text: 网站导航
+            - generic [ref=e46]: "|"
+    - generic:
+      - generic:
+        - iframe [ref=e48]:
+          - link [ref=f16e3] [cursor=pointer]:
+            - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1322&ci=1&or=3968&l=16148&bg=16148&b=18496&u=http%3A%2F%2Ftopic.1234567.com.cn%2Fhtml%2F2019%2F1%2F7%2FCZZT2019_PC.html
+            - img [ref=f16e4]
+        - iframe [ref=e50]:
+          - link [ref=f17e3] [cursor=pointer]:
+            - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1323&ci=1&or=3968&l=16162&bg=16162&b=18528&u=http%3A%2F%2Ffundact.eastmoney.com%2Finformation%2F2017001%2F%3Fspm%3D001.m.027
+            - img [ref=f17e4]
+        - iframe [ref=e52]:
+          - generic [ref=f18e2]:
+            - link [ref=f18e3] [cursor=pointer]:
+              - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1321&ci=1&or=3968&l=16161&bg=16161&b=18526&u=http%3A%2F%2Froadshow.eastmoney.com%2Flist%3Ftype%3D1
+              - img [ref=f18e4]
+            - img [ref=f18e6]
+    - generic [ref=e55]:
+      - generic:
+        - link "天天基金网" [ref=e56] [cursor=pointer]:
+          - /url: http://www.1234567.com.cn/
+        - heading "基金品种" [level=1] [ref=e57]:
+          - link "基金品种" [ref=e58] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/161725.html
+        - generic [ref=e59]:
+          - generic [ref=e61]:
+            - generic:
+              - paragraph [ref=e64] [cursor=pointer]: 基 金
+              - generic [ref=e66]:
+                - textbox "请输入基金代码、名称或简拼" [ref=e67]
+                - generic [ref=e68]: 请输入基金代码、名称或简拼
+              - button "搜索" [ref=e70] [cursor=pointer]
+          - generic [ref=e71]:
+            - link "基金代码" [ref=e72] [cursor=pointer]:
+              - /url: http://fund.eastmoney.com/allfund.html
+            - link "基金公司" [ref=e73] [cursor=pointer]:
+              - /url: http://fund.eastmoney.com/company/default.html#scomname;dasc
+            - link "★收藏本页" [ref=e74] [cursor=pointer]:
+              - /url: javascript:;
+    - generic [ref=e76]:
+      - list [ref=e78]:
+        - listitem [ref=e79]:
+          - link "基金数据" [ref=e80] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/data/
+          - link "基金净值" [ref=e81] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/fund.html
+          - link "投顾管家" [ref=e82] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/tg/
+          - link "基金排行" [ref=e83] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/data/fundranking.html
+          - link "定投" [ref=e84] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/dingtou/syph_yndt.html
+          - link "港基" [ref=e85] [cursor=pointer]:
+            - /url: http://overseas.1234567.com.cn/
+          - link "评级" [ref=e86] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/data/fundrating.html
+        - listitem [ref=e87]:
+          - link "基金公司" [ref=e88] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/company/default.html
+          - link "基金品种" [ref=e89] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/000001.html
+          - link "新发基金" [ref=e90] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/XFXJJ_jzrgq12.html
+          - link "申购状态" [ref=e91] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/Fund_sgzt_bzdm.html
+          - link "分红" [ref=e92] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/data/fundfenhong.html
+          - link "公告" [ref=e93] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/gonggao
+          - link "私募" [ref=e94] [cursor=pointer]:
+            - /url: http://simu.eastmoney.com/
+      - list [ref=e97]:
+        - listitem [ref=e98]:
+          - link "投资工具" [ref=e99] [cursor=pointer]:
+            - /url: http://favor.fund.eastmoney.com/
+          - link "自选基金" [ref=e100] [cursor=pointer]:
+            - /url: http://favor.fund.eastmoney.com/
+          - link "比较" [ref=e101] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/Compare/
+        - listitem [ref=e102]:
+          - link "基金筛选" [ref=e103] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/data/fundshaixuan.html
+          - link "收益计算" [ref=e104] [cursor=pointer]:
+            - /url: http://data.eastmoney.com/money/calc/CalcFundSY.html
+          - link "账本" [ref=e105] [cursor=pointer]:
+            - /url: http://fundbook.eastmoney.com/
+      - list [ref=e108]:
+        - listitem [ref=e109]:
+          - link "资讯互动" [ref=e110] [cursor=pointer]:
+            - /url: https://kuaixun.eastmoney.com/jj.html
+          - link "要闻" [ref=e111] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/a/cjjyw.html
+          - link "观点" [ref=e112] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/a/cjjgd.html
+          - link "学校" [ref=e113] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/a/cjjxx.html
+          - link "专题" [ref=e114] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/topic/#000
+        - listitem [ref=e115]:
+          - link "基金研究" [ref=e116] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/yanbao/
+          - link "策略" [ref=e117] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/a/cjjtzcl.html
+          - link "私募" [ref=e118] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/a/csmjj.html
+          - link "基金吧" [ref=e119] [cursor=pointer]:
+            - /url: http://jijinba.eastmoney.com/
+          - link "直播" [ref=e120] [cursor=pointer]:
+            - /url: http://js1.eastmoney.com/tg.aspx?ID=5098
+      - list [ref=e124]:
+        - listitem [ref=e125]:
+          - link "基金交易" [ref=e126] [cursor=pointer]:
+            - /url: https://trade.1234567.com.cn/
+          - link "活期宝" [ref=e127] [cursor=pointer]:
+            - /url: http://huoqibao.1234567.com.cn/
+          - link "指数宝" [ref=e128] [cursor=pointer]:
+            - /url: http://zhishubao.1234567.com.cn/
+          - link "稳健理财" [ref=e129] [cursor=pointer]:
+            - /url: http://fundlc.eastmoney.com/
+          - link "高端理财" [ref=e130] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/gaoduan/
+        - listitem [ref=e131]:
+          - link "基金超市" [ref=e132] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/tradeindex.html
+          - link "基金导购" [ref=e133] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/daogou
+          - link "收益排行" [ref=e134] [cursor=pointer]:
+            - /url: http://fundact.eastmoney.com/banner/default.html
+          - link "热销基金" [ref=e135] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/fundhot8.html
+          - link "五星基金" [ref=e136] [cursor=pointer]:
+            - /url: https://fundzt.eastmoney.com/2017/newwxph/
+    - generic [ref=e140]:
+      - generic [ref=e141] [cursor=pointer]: 全球市场
+      - generic [ref=e144]:
+        - list:
+          - listitem [ref=e145]:
+            - paragraph [ref=e146]:
+              - link "上证" [ref=e147] [cursor=pointer]:
+                - /url: http://quote.eastmoney.com/zs000001.html
+              - text: ：
+              - generic [ref=e148]: 4082.13↑30.70↑0.76%10845.78
+              - text: 亿元（涨：
+              - link "1357" [ref=e149] [cursor=pointer]:
+                - /url: https://quote.eastmoney.com/center/gridlist.html?st=ChangePercent&sortType=C&sortRule=-1#sh_a_board
+              - text: 平：81跌：
+              - link "906" [ref=e150] [cursor=pointer]:
+                - /url: https://quote.eastmoney.com/center/gridlist.html?st=ChangePercent&sr=1&sortType=C&sortRule=1#sh_a_board
+              - text: ）
+          - listitem [ref=e151]:
+            - paragraph [ref=e152]:
+              - link "深证 ：" [ref=e153] [cursor=pointer]:
+                - /url: http://quote.eastmoney.com/zs399001.html
+                - text: 深证
+                - generic [ref=e154]: ：
+              - generic [ref=e155]: 14966.75↑81.33↑0.55%14941.92
+              - text: 亿元（涨：
+              - link "1872" [ref=e156] [cursor=pointer]:
+                - /url: https://quote.eastmoney.com/center/gridlist.html?st=ChangePercent&sortType=C&sortRule=-1#sz_a_board
+              - text: 平：98跌：
+              - link "949" [ref=e157] [cursor=pointer]:
+                - /url: https://quote.eastmoney.com/center/gridlist.html?st=ChangePercent&sr=1&sortType=C&sortRule=1#sz_a_board
+              - text: ）
+      - link "更多" [ref=e159] [cursor=pointer]:
+        - /url: http://quote.eastmoney.com/center/global.html#global_3
+    - generic [ref=e162]:
+      - link "天天基金网" [ref=e163] [cursor=pointer]:
+        - /url: http://fund.eastmoney.com/
+      - text: ">"
+      - link "全部基金" [ref=e166] [cursor=pointer]:
+        - /url: http://fund.eastmoney.com/fund.html
+      - text: ">"
+      - link "招商中证白酒指数(LOF)A" [ref=e169] [cursor=pointer]:
+        - /url: http://fund.eastmoney.com/161725.html
+      - generic [ref=e170] [cursor=pointer]: 手机访问当前基金品种页
+    - iframe [ref=e173]:
+      - link [ref=f19e3] [cursor=pointer]:
+        - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1324&ci=1&or=47&l=13521&bg=13521&b=20261&u=http%3A%2F%2Fjs1.eastmoney.com%2Ftg.aspx%3FID%3D5971
+        - img [ref=f19e4]
+    - generic [ref=e176]:
+      - generic:
+        - term [ref=e177]: 您浏览过的基金：
+        - definition [ref=e178]:
+          - link "招商中证白酒指数(LOF)A" [ref=e179] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/161725.html
+        - definition [ref=e180]:
+          - link "华夏大盘" [ref=e181] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/000011.html
+        - definition [ref=e182]:
+          - link "嘉实增长" [ref=e183] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/070002.html
+        - definition [ref=e184]:
+          - link "泰达精选" [ref=e185] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/162204.html
+        - definition [ref=e186]:
+          - link "嘉实服务" [ref=e187] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/070006.html
+        - definition [ref=e188]:
+          - link "易基策略" [ref=e189] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/110002.html
+        - definition [ref=e190]:
+          - link "兴业全球视野" [ref=e191] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/340006.html
+        - definition [ref=e192]:
+          - link "上投阿尔法" [ref=e193] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/377010.html
+        - definition [ref=e194]:
+          - link "上证中盘ETF" [ref=e195] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/510133.html
+        - definition [ref=e196]:
+          - link "交银成长" [ref=e197] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/519692.html
+        - definition [ref=e198]:
+          - link "添富优势" [ref=e199] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/519008.html
+        - definition [ref=e200]:
+          - link "华安宏利" [ref=e201] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/040005.html
+        - definition [ref=e202]:
+          - link "上证180价值ETF" [ref=e203] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/510030.html
+        - definition [ref=e204]:
+          - link "上投优势" [ref=e205] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/375010.html
+    - generic [ref=e208]:
+      - generic [ref=e209]:
+        - generic [ref=e210]:
+          - generic [ref=e211]: 招商中证白酒指数(LOF)A(161725
+          - text: )
+        - generic [ref=e212]:
+          - link "基金吧" [ref=e213] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/ba/list,of161725.html
+          - link "加自选" [ref=e214] [cursor=pointer]:
+            - /url: javascript:;
+          - link "加对比" [ref=e215] [cursor=pointer]:
+            - /url: javascript:;
+          - link "手机版天天基金下载" [ref=e216] [cursor=pointer]:
+            - /url: http://fundact.eastmoney.com/app/
+      - generic [ref=e217]: 应业务安排，公司已于近日下线指数基金净值估算功能，请及时关注页面提示，感谢您的理解与支持。
+      - generic [ref=e219]:
+        - generic [ref=e220]:
+          - generic [ref=e221]:
+            - generic [ref=e222]:
+              - term [ref=e223]:
+                - paragraph [ref=e224]:
+                  - generic [ref=e225]:
+                    - link "单位净值" [ref=e227] [cursor=pointer]:
+                      - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+                    - text: (
+                  - text: 2026-04-17)
+              - definition [ref=e228]: 0.6288-1.87%
+              - definition [ref=e229]: 近1月：-6.80%
+              - definition [ref=e230]: 近1年：-23.93%
+            - generic [ref=e232]:
+              - term [ref=e233]:
+                - paragraph [ref=e234]:
+                  - link "累计净值" [ref=e237] [cursor=pointer]:
+                    - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+              - definition [ref=e238]: "2.3449"
+              - definition [ref=e239]: 近3月：-11.34%
+              - definition [ref=e240]: 近3年：-45.13%
+            - generic [ref=e241]:
+              - term [ref=e242]:
+                - paragraph [ref=e243]
+              - definition [ref=e244]
+              - definition [ref=e245]: 近6月：-20.25%
+              - definition [ref=e246]: 成立来：154.32%
+          - table [ref=e249]:
+            - rowgroup [ref=e250]:
+              - row "类型：指数型-股票 | 中高风险 规模：284.95亿元（2025-12-31） 基金经理：侯昊" [ref=e251]:
+                - cell "类型：指数型-股票 | 中高风险" [ref=e252]:
+                  - text: 类型：
+                  - link "指数型-股票" [ref=e253] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/ZS_jzzzl.html
+                  - text: "| 中高风险"
+                - cell "规模：284.95亿元（2025-12-31）" [ref=e254]:
+                  - link "规模" [ref=e255] [cursor=pointer]:
+                    - /url: http://fundf10.eastmoney.com/gmbd_161725.html
+                  - text: ：284.95亿元（2025-12-31）
+                - cell "基金经理：侯昊" [ref=e256]:
+                  - text: 基金经理：
+                  - link "侯昊" [ref=e257] [cursor=pointer]:
+                    - /url: http://fundf10.eastmoney.com/jjjl_161725.html
+              - row "成 立 日：2015-05-27 管 理 人：招商基金 基金评级 ：" [ref=e258]:
+                - cell "成 立 日：2015-05-27" [ref=e259]
+                - cell "管 理 人：招商基金" [ref=e260]:
+                  - text: 管 理 人：
+                  - link "招商基金" [ref=e261] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/company/80036782.html
+                - cell "基金评级 ：" [ref=e262]:
+                  - link "基金评级" [ref=e263] [cursor=pointer]:
+                    - /url: http://fundf10.eastmoney.com/jjpj_161725.html
+                  - generic [ref=e264]: ：
+              - row "跟踪标的：中证白酒指数 | 年化跟踪误差：1.74%" [ref=e266]:
+                - cell "跟踪标的：中证白酒指数 | 年化跟踪误差：1.74%" [ref=e267] [cursor=pointer]:
+                  - link "跟踪标的：" [ref=e268]:
+                    - /url: http://fundf10.eastmoney.com/tsdata_161725.html
+                  - text: 中证白酒指数 |
+                  - link "年化跟踪误差：" [ref=e269]:
+                    - /url: http://fundf10.eastmoney.com/tsdata_161725.html
+                  - text: 1.74%
+        - generic [ref=e272]:
+          - generic [ref=e273]:
+            - paragraph [ref=e274]: 证监会批准的首批独立基金销售机构
+            - paragraph [ref=e275]: 民生银行全程资金监管
+          - generic [ref=e276]:
+            - generic [ref=e277]:
+              - text: 交易状态：
+              - generic [ref=e278]: 限大额 (单日累计购买上限50.00万元)
+              - text: 开放赎回
+            - generic [ref=e279]:
+              - text: 购买手续费：
+              - generic [ref=e280]:
+                - text: 1.00% 0.10%
+                - generic [ref=e281]: "1.0"
+                - text: 折
+              - link "费率详情>" [ref=e283] [cursor=pointer]:
+                - /url: http://fundf10.eastmoney.com/jjfl_161725.html
+            - table [ref=e285]:
+              - rowgroup [ref=e286]:
+                - row "金额： 10.00元起购 元 手机也 可以买基金" [ref=e287]:
+                  - cell "金额：" [ref=e288]:
+                    - generic [ref=e289]: 金额：
+                  - cell "10.00元起购 元" [ref=e290]:
+                    - generic:
+                      - textbox [ref=e291]: 10.00元起购
+                      - generic [ref=e292]: 元
+                  - cell "手机也 可以买基金" [ref=e293]:
+                    - generic [ref=e294] [cursor=pointer]:
+                      - text: 手机也
+                      - text: 可以买基金
+            - table [ref=e297]:
+              - rowgroup [ref=e298]:
+                - row "立即购买 定投 10元起投 免费开户" [ref=e299]:
+                  - cell [ref=e300]
+                  - cell "立即购买" [ref=e302]:
+                    - link "立即购买" [ref=e303] [cursor=pointer]:
+                      - /url: https://trade.1234567.com.cn/FundtradePage/default2.aspx?fc=161725&spm=pzm
+                  - cell "定投 10元起投" [ref=e304]:
+                    - link "定投 10元起投" [ref=e305] [cursor=pointer]:
+                      - /url: https://trade.1234567.com.cn/Investment/add.aspx?fc=161725&spm=pzm
+                      - paragraph [ref=e306]: 定投
+                      - paragraph [ref=e307]: 10元起投
+                  - cell "免费开户" [ref=e308]:
+                    - link "免费开户" [ref=e309] [cursor=pointer]:
+                      - /url: https://register.1234567.com.cn/reg/step1?spm=pzm
+                      - paragraph [ref=e310]: 免费开户
+            - generic [ref=e311]:
+              - list:
+                - listitem [ref=e312] [cursor=pointer]: 活期宝转入
+                - listitem [ref=e313] [cursor=pointer]: 回活期宝
+                - listitem [ref=e314] [cursor=pointer]: 极速回活期宝
+                - listitem [ref=e315] [cursor=pointer]: 超级转换
+      - generic [ref=e316]:
+        - list:
+          - listitem [ref=e317]:
+            - link "基金档案" [ref=e318] [cursor=pointer]:
+              - /url: javascript:;
+          - listitem [ref=e319]:
+            - link "基金概况" [ref=e320] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jbgk_161725.html
+          - listitem [ref=e321]:
+            - link "基金经理" [ref=e322] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjjl_161725.html
+          - listitem [ref=e323]:
+            - link "基金公司" [ref=e324] [cursor=pointer]:
+              - /url: http://fund.eastmoney.com/company/80036782.html
+          - listitem [ref=e325]:
+            - link "历史净值" [ref=e326] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+          - listitem [ref=e327]:
+            - link "阶段涨幅" [ref=e328] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jdzf_161725.html
+          - listitem [ref=e329]:
+            - link "分红送配" [ref=e330] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/fhsp_161725.html
+          - listitem [ref=e331]:
+            - link "持仓明细" [ref=e332] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/ccmx_161725.html
+          - listitem [ref=e333]:
+            - link "行业配置" [ref=e334] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/hytz_161725.html
+          - listitem [ref=e335]:
+            - link "规模变动" [ref=e336] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/gmbd_161725.html
+          - listitem [ref=e337]:
+            - link "持有人结构" [ref=e338] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/cyrjg_161725.html
+          - listitem [ref=e339]:
+            - link "基金公告" [ref=e340] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjgg_161725.html
+          - listitem [ref=e341]:
+            - link "财务报表" [ref=e342] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/cwzb_161725.html
+          - listitem [ref=e343]:
+            - link "购买信息" [ref=e344] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjfl_161725.html
+    - generic [ref=e347]:
+      - iframe [ref=e349]:
+        - link [ref=f20e3] [cursor=pointer]:
+          - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1326&ci=1&or=47&l=13523&bg=13523&b=20262&u=http%3A%2F%2Fjs1.eastmoney.com%2Ftg.aspx%3FID%3D5972
+          - img [ref=f20e4]
+      - link "招商基金财富号 查看":
+        - /url: http://caifuhao.eastmoney.com/cfh/139624?spm=002.cfh
+        - generic [ref=e350] [cursor=pointer]:
+          - paragraph [ref=e351]: 招商基金财富号
+          - generic [ref=e352]: 查看
+    - generic [ref=e355]:
+      - generic [ref=e356]:
+        - generic [ref=e357]:
+          - generic [ref=e358]:
+            - heading "单位净值走势" [level=3] [ref=e360]:
+              - link "单位净值走势" [ref=e361] [cursor=pointer]:
+                - /url: javascript:;
+            - link "更多>" [ref=e363] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+            - link "随时随地查看最新净值" [ref=e364] [cursor=pointer]:
+              - /url: http://fundact.eastmoney.com/app/
+          - list [ref=e366]:
+            - listitem [ref=e367]:
+              - generic [ref=e368]:
+                - list:
+                  - listitem [ref=e369]: 选择时间
+                  - listitem [ref=e370] [cursor=pointer]: 1月
+                  - listitem [ref=e371] [cursor=pointer]: 3月
+                  - listitem [ref=e372] [cursor=pointer]: 6月
+                  - listitem [ref=e373] [cursor=pointer]: 1年
+                  - listitem [ref=e374] [cursor=pointer]: 3年
+                  - listitem [ref=e375] [cursor=pointer]: 5年
+                  - listitem [ref=e376] [cursor=pointer]: 今年
+                  - listitem [ref=e377] [cursor=pointer]: 成立来
+            - listitem [ref=e378]:
+              - img [ref=e380]:
+                - generic [ref=e382]:
+                  - generic [ref=e383]: "0.60"
+                  - generic [ref=e384]: "0.63"
+                  - generic [ref=e385]: "0.66"
+                  - generic [ref=e386]: "0.69"
+                  - generic [ref=e387]: "0.72"
+                  - generic [ref=e388]: "0.75"
+                  - generic [ref=e389]: 2月
+                  - generic [ref=e390]: 3月
+                  - generic [ref=e391]: 4月
+        - generic [ref=e415]:
+          - generic [ref=e416]:
+            - heading "股票持仓" [level=3] [ref=e418]:
+              - link "股票持仓" [ref=e419] [cursor=pointer]:
+                - /url: javascript:;
+            - heading "债券持仓" [level=3] [ref=e421] [cursor=pointer]:
+              - link "债券持仓" [ref=e422]:
+                - /url: javascript:;
+            - link "更多 >" [ref=e424] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/ccmx_161725.html
+          - list [ref=e426]:
+            - listitem [ref=e427]:
+              - generic [ref=e428]:
+                - table [ref=e429]:
+                  - rowgroup [ref=e430]:
+                    - row "股票名称 持仓占比 涨跌幅 相关资讯" [ref=e431]:
+                      - columnheader "股票名称" [ref=e432]
+                      - columnheader "持仓占比" [ref=e433]
+                      - columnheader "涨跌幅" [ref=e434]
+                      - columnheader "相关资讯" [ref=e435]
+                    - row "贵州茅台 15.38% 0.26% 股吧" [ref=e436]:
+                      - cell "贵州茅台" [ref=e437]:
+                        - link "贵州茅台" [ref=e438] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.600519
+                      - cell "15.38%" [ref=e439]
+                      - cell "0.26%" [ref=e440]
+                      - cell "股吧" [ref=e441]:
+                        - link "股吧" [ref=e442] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.600519
+                    - row "山西汾酒 15.11% -0.45% 股吧" [ref=e443]:
+                      - cell "山西汾酒" [ref=e444]:
+                        - link "山西汾酒" [ref=e445] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.600809
+                      - cell "15.11%" [ref=e446]
+                      - cell "-0.45%" [ref=e447]
+                      - cell "股吧" [ref=e448]:
+                        - link "股吧" [ref=e449] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.600809
+                    - row "五 粮 液 14.65% -0.50% 股吧" [ref=e450]:
+                      - cell "五 粮 液" [ref=e451]:
+                        - link "五 粮 液" [ref=e452] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/0.000858
+                      - cell "14.65%" [ref=e453]
+                      - cell "-0.50%" [ref=e454]
+                      - cell "股吧" [ref=e455]:
+                        - link "股吧" [ref=e456] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=0.000858
+                    - row "泸州老窖 14.53% -0.54% 股吧" [ref=e457]:
+                      - cell "泸州老窖" [ref=e458]:
+                        - link "泸州老窖" [ref=e459] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/0.000568
+                      - cell "14.53%" [ref=e460]
+                      - cell "-0.54%" [ref=e461]
+                      - cell "股吧" [ref=e462]:
+                        - link "股吧" [ref=e463] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=0.000568
+                    - row "洋河股份 8.34% 0.42% 股吧" [ref=e464]:
+                      - cell "洋河股份" [ref=e465]:
+                        - link "洋河股份" [ref=e466] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/0.002304
+                      - cell "8.34%" [ref=e467]
+                      - cell "0.42%" [ref=e468]
+                      - cell "股吧" [ref=e469]:
+                        - link "股吧" [ref=e470] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=0.002304
+                    - row "古井贡酒 5.14% 0.66% 股吧" [ref=e471]:
+                      - cell "古井贡酒" [ref=e472]:
+                        - link "古井贡酒" [ref=e473] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/0.000596
+                      - cell "5.14%" [ref=e474]
+                      - cell "0.66%" [ref=e475]
+                      - cell "股吧" [ref=e476]:
+                        - link "股吧" [ref=e477] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=0.000596
+                    - row "今世缘 4.97% 0.66% 股吧" [ref=e478]:
+                      - cell "今世缘" [ref=e479]:
+                        - link "今世缘" [ref=e480] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.603369
+                      - cell "4.97%" [ref=e481]
+                      - cell "0.66%" [ref=e482]
+                      - cell "股吧" [ref=e483]:
+                        - link "股吧" [ref=e484] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.603369
+                    - row "迎驾贡酒 2.47% 1.62% 股吧" [ref=e485]:
+                      - cell "迎驾贡酒" [ref=e486]:
+                        - link "迎驾贡酒" [ref=e487] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.603198
+                      - cell "2.47%" [ref=e488]
+                      - cell "1.62%" [ref=e489]
+                      - cell "股吧" [ref=e490]:
+                        - link "股吧" [ref=e491] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.603198
+                    - row "舍得酒业 2.14% 0.15% 股吧" [ref=e492]:
+                      - cell "舍得酒业" [ref=e493]:
+                        - link "舍得酒业" [ref=e494] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.600702
+                      - cell "2.14%" [ref=e495]
+                      - cell "0.15%" [ref=e496]
+                      - cell "股吧" [ref=e497]:
+                        - link "股吧" [ref=e498] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.600702
+                    - row "口子窖 2.06% -0.53% 股吧" [ref=e499]:
+                      - cell "口子窖" [ref=e500]:
+                        - link "口子窖" [ref=e501] [cursor=pointer]:
+                          - /url: //quote.eastmoney.com/unify/r/1.603589
+                      - cell "2.06%" [ref=e502]
+                      - cell "-0.53%" [ref=e503]
+                      - cell "股吧" [ref=e504]:
+                        - link "股吧" [ref=e505] [cursor=pointer]:
+                          - /url: https://fund.eastmoney.com/ba/interface/GetList.aspx?code=1.603589
+                - paragraph [ref=e506]:
+                  - link "前十持仓占比合计：" [ref=e508] [cursor=pointer]:
+                    - /url: http://fundf10.eastmoney.com/ccmx_161725.html
+                  - generic [ref=e509]: 84.79%
+              - generic [ref=e510]:
+                - generic [ref=e511]: "持仓截止日期: 2025-12-31"
+                - link "更多持仓信息>" [ref=e512] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/ccmx_161725.html
+      - generic [ref=e513]:
+        - generic [ref=e514]:
+          - generic [ref=e515]:
+            - heading "热门产品" [level=3] [ref=e517] [cursor=pointer]:
+              - link "热门产品" [ref=e518]:
+                - /url: javascript:;
+            - heading "公司观点" [level=3] [ref=e520] [cursor=pointer]:
+              - link "公司观点" [ref=e521]:
+                - /url: javascript:;
+            - link "更多>" [ref=e523] [cursor=pointer]:
+              - /url: http://caifuhao.eastmoney.com/cfh/139624?spm=002.cfh
+          - list [ref=e525]:
+            - listitem [ref=e526]:
+              - generic [ref=e527]:
+                - paragraph [ref=e528]: 精选港股通标的
+                - paragraph [ref=e529]:
+                  - generic [ref=e530]: 6.24%
+                  - generic [ref=e531]: 近6月
+                  - link "招商MSCI中..." [ref=e532] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/005761.html?spm=002.cfh
+              - generic [ref=e533]:
+                - paragraph [ref=e534]: 基本面改善、估值底部
+                - paragraph [ref=e535]:
+                  - generic [ref=e536]: 3.89%
+                  - generic [ref=e537]: 近1年
+                  - link "招商中证银行指..." [ref=e538] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/161723.html?spm=002.cfh
+              - generic [ref=e539]:
+                - paragraph [ref=e540]: 蝉联三座“金牛奖”
+                - paragraph [ref=e541]:
+                  - generic [ref=e542]: 1.56%
+                  - generic [ref=e543]: 近1年
+                  - link "招商产业债券A" [ref=e544] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/217022.html?spm=002.cfh
+        - generic [ref=e545]:
+          - generic [ref=e546]:
+            - heading "活期宝" [level=3] [ref=e548] [cursor=pointer]:
+              - link "活期宝" [ref=e549]:
+                - /url: javascript:;
+            - heading "稳健理财" [level=3] [ref=e551] [cursor=pointer]:
+              - link "稳健理财" [ref=e552]:
+                - /url: http://fundlc.eastmoney.com/
+            - link "查收益>" [ref=e554] [cursor=pointer]:
+              - /url: http://huoqibao.1234567.com.cn
+          - list [ref=e556]:
+            - listitem [ref=e557] [cursor=pointer]:
+              - paragraph [ref=e558]:
+                - text: 活期宝
+                - generic [ref=e559]: 灵活取现，最快1秒到账
+              - paragraph [ref=e560]:
+                - generic [ref=e561]: 关联基金最高7日年化
+                - generic [ref=e562]: 2.03%
+                - text: 04-17
+              - paragraph [ref=e563]: 快取单日限额 最高超50万元
+              - generic [ref=e564]:
+                - link "免费开通" [ref=e565]:
+                  - /url: https://register.1234567.com.cn/reg/step1?spm=001002001.lwb
+                - link "立即充值" [ref=e566]:
+                  - /url: https://trade.1234567.com.cn/xjb/recharge?spm=001002001.lwb
+    - generic [ref=e569]:
+      - generic [ref=e570]:
+        - generic [ref=e571]:
+          - generic [ref=e572]:
+            - heading "累计净值走势" [level=3] [ref=e574]:
+              - link "累计净值走势" [ref=e575] [cursor=pointer]:
+                - /url: javascript:;
+            - link "更多>" [ref=e577] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+            - link "随时随地查看最新净值" [ref=e578] [cursor=pointer]:
+              - /url: http://fundact.eastmoney.com/app/
+          - list [ref=e580]:
+            - listitem [ref=e581]:
+              - generic [ref=e582]:
+                - list:
+                  - listitem [ref=e583]: 选择时间
+                  - listitem [ref=e584] [cursor=pointer]: 1月
+                  - listitem [ref=e585] [cursor=pointer]: 3月
+                  - listitem [ref=e586] [cursor=pointer]: 6月
+                  - listitem [ref=e587] [cursor=pointer]: 1年
+                  - listitem [ref=e588] [cursor=pointer]: 3年
+                  - listitem [ref=e589] [cursor=pointer]: 5年
+                  - listitem [ref=e590] [cursor=pointer]: 今年
+                  - listitem [ref=e591] [cursor=pointer]: 成立来
+            - listitem [ref=e592]:
+              - img [ref=e594]:
+                - generic [ref=e596]:
+                  - generic [ref=e597]: "2.34"
+                  - generic [ref=e598]: "2.37"
+                  - generic [ref=e599]: "2.40"
+                  - generic [ref=e600]: "2.43"
+                  - generic [ref=e601]: "2.46"
+                  - generic [ref=e602]: "2.49"
+                  - generic [ref=e603]: 2月
+                  - generic [ref=e604]: 3月
+                  - generic [ref=e605]: 4月
+        - generic [ref=e629]:
+          - generic [ref=e630]:
+            - heading "净值" [level=3] [ref=e632]:
+              - link "净值" [ref=e633] [cursor=pointer]:
+                - /url: javascript:;
+            - heading "分红" [level=3] [ref=e635] [cursor=pointer]:
+              - link "分红" [ref=e636]:
+                - /url: javascript:;
+            - heading "评级" [level=3] [ref=e638] [cursor=pointer]:
+              - link "评级" [ref=e639]:
+                - /url: javascript:;
+            - link "更多>" [ref=e641] [cursor=pointer]:
+              - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+          - list [ref=e643]:
+            - listitem [ref=e644]:
+              - table [ref=e646]:
+                - rowgroup [ref=e647]:
+                  - row "日期 单位净值 累计净值 日增长率" [ref=e648]:
+                    - columnheader "日期" [ref=e649]
+                    - columnheader "单位净值" [ref=e650]
+                    - columnheader "累计净值" [ref=e651]
+                    - columnheader "日增长率" [ref=e652]
+                  - row "04-17 0.6288 2.3449 -1.87%" [ref=e653]:
+                    - cell "04-17" [ref=e654]
+                    - cell "0.6288" [ref=e655]
+                    - cell "2.3449" [ref=e656]
+                    - cell "-1.87%" [ref=e657]
+                  - row "04-16 0.6408 2.3569 0.17%" [ref=e658]:
+                    - cell "04-16" [ref=e659]
+                    - cell "0.6408" [ref=e660]
+                    - cell "2.3569" [ref=e661]
+                    - cell "0.17%" [ref=e662]
+                  - row "04-15 0.6397 2.3558 0.39%" [ref=e663]:
+                    - cell "04-15" [ref=e664]
+                    - cell "0.6397" [ref=e665]
+                    - cell "2.3558" [ref=e666]
+                    - cell "0.39%" [ref=e667]
+                  - row "04-14 0.6372 2.3533 0.92%" [ref=e668]:
+                    - cell "04-14" [ref=e669]
+                    - cell "0.6372" [ref=e670]
+                    - cell "2.3533" [ref=e671]
+                    - cell "0.92%" [ref=e672]
+                  - row "04-13 0.6314 2.3475 -0.47%" [ref=e673]:
+                    - cell "04-13" [ref=e674]
+                    - cell "0.6314" [ref=e675]
+                    - cell "2.3475" [ref=e676]
+                    - cell "-0.47%" [ref=e677]
+                  - row "04-10 0.6344 2.3505 0.03%" [ref=e678]:
+                    - cell "04-10" [ref=e679]
+                    - cell "0.6344" [ref=e680]
+                    - cell "2.3505" [ref=e681]
+                    - cell "0.03%" [ref=e682]
+                  - row "04-09 0.6342 2.3503 -1.75%" [ref=e683]:
+                    - cell "04-09" [ref=e684]
+                    - cell "0.6342" [ref=e685]
+                    - cell "2.3503" [ref=e686]
+                    - cell "-1.75%" [ref=e687]
+                  - row "04-08 0.6455 2.3616 1.65%" [ref=e688]:
+                    - cell "04-08" [ref=e689]
+                    - cell "0.6455" [ref=e690]
+                    - cell "2.3616" [ref=e691]
+                    - cell "1.65%" [ref=e692]
+                  - row "04-07 0.6350 2.3511 -0.67%" [ref=e693]:
+                    - cell "04-07" [ref=e694]
+                    - cell "0.6350" [ref=e695]
+                    - cell "2.3511" [ref=e696]
+                    - cell "-0.67%" [ref=e697]
+                  - row "04-03 0.6393 2.3554 -1.68%" [ref=e698]:
+                    - cell "04-03" [ref=e699]
+                    - cell "0.6393" [ref=e700]
+                    - cell "2.3554" [ref=e701]
+                    - cell "-1.68%" [ref=e702]
+                  - row "04-02 0.6502 2.3663 0.43%" [ref=e703]:
+                    - cell "04-02" [ref=e704]
+                    - cell "0.6502" [ref=e705]
+                    - cell "2.3663" [ref=e706]
+                    - cell "0.43%" [ref=e707]
+              - link "更多净值信息>" [ref=e709] [cursor=pointer]:
+                - /url: http://fundf10.eastmoney.com/jjjz_161725.html
+      - generic [ref=e711]:
+        - generic [ref=e712]:
+          - heading "我的自选基金" [level=3] [ref=e714] [cursor=pointer]:
+            - link "我的自选基金" [ref=e715]:
+              - /url: http://favor.fund.eastmoney.com/
+          - link "更多>" [ref=e717] [cursor=pointer]:
+            - /url: http://favor.fund.eastmoney.com/
+        - table [ref=e719]:
+          - rowgroup [ref=e720]:
+            - row "基金名称 单位净值 日增长率" [ref=e721]:
+              - columnheader "基金名称" [ref=e722]
+              - columnheader "单位净值" [ref=e723]
+              - columnheader "日增长率" [ref=e724]
+            - row "华夏成长混合 1.1210 0.27%" [ref=e725]:
+              - cell "华夏成长混合" [ref=e726]:
+                - link "华夏成长混合" [ref=e727] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/000001.html
+              - cell "1.1210" [ref=e728]
+              - cell "0.27%" [ref=e729]
+            - row "华夏大盘精选混 21.8360 0.65%" [ref=e730]:
+              - cell "华夏大盘精选混" [ref=e731]:
+                - link "华夏大盘精选混" [ref=e732] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/000011.html
+              - cell "21.8360" [ref=e733]
+              - cell "0.65%" [ref=e734]
+            - row "富国全球科技互 4.3552 1.45%" [ref=e735]:
+              - cell "富国全球科技互" [ref=e736]:
+                - link "富国全球科技互" [ref=e737] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/100055.html
+              - cell "4.3552" [ref=e738]
+              - cell "1.45%" [ref=e739]
+            - row "500ETF联 2.2972 0.39%" [ref=e740]:
+              - cell "500ETF联" [ref=e741]:
+                - link "500ETF联" [ref=e742] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/160119.html
+              - cell "2.2972" [ref=e743]
+              - cell "0.39%" [ref=e744]
+            - row "鹏华中证500 2.3755 0.41%" [ref=e745]:
+              - cell "鹏华中证500" [ref=e746]:
+                - link "鹏华中证500" [ref=e747] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/160616.html
+              - cell "2.3755" [ref=e748]
+              - cell "0.41%" [ref=e749]
+            - row "富国中证军工指 1.3430 0.83%" [ref=e750]:
+              - cell "富国中证军工指" [ref=e751]:
+                - link "富国中证军工指" [ref=e752] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/161024.html
+              - cell "1.3430" [ref=e753]
+              - cell "0.83%" [ref=e754]
+            - row "融通内需驱动混 3.5770 -1.08%" [ref=e755]:
+              - cell "融通内需驱动混" [ref=e756]:
+                - link "融通内需驱动混" [ref=e757] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/161611.html
+              - cell "3.5770" [ref=e758]
+              - cell "-1.08%" [ref=e759]
+            - row "银华领先策略混 1.1157 -0.80%" [ref=e760]:
+              - cell "银华领先策略混" [ref=e761]:
+                - link "银华领先策略混" [ref=e762] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/180013.html
+              - cell "1.1157" [ref=e763]
+              - cell "-0.80%" [ref=e764]
+            - row "泰信优质生活混 0.6246 -1.84%" [ref=e765]:
+              - cell "泰信优质生活混" [ref=e766]:
+                - link "泰信优质生活混" [ref=e767] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/290004.html
+              - cell "0.6246" [ref=e768]
+              - cell "-1.84%" [ref=e769]
+            - row "申万菱信消费增 1.2180 -1.62%" [ref=e770]:
+              - cell "申万菱信消费增" [ref=e771]:
+                - link "申万菱信消费增" [ref=e772] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/310388.html
+              - cell "1.2180" [ref=e773]
+              - cell "-1.62%" [ref=e774]
+        - link "更多自选基金信息>" [ref=e776] [cursor=pointer]:
+          - /url: http://favor.fund.eastmoney.com/
+    - generic:
+      - generic:
+        - generic:
+          - generic [ref=e777]:
+            - generic [ref=e778]:
+              - generic [ref=e779]:
+                - heading "阶段涨幅" [level=3] [ref=e781]:
+                  - link "阶段涨幅" [ref=e782] [cursor=pointer]:
+                    - /url: javascript:;
+                - heading "季度涨幅" [level=3] [ref=e784] [cursor=pointer]:
+                  - link "季度涨幅" [ref=e785]:
+                    - /url: javascript:;
+                - heading "年度涨幅" [level=3] [ref=e787] [cursor=pointer]:
+                  - link "年度涨幅" [ref=e788]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e790] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jdzf_161725.html
+                - generic [ref=e791]: 截止至2026-04-17
+                - link "下载天天基金手机版，随时查看阶段涨幅" [ref=e792] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/app/
+              - list [ref=e794]:
+                - listitem [ref=e795]:
+                  - table [ref=e796]:
+                    - rowgroup [ref=e797]:
+                      - row "近1周 近1月 近3月 近6月 今年来 近1年 近2年 近3年" [ref=e798]:
+                        - columnheader [ref=e799]
+                        - columnheader "近1周" [ref=e800]:
+                          - generic [ref=e801]: 近1周
+                        - columnheader "近1月" [ref=e802]:
+                          - generic [ref=e803]: 近1月
+                        - columnheader "近3月" [ref=e804]:
+                          - generic [ref=e805]: 近3月
+                        - columnheader "近6月" [ref=e806]:
+                          - generic [ref=e807]: 近6月
+                        - columnheader "今年来" [ref=e808]:
+                          - generic [ref=e809]: 今年来
+                        - columnheader "近1年" [ref=e810]:
+                          - generic [ref=e811]: 近1年
+                        - columnheader "近2年" [ref=e812]:
+                          - generic [ref=e813]: 近2年
+                        - columnheader "近3年" [ref=e814]:
+                          - generic [ref=e815]: 近3年
+                      - row "阶段涨幅 -0.88% -6.80% -11.34% -20.25% -11.42% -23.93% -31.64% -45.13%" [ref=e816]:
+                        - cell "阶段涨幅" [ref=e817]:
+                          - generic [ref=e818]: 阶段涨幅
+                        - cell "-0.88%" [ref=e819]:
+                          - generic [ref=e820]: "-0.88%"
+                        - cell "-6.80%" [ref=e821]:
+                          - generic [ref=e822]: "-6.80%"
+                        - cell "-11.34%" [ref=e823]:
+                          - generic [ref=e824]: "-11.34%"
+                        - cell "-20.25%" [ref=e825]:
+                          - generic [ref=e826]: "-20.25%"
+                        - cell "-11.42%" [ref=e827]:
+                          - generic [ref=e828]: "-11.42%"
+                        - cell "-23.93%" [ref=e829]:
+                          - generic [ref=e830]: "-23.93%"
+                        - cell "-31.64%" [ref=e831]:
+                          - generic [ref=e832]: "-31.64%"
+                        - cell "-45.13%" [ref=e833]:
+                          - generic [ref=e834]: "-45.13%"
+                      - row "同类平均 2.58% 2.60% -0.43% 9.28% 5.44% 37.68% 54.00% 27.52%" [ref=e835]:
+                        - cell "同类平均" [ref=e836]:
+                          - generic [ref=e837]: 同类平均
+                        - cell "2.58%" [ref=e839]:
+                          - generic [ref=e840]: 2.58%
+                        - cell "2.60%" [ref=e841]:
+                          - generic [ref=e842]: 2.60%
+                        - cell "-0.43%" [ref=e843]:
+                          - generic [ref=e844]: "-0.43%"
+                        - cell "9.28%" [ref=e845]:
+                          - generic [ref=e846]: 9.28%
+                        - cell "5.44%" [ref=e847]:
+                          - generic [ref=e848]: 5.44%
+                        - cell "37.68%" [ref=e849]:
+                          - generic [ref=e850]: 37.68%
+                        - cell "54.00%" [ref=e851]:
+                          - generic [ref=e852]: 54.00%
+                        - cell "27.52%" [ref=e853]:
+                          - generic [ref=e854]: 27.52%
+                      - row "沪深300 2.40% 4.17% 0.82% 4.83% 2.75% 26.11% 34.33% 15.67%" [ref=e855]:
+                        - cell "沪深300" [ref=e856]:
+                          - generic [ref=e857]: 沪深300
+                        - cell "2.40%" [ref=e858]:
+                          - generic [ref=e859]: 2.40%
+                        - cell "4.17%" [ref=e860]:
+                          - generic [ref=e861]: 4.17%
+                        - cell "0.82%" [ref=e862]:
+                          - generic [ref=e863]: 0.82%
+                        - cell "4.83%" [ref=e864]:
+                          - generic [ref=e865]: 4.83%
+                        - cell "2.75%" [ref=e866]:
+                          - generic [ref=e867]: 2.75%
+                        - cell "26.11%" [ref=e868]:
+                          - generic [ref=e869]: 26.11%
+                        - cell "34.33%" [ref=e870]:
+                          - generic [ref=e871]: 34.33%
+                        - cell "15.67%" [ref=e872]:
+                          - generic [ref=e873]: 15.67%
+                      - row "跟踪标的 -0.41% -3.74% -12.68% -21.45% -12.37% -26.55% -36.05% -49.71%" [ref=e874]:
+                        - cell "跟踪标的" [ref=e875]:
+                          - generic [ref=e876]: 跟踪标的
+                        - cell "-0.41%" [ref=e878]:
+                          - generic [ref=e879]: "-0.41%"
+                        - cell "-3.74%" [ref=e880]:
+                          - generic [ref=e881]: "-3.74%"
+                        - cell "-12.68%" [ref=e882]:
+                          - generic [ref=e883]: "-12.68%"
+                        - cell "-21.45%" [ref=e884]:
+                          - generic [ref=e885]: "-21.45%"
+                        - cell "-12.37%" [ref=e886]:
+                          - generic [ref=e887]: "-12.37%"
+                        - cell "-26.55%" [ref=e888]:
+                          - generic [ref=e889]: "-26.55%"
+                        - cell "-36.05%" [ref=e890]:
+                          - generic [ref=e891]: "-36.05%"
+                        - cell "-49.71%" [ref=e892]:
+                          - generic [ref=e893]: "-49.71%"
+                      - row "同类排名 4762 | 5020 4938 | 4954 4566 | 4820 4479 | 4497 4716 | 4796 3722 | 3723 2666 | 2667 2079 | 2082" [ref=e894]:
+                        - cell "同类排名" [ref=e895]:
+                          - generic [ref=e896]: 同类排名
+                        - cell "4762 | 5020" [ref=e898]:
+                          - generic [ref=e899]: 4762 | 5020
+                        - cell "4938 | 4954" [ref=e900]:
+                          - generic [ref=e901]: 4938 | 4954
+                        - cell "4566 | 4820" [ref=e902]:
+                          - generic [ref=e903]: 4566 | 4820
+                        - cell "4479 | 4497" [ref=e904]:
+                          - generic [ref=e905]: 4479 | 4497
+                        - cell "4716 | 4796" [ref=e906]:
+                          - generic [ref=e907]: 4716 | 4796
+                        - cell "3722 | 3723" [ref=e908]:
+                          - generic [ref=e909]: 3722 | 3723
+                        - cell "2666 | 2667" [ref=e910]:
+                          - generic [ref=e911]: 2666 | 2667
+                        - cell "2079 | 2082" [ref=e912]:
+                          - generic [ref=e913]: 2079 | 2082
+                      - row "四分位排名 不佳 不佳 不佳 不佳 不佳 不佳 不佳 不佳" [ref=e914]:
+                        - cell "四分位排名" [ref=e915]:
+                          - generic [ref=e916]: 四分位排名
+                        - cell "不佳" [ref=e918]:
+                          - heading "不佳" [level=3] [ref=e924]
+                        - cell "不佳" [ref=e925]:
+                          - heading "不佳" [level=3] [ref=e931]
+                        - cell "不佳" [ref=e932]:
+                          - heading "不佳" [level=3] [ref=e938]
+                        - cell "不佳" [ref=e939]:
+                          - heading "不佳" [level=3] [ref=e945]
+                        - cell "不佳" [ref=e946]:
+                          - heading "不佳" [level=3] [ref=e952]
+                        - cell "不佳" [ref=e953]:
+                          - heading "不佳" [level=3] [ref=e959]
+                        - cell "不佳" [ref=e960]:
+                          - heading "不佳" [level=3] [ref=e966]
+                        - cell "不佳" [ref=e967]:
+                          - heading "不佳" [level=3] [ref=e973]
+            - generic [ref=e974]:
+              - generic [ref=e975]:
+                - heading "累计收益率走势" [level=3] [ref=e977]:
+                  - link "累计收益率走势" [ref=e978] [cursor=pointer]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e980] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jdzf_161725.html
+                - link "下载天天基金手机版，随时随地查看累计收益" [ref=e981] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/app/
+              - list [ref=e983]:
+                - listitem [ref=e984]:
+                  - generic [ref=e985]:
+                    - list:
+                      - listitem [ref=e986]: 选择时间
+                      - listitem [ref=e987] [cursor=pointer]: 1月
+                      - listitem [ref=e988] [cursor=pointer]: 3月
+                      - listitem [ref=e989] [cursor=pointer]: 6月
+                      - listitem [ref=e990] [cursor=pointer]: 1年
+                      - listitem [ref=e991] [cursor=pointer]: 3年
+                      - listitem [ref=e992] [cursor=pointer]: 5年
+                      - listitem [ref=e993] [cursor=pointer]: 今年
+                      - listitem [ref=e994] [cursor=pointer]: 成立来
+                  - img [ref=e997]:
+                    - generic [ref=e999]:
+                      - generic [ref=e1001]: "-30.00%"
+                      - generic [ref=e1002]: "-20.00%"
+                      - generic [ref=e1003]: "-10.00%"
+                      - generic [ref=e1004]: 0.00%
+                      - generic [ref=e1005]: 10.00%
+                      - generic [ref=e1006]: 20.00%
+                      - generic [ref=e1007]: 11月
+                      - generic [ref=e1008]: 12月
+                      - generic [ref=e1009]: 2月
+                      - generic [ref=e1010]: 3月
+                      - generic [ref=e1011]: 4月
+                      - generic [ref=e1012]: "2026"
+                      - generic [ref=e1021]: 同类平均
+                      - generic [ref=e1024]: 沪深300
+                      - generic [ref=e1027]: 招商中证白酒指数(LO
+                  - generic [ref=e1031]:
+                    - link "对比" [ref=e1032] [cursor=pointer]:
+                      - /url: javascript:;
+                    - combobox [ref=e1034]:
+                      - option "沪深300" [selected]
+                      - option "中证500"
+                      - option "上证指数"
+                      - option "深证成指"
+                      - option "中小板指"
+                      - option "创业板指"
+                    - generic [ref=e1035]: PK
+                    - generic [ref=e1037]: 当前基金
+            - generic [ref=e1038]:
+              - generic [ref=e1039]:
+                - heading "同类排名走势" [level=3] [ref=e1041]:
+                  - link "同类排名走势" [ref=e1042] [cursor=pointer]:
+                    - /url: javascript:;
+                    - text: 同类排名走势
+                - heading "百分比排名走势" [level=3] [ref=e1045] [cursor=pointer]:
+                  - link "百分比排名走势" [ref=e1046]:
+                    - /url: javascript:;
+                    - generic [ref=e1047]: 百分比排名走势
+                - link "更多>" [ref=e1050] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jdzf_161725.html
+                - link "下载天天基金手机版，随时随地查看排名走势" [ref=e1051] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/app/
+              - list [ref=e1053]:
+                - listitem [ref=e1054]:
+                  - generic [ref=e1055]:
+                    - list:
+                      - listitem [ref=e1056]: 选择时间
+                      - listitem [ref=e1057] [cursor=pointer]: 1月
+                      - listitem [ref=e1058] [cursor=pointer]: 3月
+                      - listitem [ref=e1059] [cursor=pointer]: 6月
+                      - listitem [ref=e1060] [cursor=pointer]: 1年
+                      - listitem [ref=e1061] [cursor=pointer]: 3年
+                      - listitem [ref=e1062] [cursor=pointer]: 5年
+                      - listitem [ref=e1063] [cursor=pointer]: 今年
+                      - listitem [ref=e1064] [cursor=pointer]: 成立来
+                  - generic [ref=e1065]:
+                    - text: "选择指标:"
+                    - combobox [ref=e1066] [cursor=pointer]:
+                      - option "近3月排名" [selected]
+                      - option "近6月排名"
+                      - option "近1年排名"
+                  - img [ref=e1069]:
+                    - generic [ref=e1071]:
+                      - generic [ref=e1073]: 2,500
+                      - generic [ref=e1074]: 3,000
+                      - generic [ref=e1075]: 3,500
+                      - generic [ref=e1076]: 4,000
+                      - generic [ref=e1077]: 4,500
+                      - generic [ref=e1078]: 5,000
+                      - generic [ref=e1079]: 11月
+                      - generic [ref=e1080]: 12月
+                      - generic [ref=e1081]: 2月
+                      - generic [ref=e1082]: 3月
+                      - generic [ref=e1083]: 4月
+                      - generic [ref=e1084]: "2026"
+            - generic [ref=e1087]:
+              - generic [ref=e1088]:
+                - heading "规模变动" [level=3] [ref=e1090]:
+                  - link "规模变动" [ref=e1091] [cursor=pointer]:
+                    - /url: javascript:;
+                - heading "持有人结构" [level=3] [ref=e1093] [cursor=pointer]:
+                  - link "持有人结构" [ref=e1094]:
+                    - /url: javascript:;
+                - heading "资产配置" [level=3] [ref=e1096] [cursor=pointer]:
+                  - link "资产配置" [ref=e1097]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e1099] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/gmbd_161725.html
+              - list [ref=e1101]:
+                - listitem [ref=e1102]:
+                  - img [ref=e1104]:
+                    - generic [ref=e1106]:
+                      - generic [ref=e1108]: 净
+                      - generic [ref=e1109]: 资
+                      - generic [ref=e1110]: 产
+                      - generic [ref=e1111]: ︵
+                      - generic [ref=e1112]: 亿
+                      - generic [ref=e1113]: 元
+                      - generic [ref=e1114]: ︶
+                      - generic [ref=e1115]: "0"
+                      - generic [ref=e1116]: "100"
+                      - generic [ref=e1117]: "200"
+                      - generic [ref=e1118]: "300"
+                      - generic [ref=e1119]: "400"
+                      - generic [ref=e1120]: 12-31
+                      - generic [ref=e1121]: 03-31
+                      - generic [ref=e1122]: 06-30
+                      - generic [ref=e1123]: 09-30
+                      - generic [ref=e1124]: 12-31
+            - generic [ref=e1130]:
+              - generic [ref=e1131]:
+                - heading "基金投资风格" [level=3] [ref=e1133]:
+                  - link "基金投资风格" [ref=e1134] [cursor=pointer]:
+                    - /url: javascript:;
+                - heading "基金换手率" [level=3] [ref=e1136] [cursor=pointer]:
+                  - link "基金换手率" [ref=e1137]:
+                    - /url: javascript:;
+                - heading "业绩评价" [level=3] [ref=e1139] [cursor=pointer]:
+                  - link "业绩评价" [ref=e1140]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e1142] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/tsdata_161725.html
+              - list [ref=e1144]:
+                - listitem [ref=e1145]:
+                  - generic [ref=e1146]: 2025年4季度投资风格
+                  - img [ref=e1147]
+            - generic [ref=e1148]:
+              - generic [ref=e1149]:
+                - heading "现任基金经理" [level=3] [ref=e1151]:
+                  - link "现任基金经理" [ref=e1152] [cursor=pointer]:
+                    - /url: javascript:;
+                - heading "基金经理变动一览" [level=3] [ref=e1154] [cursor=pointer]:
+                  - link "基金经理变动一览" [ref=e1155]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e1157] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jjjl_161725.html
+              - list [ref=e1159]:
+                - listitem [ref=e1160]:
+                  - generic [ref=e1161]:
+                    - generic [ref=e1162]:
+                      - term [ref=e1163] [cursor=pointer]: 选择基金经理：
+                      - definition [ref=e1164] [cursor=pointer]: 侯昊
+                    - generic [ref=e1165]:
+                      - generic [ref=e1167]:
+                        - link "侯昊" [ref=e1169] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/manager/30379533.html
+                        - generic [ref=e1170] [cursor=pointer]: ★★★★★
+                        - generic [ref=e1171]: 累计任职时间：
+                        - generic [ref=e1172]: 8年又243天
+                        - generic [ref=e1173]: 现任基金资产规模：
+                        - generic [ref=e1174]: 574.41亿(24只基金)
+                      - paragraph [ref=e1176]:
+                        - link "登录" [ref=e1177] [cursor=pointer]:
+                          - /url: https://trade.1234567.com.cn/login?direct_url=https%3A%2F%2Ffund.eastmoney.com%2F161725.html
+                        - text: 后,可查看基金经理业绩评价图。
+                      - img [ref=e1180]:
+                        - generic [ref=e1182]:
+                          - generic [ref=e1183]: 0 %
+                          - generic [ref=e1184]: 20 %
+                          - generic [ref=e1185]: 40 %
+                          - generic [ref=e1186]: 60 %
+                          - generic [ref=e1187]: 80 %
+                          - generic [ref=e1188]: 100 %
+                          - generic [ref=e1189]: 任期收益
+                          - generic [ref=e1190]: 沪深300
+                      - generic [ref=e1194]: 截止至：2026-04-17
+                      - generic [ref=e1195]: 截止至：2026-04-17
+            - generic [ref=e1196]:
+              - generic [ref=e1197]:
+                - heading "基金资讯" [level=3] [ref=e1199]:
+                  - link "基金资讯" [ref=e1200] [cursor=pointer]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e1202] [cursor=pointer]:
+                  - /url: javascript:;
+              - generic [ref=e1203]:
+                - list [ref=e1204]:
+                  - listitem [ref=e1205]:
+                    - link "“白酒系”宜宾银行的烦恼：净利与分红双 04-18" [ref=e1206] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/a/202604183709654722.html
+                      - generic [ref=e1207]: “白酒系”宜宾银行的烦恼：净利与分红双
+                      - generic [ref=e1208]: 04-18
+                  - listitem [ref=e1209]:
+                    - link "金徽酒：2026年一季度净利润2.05 04-16" [ref=e1210] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/a/202604163707539677.html
+                      - generic [ref=e1211]: 金徽酒：2026年一季度净利润2.05
+                      - generic [ref=e1212]: 04-16
+                  - listitem [ref=e1213]:
+                    - link "舍得酒业：2026年一季度净利润2.3 04-15" [ref=e1214] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/a/202604153706309897.html
+                      - generic [ref=e1215]: 舍得酒业：2026年一季度净利润2.3
+                      - generic [ref=e1216]: 04-15
+                  - listitem [ref=e1217]:
+                    - link "白酒拉升，贵州茅台涨超1%！白酒周期调 04-15" [ref=e1218] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/a/202604153705620997.html
+                      - generic [ref=e1219]: 白酒拉升，贵州茅台涨超1%！白酒周期调
+                      - generic [ref=e1220]: 04-15
+                  - listitem [ref=e1221]:
+                    - link "工银食品饮料混合A：2025年利润53 04-13" [ref=e1222] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/a/202604133703158953.html
+                      - generic [ref=e1223]: 工银食品饮料混合A：2025年利润53
+                      - generic [ref=e1224]: 04-13
+                - link "更多相关基金资讯>" [ref=e1226] [cursor=pointer]:
+                  - /url: javascript:;
+            - generic [ref=e1227]:
+              - generic [ref=e1228]:
+                - heading "基金公告" [level=3] [ref=e1230]:
+                  - link "基金公告" [ref=e1231] [cursor=pointer]:
+                    - /url: javascript:;
+                - link "更多>" [ref=e1233] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jjgg_161725.html
+              - generic [ref=e1234]:
+                - list [ref=e1235]:
+                  - listitem [ref=e1236]:
+                    - link "招商基金管理有限公司关于旗下基金投 04-01" [ref=e1237] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/gonggao/161725,AN202603311820920513.html
+                      - generic [ref=e1238]: 招商基金管理有限公司关于旗下基金投
+                      - generic [ref=e1239]: 04-01
+                  - listitem [ref=e1240]:
+                    - link "招商中证白酒指数证券投资基金202 03-31" [ref=e1241] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/gonggao/161725,AN202603301820871694.html
+                      - generic [ref=e1242]: 招商中证白酒指数证券投资基金202
+                      - generic [ref=e1243]: 03-31
+                  - listitem [ref=e1244]:
+                    - link "招商基金管理有限公司旗下公募基金通 03-31" [ref=e1245] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/gonggao/161725,AN202603301820866056.html
+                      - generic [ref=e1246]: 招商基金管理有限公司旗下公募基金通
+                      - generic [ref=e1247]: 03-31
+                  - listitem [ref=e1248]:
+                    - link "招商基金管理有限公司关于调整旗下部 02-11" [ref=e1249] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/gonggao/161725,AN202602101819857290.html
+                      - generic [ref=e1250]: 招商基金管理有限公司关于调整旗下部
+                      - generic [ref=e1251]: 02-11
+                  - listitem [ref=e1252]:
+                    - link "招商中证白酒指数证券投资基金(LO 01-30" [ref=e1253] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/gonggao/161725,AN202601291818544825.html
+                      - generic [ref=e1254]: 招商中证白酒指数证券投资基金(LO
+                      - generic [ref=e1255]: 01-30
+                - link "更多相关基金公告>" [ref=e1257] [cursor=pointer]:
+                  - /url: http://fundf10.eastmoney.com/jjgg_161725.html
+            - generic [ref=e1258]:
+              - generic [ref=e1259]:
+                - heading "招商中证白酒指数(LOF)A基金吧" [level=3] [ref=e1261]:
+                  - link "招商中证白酒指数(LOF)A基金吧" [ref=e1262] [cursor=pointer]:
+                    - /url: http://fund.eastmoney.com/ba/list,of161725.html
+                - link "进入招商基金公司吧" [ref=e1264] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/ba/type,zg80036782.html
+                - link "进入招商中证白酒指数(LOF)A基金吧" [ref=e1266] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/ba/list,of161725.html
+              - generic [ref=e1267]:
+                - table [ref=e1268]:
+                  - rowgroup [ref=e1269]:
+                    - row "点击 回复 标题 作者 最新更新时间" [ref=e1270]:
+                      - columnheader "点击" [ref=e1271]
+                      - columnheader "回复" [ref=e1272]
+                      - columnheader "标题" [ref=e1273]
+                      - columnheader "作者" [ref=e1274]
+                      - columnheader "最新更新时间" [ref=e1275]
+                    - row "1212 42 4月20【今日债市早评】今天股市有涨有跌，债市上涨 手扶拖拉司基 04-20 18:21" [ref=e1276]:
+                      - cell "1212" [ref=e1277]
+                      - cell "42" [ref=e1278]
+                      - cell "4月20【今日债市早评】今天股市有涨有跌，债市上涨" [ref=e1279]:
+                        - link "4月20【今日债市早评】今天股市有涨有跌，债市上涨" [ref=e1280] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,sh511090,1695701069.html
+                      - cell "手扶拖拉司基" [ref=e1281]:
+                        - link "手扶拖拉司基" [ref=e1282] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8334113481821668
+                      - cell "04-20 18:21" [ref=e1283]
+                    - row "2356 76 4月20【债市2点半】下午股市下跌，债市上涨，双债 手扶拖拉司基 04-20 18:21" [ref=e1284]:
+                      - cell "2356" [ref=e1285]
+                      - cell "76" [ref=e1286]
+                      - cell "4月20【债市2点半】下午股市下跌，债市上涨，双债" [ref=e1287]:
+                        - link "4月20【债市2点半】下午股市下跌，债市上涨，双债" [ref=e1288] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,sh511090,1695997509.html
+                      - cell "手扶拖拉司基" [ref=e1289]:
+                        - link "手扶拖拉司基" [ref=e1290] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8334113481821668
+                      - cell "04-20 18:21" [ref=e1291]
+                    - row "60 1 5年了!!!!!!!!!!你知道这5年我们这5年是 亿万股涨停 04-20 18:09" [ref=e1292]:
+                      - cell "60" [ref=e1293]
+                      - cell "1" [ref=e1294]
+                      - cell "5年了!!!!!!!!!!你知道这5年我们这5年是" [ref=e1295]:
+                        - link "5年了!!!!!!!!!!你知道这5年我们这5年是" [ref=e1296] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696153563.html
+                      - cell "亿万股涨停" [ref=e1297]:
+                        - link "亿万股涨停" [ref=e1298] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8212115339393708
+                      - cell "04-20 18:09" [ref=e1299]
+                    - row "42 0 $招商中证白酒指数(LOF)A$烂泥巴抉不上墙！ 基民2072RK1329 04-20 18:01" [ref=e1300]:
+                      - cell "42" [ref=e1301]
+                      - cell "0" [ref=e1302]
+                      - cell "$招商中证白酒指数(LOF)A$烂泥巴抉不上墙！" [ref=e1303]:
+                        - link "$招商中证白酒指数(LOF)A$烂泥巴抉不上墙！" [ref=e1304] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696155153.html
+                      - cell "基民2072RK1329" [ref=e1305]:
+                        - link "基民2072RK1329" [ref=e1306] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/5841366166565494
+                      - cell "04-20 18:01" [ref=e1307]
+                    - row "1101 22 小沐策略丨顶级预判！再次抄底成功！今天加还是减？？ 小沐投资笔记 04-20 17:37" [ref=e1308]:
+                      - cell "1101" [ref=e1309]
+                      - cell "22" [ref=e1310]
+                      - cell "小沐策略丨顶级预判！再次抄底成功！今天加还是减？？" [ref=e1311]:
+                        - link "小沐策略丨顶级预判！再次抄底成功！今天加还是减？？" [ref=e1312] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696074992.html
+                      - cell "小沐投资笔记" [ref=e1313]:
+                        - link "小沐投资笔记" [ref=e1314] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/2471396135353424
+                      - cell "04-20 17:37" [ref=e1315]
+                    - row "276 7 慢牛行情，你吃肉了吗？ 求稳的小兰兰 04-20 17:27" [ref=e1316]:
+                      - cell "276" [ref=e1317]
+                      - cell "7" [ref=e1318]
+                      - cell "慢牛行情，你吃肉了吗？" [ref=e1319]:
+                        - link "慢牛行情，你吃肉了吗？" [ref=e1320] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of021533,1695906787.html
+                      - cell "求稳的小兰兰" [ref=e1321]:
+                        - link "求稳的小兰兰" [ref=e1322] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8817436762591636
+                      - cell "04-20 17:27" [ref=e1323]
+                    - row "31 0 行情何时反转？ 股友QJEPVc 04-20 17:18" [ref=e1324]:
+                      - cell "31" [ref=e1325]
+                      - cell "0" [ref=e1326]
+                      - cell "行情何时反转？" [ref=e1327]:
+                        - link "行情何时反转？" [ref=e1328] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696143484.html
+                      - cell "股友QJEPVc" [ref=e1329]:
+                        - link "股友QJEPVc" [ref=e1330] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/1902305546231780
+                      - cell "04-20 17:18" [ref=e1331]
+                    - row "1034 6 请问一下，你们有亏损像我这种高的吗？人呢不是这些个 骑扬成金de杨戬 04-20 16:49" [ref=e1332]:
+                      - cell "1034" [ref=e1333]
+                      - cell "6" [ref=e1334]
+                      - cell "请问一下，你们有亏损像我这种高的吗？人呢不是这些个" [ref=e1335]:
+                        - link "请问一下，你们有亏损像我这种高的吗？人呢不是这些个" [ref=e1336] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1695487731.html
+                      - cell "骑扬成金de杨戬" [ref=e1337]:
+                        - link "骑扬成金de杨戬" [ref=e1338] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/3247005499439248
+                      - cell "04-20 16:49" [ref=e1339]
+                    - row "34 0 无聊 基民957O331L75 04-20 16:26" [ref=e1340]:
+                      - cell "34" [ref=e1341]
+                      - cell "0" [ref=e1342]
+                      - cell "无聊" [ref=e1343]:
+                        - link "无聊" [ref=e1344] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696127845.html
+                      - cell "基民957O331L75" [ref=e1345]:
+                        - link "基民957O331L75" [ref=e1346] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/9567376083257440
+                      - cell "04-20 16:26" [ref=e1347]
+                    - row "457 3 突破！这2只成长型指数，势头正盛！ 复来指数投资 04-20 16:23" [ref=e1348]:
+                      - cell "457" [ref=e1349]
+                      - cell "3" [ref=e1350]
+                      - cell "突破！这2只成长型指数，势头正盛！" [ref=e1351]:
+                        - link "突破！这2只成长型指数，势头正盛！" [ref=e1352] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,cfhpl,1695348257.html
+                      - cell "复来指数投资" [ref=e1353]:
+                        - link "复来指数投资" [ref=e1354] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/3246335589416622
+                      - cell "04-20 16:23" [ref=e1355]
+                    - row "108 2 市场冲高没能稳住，接下来会怎么走？ 小i爱理财 04-20 16:19" [ref=e1356]:
+                      - cell "108" [ref=e1357]
+                      - cell "2" [ref=e1358]
+                      - cell "市场冲高没能稳住，接下来会怎么走？" [ref=e1359]:
+                        - link "市场冲高没能稳住，接下来会怎么走？" [ref=e1360] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of016530,1696051612.html
+                      - cell "小i爱理财" [ref=e1361]:
+                        - link "小i爱理财" [ref=e1362] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/3733014998267484
+                      - cell "04-20 16:19" [ref=e1363]
+                    - row "144 2 白板行业为何迟迟不见起色？ 明亮de卡丽妲 04-20 16:17" [ref=e1364]:
+                      - cell "144" [ref=e1365]
+                      - cell "2" [ref=e1366]
+                      - cell "白板行业为何迟迟不见起色？" [ref=e1367]:
+                        - link "白板行业为何迟迟不见起色？" [ref=e1368] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696104084.html
+                      - cell "明亮de卡丽妲" [ref=e1369]:
+                        - link "明亮de卡丽妲" [ref=e1370] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/1256346203741516
+                      - cell "04-20 16:17" [ref=e1371]
+                    - row "70 0 今天给你粒糖吃，明天接着抽耳光 股友tsunJQ 04-20 16:10" [ref=e1372]:
+                      - cell "70" [ref=e1373]
+                      - cell "0" [ref=e1374]
+                      - cell "今天给你粒糖吃，明天接着抽耳光" [ref=e1375]:
+                        - link "今天给你粒糖吃，明天接着抽耳光" [ref=e1376] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696123056.html
+                      - cell "股友tsunJQ" [ref=e1377]:
+                        - link "股友tsunJQ" [ref=e1378] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8283336001441206
+                      - cell "04-20 16:10" [ref=e1379]
+                    - row "574 1 说一下方向，目前趋势已经形成，短期可能有小级别高点 猫姐养基大户 04-20 15:56" [ref=e1380]:
+                      - cell "574" [ref=e1381]
+                      - cell "1" [ref=e1382]
+                      - cell "说一下方向，目前趋势已经形成，短期可能有小级别高点" [ref=e1383]:
+                        - link "说一下方向，目前趋势已经形成，短期可能有小级别高点" [ref=e1384] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1695925050.html
+                      - cell "猫姐养基大户" [ref=e1385]:
+                        - link "猫姐养基大户" [ref=e1386] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/3246456680858932
+                      - cell "04-20 15:56" [ref=e1387]
+                    - row "165 4 死鸡，亏20个点了，能回本吗 基民94awdZ 04-20 15:55" [ref=e1388]:
+                      - cell "165" [ref=e1389]
+                      - cell "4" [ref=e1390]
+                      - cell "死鸡，亏20个点了，能回本吗" [ref=e1391]:
+                        - link "死鸡，亏20个点了，能回本吗" [ref=e1392] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696077742.html
+                      - cell "基民94awdZ" [ref=e1393]:
+                        - link "基民94awdZ" [ref=e1394] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/8610095318948314
+                      - cell "04-20 15:55" [ref=e1395]
+                    - row "4384 25 全职炒股第七年，4月份第三周总结 趋势价投禾木客 04-20 15:54" [ref=e1396]:
+                      - cell "4384" [ref=e1397]
+                      - cell "25" [ref=e1398]
+                      - cell "全职炒股第七年，4月份第三周总结" [ref=e1399]:
+                        - link "全职炒股第七年，4月份第三周总结" [ref=e1400] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,cfhpl,1695581544.html
+                      - cell "趋势价投禾木客" [ref=e1401]:
+                        - link "趋势价投禾木客" [ref=e1402] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/1901356210021254
+                      - cell "04-20 15:54" [ref=e1403]
+                    - row "78 0 主力:都盯着盘呢，那就让你们崩溃 浣熊理财蛇 04-20 15:42" [ref=e1404]:
+                      - cell "78" [ref=e1405]
+                      - cell "0" [ref=e1406]
+                      - cell "主力:都盯着盘呢，那就让你们崩溃" [ref=e1407]:
+                        - link "主力:都盯着盘呢，那就让你们崩溃" [ref=e1408] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696113387.html
+                      - cell "浣熊理财蛇" [ref=e1409]:
+                        - link "浣熊理财蛇" [ref=e1410] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/7344466678828368
+                      - cell "04-20 15:42" [ref=e1411]
+                    - 'row "51 0 #晒收益# 基民9Vh7xD 04-20 15:42" [ref=e1412]':
+                      - cell "51" [ref=e1413]
+                      - cell "0" [ref=e1414]
+                      - cell "#晒收益#" [ref=e1415]:
+                        - link "#晒收益#" [ref=e1416] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696113229.html
+                      - cell "基民9Vh7xD" [ref=e1417]:
+                        - link "基民9Vh7xD" [ref=e1418] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/4717095320136984
+                      - cell "04-20 15:42" [ref=e1419]
+                    - row "76 0 满仓亏15个点，头疼死 股友8T01606d66 04-20 15:31" [ref=e1420]:
+                      - cell "76" [ref=e1421]
+                      - cell "0" [ref=e1422]
+                      - cell "满仓亏15个点，头疼死" [ref=e1423]:
+                        - link "满仓亏15个点，头疼死" [ref=e1424] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696107663.html
+                      - cell "股友8T01606d66" [ref=e1425]:
+                        - link "股友8T01606d66" [ref=e1426] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/7649316423860438
+                      - cell "04-20 15:31" [ref=e1427]
+                    - row "82 0 只要做工业酒精，那么就现在是跟上这个工业革命那么上 韭菜哥d 04-20 15:21" [ref=e1428]:
+                      - cell "82" [ref=e1429]
+                      - cell "0" [ref=e1430]
+                      - cell "只要做工业酒精，那么就现在是跟上这个工业革命那么上" [ref=e1431]:
+                        - link "只要做工业酒精，那么就现在是跟上这个工业革命那么上" [ref=e1432] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/ba/news,of161725,1696102581.html
+                      - cell "韭菜哥d" [ref=e1433]:
+                        - link "韭菜哥d" [ref=e1434] [cursor=pointer]:
+                          - /url: http://iguba.eastmoney.com/7532087174853140
+                      - cell "04-20 15:21" [ref=e1435]
+                - link "查看更多招商中证白酒指数(LOF)A基金吧>" [ref=e1437] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/ba/list,of161725.html
+              - iframe [ref=e1439]:
+                - generic [ref=f21e2]:
+                  - generic [ref=f21e3]:
+                    - generic [ref=f21e4]:
+                      - generic [ref=f21e5]: 发新帖
+                      - generic [ref=f21e7]:
+                        - text: 请在登录后，发表评论！
+                        - generic [ref=f21e8]:
+                          - link "登录" [ref=f21e9] [cursor=pointer]:
+                            - /url: https://passport2.eastmoney.com/pub/login?backurl=https://fund.eastmoney.com/161725.html
+                          - text: "|"
+                          - link "5秒注册" [ref=f21e10] [cursor=pointer]:
+                            - /url: https://passport2.eastmoney.com/pub/reg
+                    - textbox [ref=f21e12]
+                    - generic [ref=f21e13]:
+                      - generic [ref=f21e14]:
+                        - link "表情" [ref=f21e15] [cursor=pointer]:
+                          - /url: javascript:;
+                          - emphasis [ref=f21e16]
+                          - text: 表情
+                        - generic [ref=f21e17] [cursor=pointer]:
+                          - emphasis [ref=f21e18]
+                          - text: 作者声明
+                      - generic [ref=f21e19]:
+                        - button "发布" [ref=f21e20] [cursor=pointer]
+                        - button "清空" [ref=f21e21] [cursor=pointer]
+                  - generic [ref=f21e22]:
+                    - text: 郑重声明：用户在本社区发表的所有资料、言论等仅代表个人观点，与本网站立场无关，不对您构成任何投资建议。用户应基于自己的独立判断，自行决定证券投资并承担相应风险。
+                    - link "《东方财富社区管理规定》" [ref=f21e23] [cursor=pointer]:
+                      - /url: //guba.eastmoney.com/gltl.aspx
+          - generic [ref=e1440]:
+            - iframe [ref=e1442]:
+              - link [ref=f22e3] [cursor=pointer]:
+                - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1332&ci=1&or=47&l=13525&bg=13525&b=15377&u=http%3A%2F%2Ffund.eastmoney.com%2Fgaoduan%2F%3Fspm%3D001.t.036
+                - img [ref=f22e4]
+            - generic [ref=e1443]:
+              - generic [ref=e1444]:
+                - heading "同类基金涨幅榜" [level=3] [ref=e1446] [cursor=pointer]:
+                  - link "同类基金涨幅榜" [ref=e1447]:
+                    - /url: http://fund.eastmoney.com/data/fundranking.html#tgp;c0;r;s1nzf;ddesc;
+                - link "更多>" [ref=e1449] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/data/fundranking.html#tgp;c0;r;s1nzf;ddesc;
+              - generic [ref=e1450]:
+                - list [ref=e1452]:
+                  - listitem [ref=e1453] [cursor=pointer]:
+                    - generic [ref=e1454]: 近1年
+                - list [ref=e1456]:
+                  - listitem [ref=e1457]:
+                    - generic [ref=e1458]:
+                      - generic [ref=e1459]:
+                        - generic [ref=e1460]:
+                          - link "通信ETF国泰" [ref=e1461] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/515880.html
+                          - paragraph [ref=e1462]:
+                            - generic [ref=e1463]: 近1年
+                            - generic [ref=e1464]: 257.83%
+                        - link "购买" [ref=e1466] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/515880.html?spm=pzm
+                      - generic [ref=e1467]:
+                        - generic [ref=e1468]:
+                          - link "东财通信A" [ref=e1469] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/008326.html
+                          - paragraph [ref=e1470]:
+                            - generic [ref=e1471]: 近1年
+                            - generic [ref=e1472]: 245.98%
+                        - link "购买" [ref=e1474] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/008326.html?spm=pzm
+                      - generic [ref=e1475]:
+                        - generic [ref=e1476]:
+                          - link "东财通信C" [ref=e1477] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/008327.html
+                          - paragraph [ref=e1478]:
+                            - generic [ref=e1479]: 近1年
+                            - generic [ref=e1480]: 245.11%
+                        - link "购买" [ref=e1482] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/008327.html?spm=pzm
+                      - generic [ref=e1483]:
+                        - generic [ref=e1484]:
+                          - link "天弘中证全指通信设备指" [ref=e1485] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/020899.html
+                          - paragraph [ref=e1486]:
+                            - generic [ref=e1487]: 近1年
+                            - generic [ref=e1488]: 240.91%
+                        - link "购买" [ref=e1490] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/020899.html?spm=pzm
+                      - generic [ref=e1491]:
+                        - generic [ref=e1492]:
+                          - link "天弘中证全指通信设备指" [ref=e1493] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/020900.html
+                          - paragraph [ref=e1494]:
+                            - generic [ref=e1495]: 近1年
+                            - generic [ref=e1496]: 240.24%
+                        - link "购买" [ref=e1498] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/020900.html?spm=pzm
+                      - generic [ref=e1499]:
+                        - generic [ref=e1500]:
+                          - link "博时中证全指通信设备指" [ref=e1501] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/020691.html
+                          - paragraph [ref=e1502]:
+                            - generic [ref=e1503]: 近1年
+                            - generic [ref=e1504]: 235.91%
+                        - link "购买" [ref=e1506] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/020691.html?spm=pzm
+                      - generic [ref=e1507]:
+                        - generic [ref=e1508]:
+                          - link "招商中证白酒指数(LO" [ref=e1509] [cursor=pointer]:
+                            - /url: http://fund.eastmoney.com/161725.html
+                          - paragraph [ref=e1510]:
+                            - generic [ref=e1511]: 近1年
+                            - generic [ref=e1512]: "-23.93%"
+                        - link "购买" [ref=e1514] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/161725.html?spm=pzm
+                    - link "全部同类基金>" [ref=e1516] [cursor=pointer]:
+                      - /url: http://fund.eastmoney.com/data/fundranking.html#tgp;c0;r;s1nzf;ddesc;
+            - generic [ref=e1517]:
+              - generic [ref=e1518]:
+                - heading "相关主题基金" [level=3] [ref=e1520] [cursor=pointer]:
+                  - link "相关主题基金" [ref=e1521]:
+                    - /url: http://fund.eastmoney.com/ztjj2/
+                - link "更多>" [ref=e1523] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/ztjj2/
+              - generic [ref=e1524]:
+                - list [ref=e1526]:
+                  - listitem [ref=e1527] [cursor=pointer]:
+                    - generic [ref=e1528]: 白酒
+                  - listitem [ref=e1529] [cursor=pointer]:
+                    - generic [ref=e1530]: 食品饮料
+                  - listitem [ref=e1531] [cursor=pointer]:
+                    - generic [ref=e1532]: 消费
+                - list [ref=e1534]:
+                  - listitem [ref=e1535]:
+                    - generic [ref=e1536]:
+                      - generic [ref=e1537]:
+                        - link "嘉实新起航混合A" [ref=e1538] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/002212.html
+                        - paragraph [ref=e1539]:
+                          - generic [ref=e1540]: 近1年
+                          - generic [ref=e1541]: "-4.40%"
+                      - link "购买" [ref=e1543] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/002212.html?spm=pzm
+                    - generic [ref=e1544]:
+                      - generic [ref=e1545]:
+                        - link "嘉实新起航混合C" [ref=e1546] [cursor=pointer]:
+                          - /url: http://fund.eastmoney.com/016264.html
+                        - paragraph [ref=e1547]:
+                          - generic [ref=e1548]: 近1年
+                          - generic [ref=e1549]: "-4.93%"
+                      - link "购买" [ref=e1551] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/016264.html?spm=pzm
+                - link "更多主题基金>" [ref=e1553] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/ztjj2/#!curr/BK000076/fs/SYL_6Y/fst/desc
+            - generic [ref=e1554]:
+              - generic [ref=e1555]:
+                - heading "同公司旗下基金" [level=3] [ref=e1557] [cursor=pointer]:
+                  - link "同公司旗下基金" [ref=e1558]:
+                    - /url: http://fund.eastmoney.com/company/80036782.html
+                - link "更多>" [ref=e1560] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/company/80036782.html
+              - generic [ref=e1561] [cursor=pointer]:
+                - generic [ref=e1562]:
+                  - paragraph [ref=e1563]: 招商基金
+                  - generic [ref=e1564]:
+                    - generic [ref=e1565]: 管理规模：9613.08亿
+                    - generic [ref=e1566]: 旗下基金：663只
+                - generic [ref=e1567]:
+                  - generic [ref=e1568]:
+                    - generic [ref=e1569]:
+                      - link "招商北证50成份指数发" [ref=e1570]:
+                        - /url: http://fund.eastmoney.com/017517.html
+                      - paragraph [ref=e1571]:
+                        - generic [ref=e1572]: 日涨幅
+                        - generic [ref=e1573]: 4.47%
+                    - link "购买" [ref=e1575]:
+                      - /url: http://fund.eastmoney.com/017517.html?spm=pzm
+                  - generic [ref=e1576]:
+                    - generic [ref=e1577]:
+                      - link "招商北证50成份指数发" [ref=e1578]:
+                        - /url: http://fund.eastmoney.com/017518.html
+                      - paragraph [ref=e1579]:
+                        - generic [ref=e1580]: 日涨幅
+                        - generic [ref=e1581]: 4.47%
+                    - link "购买" [ref=e1583]:
+                      - /url: http://fund.eastmoney.com/017518.html?spm=pzm
+                  - generic [ref=e1584]:
+                    - generic [ref=e1585]:
+                      - link "招商远见成长混合A" [ref=e1586]:
+                        - /url: http://fund.eastmoney.com/014783.html
+                      - paragraph [ref=e1587]:
+                        - generic [ref=e1588]: 日涨幅
+                        - generic [ref=e1589]: 3.75%
+                    - link "购买" [ref=e1591]:
+                      - /url: http://fund.eastmoney.com/014783.html?spm=pzm
+                  - generic [ref=e1592]:
+                    - generic [ref=e1593]:
+                      - link "招商远见成长混合C" [ref=e1594]:
+                        - /url: http://fund.eastmoney.com/014784.html
+                      - paragraph [ref=e1595]:
+                        - generic [ref=e1596]: 日涨幅
+                        - generic [ref=e1597]: 3.75%
+                    - link "购买" [ref=e1599]:
+                      - /url: http://fund.eastmoney.com/014784.html?spm=pzm
+                  - generic [ref=e1600]:
+                    - generic [ref=e1601]:
+                      - link "中概互联ETF招商" [ref=e1602]:
+                        - /url: http://fund.eastmoney.com/513220.html
+                      - paragraph [ref=e1603]:
+                        - generic [ref=e1604]: 日涨幅
+                        - generic [ref=e1605]: 3.74%
+                    - link "购买" [ref=e1607]:
+                      - /url: http://fund.eastmoney.com/513220.html?spm=pzm
+                  - generic [ref=e1608]:
+                    - generic [ref=e1609]:
+                      - link "招商商业模式优选A" [ref=e1610]:
+                        - /url: http://fund.eastmoney.com/010944.html
+                      - paragraph [ref=e1611]:
+                        - generic [ref=e1612]: 日涨幅
+                        - generic [ref=e1613]: 3.62%
+                    - link "购买" [ref=e1615]:
+                      - /url: http://fund.eastmoney.com/010944.html?spm=pzm
+                  - generic [ref=e1616]:
+                    - generic [ref=e1617]:
+                      - link "招商商业模式优选C" [ref=e1618]:
+                        - /url: http://fund.eastmoney.com/010945.html
+                      - paragraph [ref=e1619]:
+                        - generic [ref=e1620]: 日涨幅
+                        - generic [ref=e1621]: 3.61%
+                    - link "购买" [ref=e1623]:
+                      - /url: http://fund.eastmoney.com/010945.html?spm=pzm
+                - generic [ref=e1624]:
+                  - generic [ref=e1625]: 截止:04-20
+                  - link "全部同公司旗下基金>" [ref=e1626]:
+                    - /url: http://fund.eastmoney.com/company/80036782.html
+            - iframe [ref=e1628]:
+              - link [ref=f23e3] [cursor=pointer]:
+                - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1333&ci=1&or=47&l=13526&bg=13526&b=15378&u=https%3A%2F%2Ffund.eastmoney.com%2Ftrade%2FGsList.html
+                - img [ref=f23e4]
+            - generic [ref=e1629]:
+              - heading "关注该基金的人还关注了" [level=3] [ref=e1632] [cursor=pointer]:
+                - link "关注该基金的人还关注了" [ref=e1633]:
+                  - /url: javascript:;
+              - table [ref=e1634]:
+                - rowgroup [ref=e1635]:
+                  - row "基金名称 关注度" [ref=e1636]:
+                    - columnheader "基金名称" [ref=e1637]
+                    - columnheader "关注度" [ref=e1638]
+                  - row "中欧医疗健康混合A 555616人" [ref=e1639]:
+                    - cell "中欧医疗健康混合A" [ref=e1640]:
+                      - link "中欧医疗健康混合A" [ref=e1641] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/003095.html
+                    - cell "555616人" [ref=e1642]
+                  - row "易方达蓝筹精选混合 852679人" [ref=e1643]:
+                    - cell "易方达蓝筹精选混合" [ref=e1644]:
+                      - link "易方达蓝筹精选混合" [ref=e1645] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/005827.html
+                    - cell "852679人" [ref=e1646]
+                  - row "易方达优质精选混合(Q 581738人" [ref=e1647]:
+                    - cell "易方达优质精选混合(Q" [ref=e1648]:
+                      - link "易方达优质精选混合(Q" [ref=e1649] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/110011.html
+                    - cell "581738人" [ref=e1650]
+                  - row "易方达消费行业股票 755597人" [ref=e1651]:
+                    - cell "易方达消费行业股票" [ref=e1652]:
+                      - link "易方达消费行业股票" [ref=e1653] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/110022.html
+                    - cell "755597人" [ref=e1654]
+                  - row "诺安成长混合A 741396人" [ref=e1655]:
+                    - cell "诺安成长混合A" [ref=e1656]:
+                      - link "诺安成长混合A" [ref=e1657] [cursor=pointer]:
+                        - /url: http://fund.eastmoney.com/320007.html
+                    - cell "741396人" [ref=e1658]
+    - iframe [ref=e1661]:
+      - link [ref=f24e3] [cursor=pointer]:
+        - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=95&c=1325&ci=1&or=47&l=13522&bg=13522&b=15373&u=http%3A%2F%2Ffund.eastmoney.com%2Ftrade%2Fyzzq.html
+        - img [ref=f24e4]
+    - generic [ref=e1664]: 郑重声明：以上信息（包括但不限于文字、视频、音频、数据及图表）均基于公开信息采集，相关信息并未经过本公司证实，本公司不保证该信息全部或者部分内容的准确性、真实性、完整性，不构成本公司任何推荐或保证。基金具体信息以管理人相关公告为准。投资者投资前需仔细阅读《基金合同》、《招募说明书》等法律文件，了解产品收益与风险特征。过往业绩不预示其未来表现，市场有风险，投资需谨慎。数据来源：东方财富Choice数据。
+    - generic [ref=e1666]:
+      - paragraph [ref=e1667]: 将天天基金网设为上网首页吗？ 将天天基金网添加到收藏夹吗？
+      - paragraph [ref=e1668]:
+        - link "关于我们" [ref=e1669] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/about.html
+        - text: "|"
+        - link "资质证明" [ref=e1670] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/licenses.html
+        - text: "|"
+        - link "研究中心" [ref=e1671] [cursor=pointer]:
+          - /url: http://fundact.eastmoney.com/ttjjyjzx/
+        - text: "|"
+        - link "联系我们" [ref=e1672] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/connect.html
+        - text: "|"
+        - link "安全指引" [ref=e1673] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/security_guid.html
+        - text: "|"
+        - link "免责条款" [ref=e1674] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/relief.html
+        - text: "|"
+        - link "隐私条款" [ref=e1675] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/secret.html
+        - text: "|"
+        - link "风险提示函" [ref=e1676] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/risktips.html
+        - text: "|"
+        - link "意见建议" [ref=e1677] [cursor=pointer]:
+          - /url: http://feedback.1234567.com.cn/
+        - text: "|"
+        - link "在线客服" [ref=e1678] [cursor=pointer]:
+          - /url: javascript:;
+        - text: "|"
+        - link "诚聘英才" [ref=e1679] [cursor=pointer]:
+          - /url: https://app.mokahr.com/social-recruitment/eastmoney/57970#/
+      - paragraph [ref=e1680]:
+        - text: 天天基金客服热线：95021 |客服邮箱：
+        - link "vip@1234567.com.cn" [ref=e1681] [cursor=pointer]:
+          - /url: mailto:vip@1234567.com.cn
+        - text: "|人工服务时间：工作日 7:30-21:30 双休日 9:00-21:30"
+        - text: 郑重声明：
+        - link "天天基金系证监会批准的基金销售机构[000000303]" [ref=e1682] [cursor=pointer]:
+          - /url: http://help.1234567.com.cn/aboutus/licenses.html
+        - text: 。天天基金网所载文章、数据仅供参考，使用前请核实，风险自负。
+        - text: 中国证监会上海监管局网址：
+        - link "www.csrc.gov.cn/pub/shanghai" [ref=e1683] [cursor=pointer]:
+          - /url: http://www.csrc.gov.cn/pub/shanghai/
+        - text: CopyRight 上海天天基金销售有限公司 2011-现在 沪ICP证：沪B2-20130026
+        - link "网站备案号：沪ICP备11042629号-1" [ref=e1684] [cursor=pointer]:
+          - /url: https://beian.miit.gov.cn/
+      - paragraph [ref=e1685]:
+        - link "上海网警网络110" [ref=e1686] [cursor=pointer]:
+          - /url: javascript:;
+        - link "网络社会征信网" [ref=e1687] [cursor=pointer]:
+          - /url: javascript:;
+        - link "上海违法和违规信息举报中心" [ref=e1688] [cursor=pointer]:
+          - /url: http://www.shjbzx.cn/
+        - link "沪公网备" [ref=e1689] [cursor=pointer]:
+          - /url: javascript:;
+    - iframe [ref=e1691]:
+      - generic [ref=f25e2]:
+        - generic [ref=f25e3]:
+          - link [ref=f25e4] [cursor=pointer]:
+            - /url: javascript:;
+          - link "天天基金App 随时随地轻松理财 申购费率1折起 立即查看" [ref=f25e6] [cursor=pointer]:
+            - /url: http://fundact.eastmoney.com/app/?spm=001.na
+            - generic [ref=f25e7]:
+              - heading "天天基金App" [level=3] [ref=f25e8]
+              - heading "随时随地轻松理财" [level=3] [ref=f25e9]
+              - heading "申购费率1折起" [level=4] [ref=f25e10]
+              - generic [ref=f25e11]: 立即查看
+        - generic [ref=f25e12]:
+          - link [ref=f25e13] [cursor=pointer]:
+            - /url: http://fundact.eastmoney.com/banner/yzzq.html?spm=001.na&spm=001.na#zwf_,1n;desc_undefined,sc_1n,st_desc
+            - img [ref=f25e15]
+          - generic [ref=f25e16]:
+            - list [ref=f25e18]:
+              - listitem [ref=f25e19]:
+                - link "中航机遇领航混合发起A 336.80% 近1年收益率" [ref=f25e20] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/018956.html?spm=001.na
+                  - paragraph [ref=f25e21]: 中航机遇领航混合发起A
+                  - paragraph [ref=f25e22]: 336.80%
+                  - paragraph [ref=f25e23]: 近1年收益率
+              - listitem [ref=f25e24]:
+                - link "立即购买" [ref=f25e25] [cursor=pointer]:
+                  - /url: https://fund.eastmoney.com/018956.html
+              - listitem [ref=f25e26]:
+                - generic [ref=f25e27]: 费率1折
+                - link "详情〉" [ref=f25e28] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/018956.html?spm=001.na
+            - list [ref=f25e30]:
+              - listitem [ref=f25e31]:
+                - link "永赢科技智选混合发起A 328.33% 近1年收益率" [ref=f25e32] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/022364.html?spm=001.na
+                  - paragraph [ref=f25e33]: 永赢科技智选混合发起A
+                  - paragraph [ref=f25e34]: 328.33%
+                  - paragraph [ref=f25e35]: 近1年收益率
+              - listitem [ref=f25e36]:
+                - link "立即购买" [ref=f25e37] [cursor=pointer]:
+                  - /url: https://fund.eastmoney.com/022364.html
+              - listitem [ref=f25e38]:
+                - generic [ref=f25e39]: 费率1折
+                - link "详情〉" [ref=f25e40] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/022364.html?spm=001.na
+            - list [ref=f25e42]:
+              - listitem [ref=f25e43]:
+                - link "华泰柏瑞质量成长A 326.73% 近1年收益率" [ref=f25e44] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/008528.html?spm=001.na
+                  - paragraph [ref=f25e45]: 华泰柏瑞质量成长A
+                  - paragraph [ref=f25e46]: 326.73%
+                  - paragraph [ref=f25e47]: 近1年收益率
+              - listitem [ref=f25e48]:
+                - link "立即购买" [ref=f25e49] [cursor=pointer]:
+                  - /url: https://fund.eastmoney.com/008528.html
+              - listitem [ref=f25e50]:
+                - generic [ref=f25e51]: 费率1折
+                - link "详情〉" [ref=f25e52] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/008528.html?spm=001.na
+            - list [ref=f25e54]:
+              - listitem [ref=f25e55]:
+                - link "信澳业绩驱动混合A 320.68% 近1年收益率" [ref=f25e56] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/016370.html?spm=001.na
+                  - paragraph [ref=f25e57]: 信澳业绩驱动混合A
+                  - paragraph [ref=f25e58]: 320.68%
+                  - paragraph [ref=f25e59]: 近1年收益率
+              - listitem [ref=f25e60]:
+                - link "立即购买" [ref=f25e61] [cursor=pointer]:
+                  - /url: https://fund.eastmoney.com/016370.html
+              - listitem [ref=f25e62]:
+                - generic [ref=f25e63]: 费率1折
+                - link "详情〉" [ref=f25e64] [cursor=pointer]:
+                  - /url: http://fundact.eastmoney.com/fundinfo/016370.html?spm=001.na
+        - generic [ref=f25e65]:
+          - link "稳健理财" [ref=f25e66] [cursor=pointer]:
+            - /url: http://fund.eastmoney.com/gslc/?spm=001.na
+            - generic [ref=f25e67]: 稳健理财
+          - generic [ref=f25e68]:
+            - list [ref=f25e70]:
+              - listitem [ref=f25e71]:
+                - link "****2号 登录可见 业绩基准(年化)" [ref=f25e72] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/959094.html?spm=001.na
+                  - paragraph [ref=f25e73]: "****2号"
+                  - paragraph [ref=f25e74]: 登录可见
+                  - paragraph [ref=f25e75]: 业绩基准(年化)
+              - listitem [ref=f25e76]:
+                - link "查看详情" [ref=f25e77] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/959094.html?spm=001.na
+            - list [ref=f25e79]:
+              - listitem [ref=f25e80]:
+                - link "泰康现金管家货币C 1.4420% 7日年化" [ref=f25e81] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/004863.html?spm=001.na
+                  - paragraph [ref=f25e82]: 泰康现金管家货币C
+                  - paragraph [ref=f25e83]: 1.4420%
+                  - paragraph [ref=f25e84]: 7日年化
+              - listitem [ref=f25e85]:
+                - link "查看详情" [ref=f25e86] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/004863.html?spm=001.na
+            - list [ref=f25e88]:
+              - listitem [ref=f25e89]:
+                - link "汇泉安阳纯债C 48.69% 近1年收益" [ref=f25e90] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/020824.html?spm=001.na
+                  - paragraph [ref=f25e91]: 汇泉安阳纯债C
+                  - paragraph [ref=f25e92]: 48.69%
+                  - paragraph [ref=f25e93]: 近1年收益
+              - listitem [ref=f25e94]:
+                - link "查看详情" [ref=f25e95] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/020824.html?spm=001.na
+        - generic [ref=f25e96]:
+          - generic [ref=f25e97]: 更多热门专题
+          - generic [ref=f25e98]:
+            - list [ref=f25e100]:
+              - listitem [ref=f25e101]: 新发基金
+              - listitem [ref=f25e102]:
+                - link "新发基金排行榜>" [ref=f25e103] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/data/xinfund.html?spm=001.na
+            - list [ref=f25e105]:
+              - listitem [ref=f25e106]: 五星基金
+              - listitem [ref=f25e107]:
+                - link "连续三年五星评级>" [ref=f25e108] [cursor=pointer]:
+                  - /url: https://fundzt.eastmoney.com/2017/newwxph/?spm=001.na
+            - list [ref=f25e110]:
+              - listitem [ref=f25e111]: 高端理财
+              - listitem [ref=f25e112]:
+                - link "择时对冲抵抗风险>" [ref=f25e113] [cursor=pointer]:
+                  - /url: http://fund.eastmoney.com/gaoduan/?spm=001.na
+            - list [ref=f25e115]:
+              - listitem [ref=f25e116]: 定投指数
+              - listitem [ref=f25e117]:
+                - link "股神巴菲特力荐产品>" [ref=f25e118] [cursor=pointer]:
+                  - /url: http://topic.1234567.com.cn/html/2018/12/10/181210dtzsjjpc_PC.html?spm=001.na
+  - generic [ref=e1693]:
+    - list:
+      - listitem [ref=e1694]:
+        - link "同类涨幅榜" [ref=e1695] [cursor=pointer]:
+          - /url: http://fund.eastmoney.com/trade/pg.html?spm=001002001.bw
+      - listitem [ref=e1696] [cursor=pointer]:
+        - link "东财通信A 近1年 245.98%" [ref=e1697]:
+          - /url: http://fund.eastmoney.com/trade/pg.html?spm=001002001.bw#sc_y,st_desc
+          - paragraph [ref=e1698]: 东财通信A
+          - paragraph [ref=e1699]:
+            - generic [ref=e1700]: 近1年
+            - generic [ref=e1701]: 245.98%
+        - link "购买" [ref=e1702]:
+          - /url: http://fund.eastmoney.com/008326.html?spm=001002001.bw
+      - listitem [ref=e1703] [cursor=pointer]:
+        - link "东财通信C 近2年 271.20%" [ref=e1704]:
+          - /url: http://fund.eastmoney.com/trade/pg.html?spm=001002001.bw#sc_3y,st_desc
+          - paragraph [ref=e1705]: 东财通信C
+          - paragraph [ref=e1706]:
+            - generic [ref=e1707]: 近2年
+            - generic [ref=e1708]: 271.20%
+        - link "购买" [ref=e1709]:
+          - /url: http://fund.eastmoney.com/008327.html?spm=001002001.bw
+      - listitem [ref=e1710] [cursor=pointer]:
+        - link "国泰中证全指通信设备 近3年 243.56%" [ref=e1711]:
+          - /url: http://fund.eastmoney.com/trade/pg.html?spm=001002001.bw#sc_6y,st_desc
+          - paragraph [ref=e1712]: 国泰中证全指通信设备
+          - paragraph [ref=e1713]:
+            - generic [ref=e1714]: 近3年
+            - generic [ref=e1715]: 243.56%
+        - link "购买" [ref=e1716]:
+          - /url: http://fund.eastmoney.com/007817.html?spm=001002001.bw
+      - listitem [ref=e1717] [cursor=pointer]:
+        - link "国泰中证全指通信设备 近5年 284.70%" [ref=e1718]:
+          - /url: http://fund.eastmoney.com/trade/pg.html?spm=001002001.bw#sc_1n,st_desc
+          - paragraph [ref=e1719]: 国泰中证全指通信设备
+          - paragraph [ref=e1720]:
+            - generic [ref=e1721]: 近5年
+            - generic [ref=e1722]: 284.70%
+        - link "购买" [ref=e1723]:
+          - /url: http://fund.eastmoney.com/007818.html?spm=001002001.bw
+      - listitem [ref=e1724]:
+        - link "换一换" [ref=e1725] [cursor=pointer]:
+          - /url: javascript:void(0);
+        - link "关闭" [ref=e1726] [cursor=pointer]:
+          - /url: javascript:void(0);
+    - iframe [ref=e1727]:
+      
+  - generic [ref=e1728]:
+    - link [ref=e1730] [cursor=pointer]:
+      - /url: //same.eastmoney.com/c?z=eastmoney&la=0&si=1&cg=48&c=1122&ci=1&or=3968&l=16150&bg=16150&b=18503&u=https%3A%2F%2Fregister.1234567.com.cn%2Freg%2Fstep1%3Fspm%3D001.pz.01
+      - img [ref=e1731]
+    - generic [ref=e1732]:
+      - img [ref=e1734] [cursor=pointer]
+      - img [ref=e1736] [cursor=pointer]
