@@ -11,3 +11,6 @@ dist/
 # env
 .env
 .env.*
+
+# release zips
+release/*.zip
