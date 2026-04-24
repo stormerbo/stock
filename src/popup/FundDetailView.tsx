@@ -1138,7 +1138,6 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
             {FUND_DETAIL_TABS.map((tab) => {
               if (tab.value === 'holding' && !hasHolding) return null;
               if (tab.value === 'chart' && detail.navHistory.length < 2) return null;
-              if (tab.value === 'intraday' && detail.intradayValuation.length === 0) return null;
               if (tab.value === 'yield' && detail.yieldHistory.length < 2) return null;
               if (tab.value === 'holdings' && detail.topHoldings.length === 0) return null;
               return (
