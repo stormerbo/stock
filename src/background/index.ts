@@ -580,38 +580,64 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     const snap = snapshots.find((s) => s.code === alert.code);
     const notifLines: string[] = [];
 
-    // 当前股价
-    if (snap && Number.isFinite(snap.price)) {
-      notifLines.push(`现价: ¥${snap.price.toFixed(2)}`);
-    }
-
-    // 当日涨跌幅
-    if (snap && Number.isFinite(snap.changePct)) {
-      const sign = snap.changePct >= 0 ? '+' : '';
-      notifLines.push(`当日涨跌: ${sign}${snap.changePct.toFixed(2)}%`);
-    }
-
-    // 最近几分钟涨跌幅（仅 spike 类型有）
     const ruleIdPrefix = alert.ruleId.split('::')[0];
     const ruleInfo = ruleTypeMap.get(ruleIdPrefix);
-    if (ruleInfo?.type === 'spike') {
+    const isSpike = ruleInfo?.type === 'spike';
+
+    // 提取 spike 方向
+    let spikeDirection: 'up' | 'down' | null = null;
+    const parts = alert.ruleId.split('::');
+    if (parts.length >= 2) {
+      if (parts[1] === 'up') spikeDirection = 'up';
+      else if (parts[1] === 'down') spikeDirection = 'down';
+    }
+
+    // 标题：股票名称(代码) + spike 类型描述
+    const spikeLabel = spikeDirection === 'up' ? '急速拉升' : spikeDirection === 'down' ? '急速打压' : '';
+    const titleSuffix = spikeLabel ? ` ${spikeLabel}` : '';
+    const notifTitle = `${alert.name}(${alert.code})${titleSuffix}`;
+
+    if (isSpike) {
+      // 第一行：近X分钟 上涨/下跌 X.XX% + 箭头
       const msgLines = alert.message.split('\n');
       const intradayLine = msgLines.find((l) => l.includes('分钟内'));
       if (intradayLine) {
         const cleaned = intradayLine.replace(/^.*?[钟内]/, '').trim();
-        const spikeWindow = ruleInfo.config.rules.find((r) => r.id === ruleIdPrefix)?.spikeWindowMinutes ?? 5;
-        notifLines.push(`最近${spikeWindow}分钟: ${cleaned}`);
+        // 提取涨跌幅数值
+        const match = cleaned.match(/([+-]?\d+\.\d+)%/);
+        const pctStr = match ? match[1] : '';
+        const pctNum = parseFloat(pctStr);
+        const arrow = pctNum >= 0 ? '↑' : '↓';
+        const spikeWindow = ruleInfo?.config.rules.find((r) => r.id === ruleIdPrefix)?.spikeWindowMinutes ?? 5;
+        const directionLabel = pctNum >= 0 ? '上涨' : '下跌';
+        notifLines.push(`近${spikeWindow}分钟${directionLabel} ${pctStr}% ${arrow}`);
       }
+
+      // 第二行：现价 + 涨跌幅
+      const pricePart = snap && Number.isFinite(snap.price) ? `现价: ¥${snap.price.toFixed(2)}` : '';
+      const changePart = snap && Number.isFinite(snap.changePct)
+        ? `涨跌幅: ${snap.changePct >= 0 ? '+' : ''}${snap.changePct.toFixed(2)}%`
+        : '';
+      const secondLine = [pricePart, changePart].filter(Boolean).join(', ');
+      if (secondLine) notifLines.push(secondLine);
     } else {
       // 其他告警类型：从消息中提取简洁的触发原因
       const shortReason = alert.message.replace(/^[^()]*\([^)]*\)\s*/, '').trim();
       notifLines.push(`告警: ${shortReason}`);
+
+      // 现价 + 涨跌幅
+      const pricePart = snap && Number.isFinite(snap.price) ? `现价: ¥${snap.price.toFixed(2)}` : '';
+      const changePart = snap && Number.isFinite(snap.changePct)
+        ? `涨跌幅: ${snap.changePct >= 0 ? '+' : ''}${snap.changePct.toFixed(2)}%`
+        : '';
+      const secondLine = [pricePart, changePart].filter(Boolean).join(', ');
+      if (secondLine) notifLines.push(secondLine);
     }
 
     chrome.notifications.create(`alert_${alert.code}_${alert.ruleId}_${Date.now()}`, {
       type: 'basic',
       iconUrl: chrome.runtime.getURL('public/icon48.png'),
-      title: `🔔 ${alert.name}`,
+      title: notifTitle,
       message: notifLines.join('\n'),
       priority: 2,
     });
