@@ -95,7 +95,9 @@ function main() {
   const pkgVersion = String(pkg.version || '0.0.0');
 
   console.log('[package] Running build...');
-  runCommand('npm', ['run', 'build']);
+  runCommand('npx', ['tsc']);
+  runCommand('npx', ['vite', 'build']);
+  runCommand('node', ['scripts/inject-manifest-key.mjs']);
 
   const manifestPath = path.join(distDir, 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
