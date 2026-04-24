@@ -1,11 +1,12 @@
 import {
   fetchBatchStockQuotes,
-  fetchStockIntraday,
+  fetchStockIntradayWithRetry,
   fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
   isTradingHours,
   normalizeStockCode,
+  pMap,
   type FundHoldingConfig,
   type FundPosition,
   type MarketIndexQuote,
@@ -296,14 +297,16 @@ async function refreshStocks() {
       });
 
     if (codesToRefresh.length > 0) {
-      const intradayResults = await Promise.all(
-        codesToRefresh.map(async (code) => {
+      const intradayResults = await pMap(
+        codesToRefresh,
+        async (code) => {
           try {
-            return { code, data: await fetchStockIntraday(code) };
+            return { code, data: await fetchStockIntradayWithRetry(code) };
           } catch {
             return { code, data: { data: [], prevClose: Number.NaN } };
           }
-        })
+        },
+        4,
       );
       const intradayMap = new Map(intradayResults.map((r) => [r.code, r.data]));
       const final = merged.map((p) =>

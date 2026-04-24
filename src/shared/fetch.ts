@@ -255,12 +255,12 @@ export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ 
   const tencentCode = toTencentStockCode(plain);
   if (!tencentCode) return { data: [], prevClose: Number.NaN };
 
-  // 先走腾讯分时（与详情页同接口、同直连模式），失败或空数据再兜底东财分时
+  // 先走腾讯分时，失败或空数据再兜底东财分时
   try {
-    const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`);
-    if (!response.ok) {
-      throw new Error(`Tencent minute fetch failed: ${response.status}`);
-    }
+    const response = await fetch(
+      `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`
+    );
+    if (!response.ok) throw new Error(`Tencent minute fetch failed: ${response.status}`);
     const json = await response.json() as {
       data?: Record<string, {
         qt?: Record<string, string[]>;
@@ -954,4 +954,65 @@ function formatFundTime(raw: string): string {
   if (/^\d{2}:\d{2}:\d{2}$/.test(time)) return time;
   if (/^\d{2}:\d{2}$/.test(time)) return `${time}:00`;
   return '-';
+}
+
+/**
+ * 并发受限的 map 函数。同时最多有 concurrency 个任务在执行。
+ */
+export async function pMap<T, R>(
+  items: T[],
+  mapper: (item: T, index: number) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing = new Set<Promise<void>>();
+  let idx = 0;
+
+  for (const item of items) {
+    const p = (async () => {
+      const i = idx++;
+      results[i] = await mapper(item, i);
+    })();
+    executing.add(p);
+    p.finally(() => executing.delete(p));
+    if (executing.size >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.allSettled(executing);
+  return results;
+}
+
+/**
+ * 带指数退避的重试包装。默认最多重试 2 次（共尝试 3 次），初始延迟 500ms。
+ */
+export async function retry<T>(
+  fn: () => Promise<T>,
+  options: { maxRetries?: number; baseDelay?: number } = {},
+): Promise<T> {
+  const { maxRetries = 2, baseDelay = 500 } = options;
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, baseDelay * 2 ** attempt));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * 带重试的并发受限分时数据拉取。
+ */
+export async function fetchStockIntradayWithRetry(
+  code: string,
+): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
+  return retry(() => fetchStockIntraday(code), { maxRetries: 2, baseDelay: 500 });
 }

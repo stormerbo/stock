@@ -425,7 +425,7 @@ export async function fetchTencentStockDetail(code: string, fallbackName = "", p
     return buildDetail(code, plainCode, fallbackName, quote, period, kline);
   }
   if (period === "day" || period === "week" || period === "month" || period === "year") {
-    const count = period === "day" ? 320 : 240;
+    const count = period === "day" ? 800 : 240;
     if (period === "year") {
       const kline = await fetchEastmoneyYearKline(tencentCode);
       // 年K需要从日线单独拿报价

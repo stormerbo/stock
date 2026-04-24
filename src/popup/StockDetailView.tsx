@@ -95,13 +95,6 @@ const PERIOD_TABS: Array<{ label: string; value: StockPeriod }> = [
   { label: "5分", value: "m5" },
 ];
 
-const WINDOW_OPTIONS = [
-  { label: "近60", size: 60 },
-  { label: "近120", size: 120 },
-  { label: "近240", size: 240 },
-  { label: "全部", size: 0 },
-] as const;
-
 function createLinePath(values: Array<number | null>, width: number, height: number, min: number, max: number): string {
   const validValues = values.filter((item): item is number => item !== null && Number.isFinite(item));
   if (validValues.length < 2 || max <= min) return "";
@@ -152,9 +145,11 @@ function IndicatorToggle({ label, value, color, active, onClick }: IndicatorTogg
 function KlineChart({ detail }: { detail: StockDetailData }) {
   const isMinuteStyle = detail.period === "minute" || detail.period === "fiveDay";
   const isSingleMinute = detail.period === "minute";
+  // 分时图（单日）隐藏范围滑条和平移；五日及以上可用
+  const showRangeControls = detail.period !== "minute";
   const MIN_WINDOW_SIZE = 24;
 
-  const [windowSize, setWindowSize] = useState<number>(isMinuteStyle ? 0 : 240);
+  const [windowSize, setWindowSize] = useState<number>(detail.period === "minute" ? 0 : 240);
   const [viewOffset, setViewOffset] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
@@ -197,7 +192,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   // Reset state when period changes
   useEffect(() => {
     setViewOffset(0);
-    setWindowSize(isMinuteStyle ? 0 : 240);
+    setWindowSize(detail.period === "minute" ? 0 : 240);
     setHoverIndex(null);
     setHoverSvgX(null);
     dragRef.current = null;
@@ -218,13 +213,13 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   }, []);
 
   const total = detail.kline.length;
-  const effectiveSize = (windowSize <= 0 || isMinuteStyle) ? total : Math.min(windowSize, total);
+  const effectiveSize = (windowSize <= 0 || detail.period === "minute") ? total : Math.min(windowSize, total);
   const maxOffset = Math.max(0, total - effectiveSize);
   const clampedOffset = Math.min(viewOffset, maxOffset);
-  const canPan = !isMinuteStyle && maxOffset > 0;
+  const canPan = showRangeControls && maxOffset > 0;
 
   const visibleKline = useMemo(() => {
-    if (isMinuteStyle || windowSize <= 0) return detail.kline;
+    if (detail.period === "minute" || windowSize <= 0) return detail.kline;
     const endIdx = total - clampedOffset;
     const startIdx = Math.max(0, endIdx - effectiveSize);
     return detail.kline.slice(startIdx, endIdx);
@@ -305,7 +300,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   };
 
   const handleRangeMouseDown = (e: React.MouseEvent) => {
-    if (isMinuteStyle) return;
+    if (!showRangeControls) return;
     e.preventDefault();
     rangeBarDragRef.current = {
       startX: e.clientX,
@@ -316,7 +311,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   };
 
   const handleRangeLeftHandleMouseDown = (e: React.MouseEvent) => {
-    if (isMinuteStyle) return;
+    if (!showRangeControls) return;
     e.preventDefault();
     e.stopPropagation();
     rangeBarDragRef.current = {
@@ -328,7 +323,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   };
 
   const handleRangeRightHandleMouseDown = (e: React.MouseEvent) => {
-    if (isMinuteStyle) return;
+    if (!showRangeControls) return;
     e.preventDefault();
     e.stopPropagation();
     rangeBarDragRef.current = {
@@ -379,7 +374,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
   };
 
   const handleChartWheel = (e: React.WheelEvent) => {
-    if (isMinuteStyle || total <= MIN_WINDOW_SIZE) return;
+    if (!showRangeControls || total <= MIN_WINDOW_SIZE) return;
     e.preventDefault();
 
     const rect = chartAreaRef.current?.getBoundingClientRect();
@@ -845,21 +840,9 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
         )}
       </div>
 
-      {/* Time range selector (K-line only) */}
-      {!isMinuteStyle ? (
+      {/* Time range selector（分时图隐藏，五日和K线可用） */}
+      {showRangeControls ? (
         <div className="chart-range-row">
-          <div className="chart-range-presets">
-            {WINDOW_OPTIONS.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                className={`range-preset-btn ${windowSize === option.size ? "active" : ""}`}
-                onClick={() => { setWindowSize(option.size); setViewOffset(0); }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
 
           <div
             ref={rangeBarRef}

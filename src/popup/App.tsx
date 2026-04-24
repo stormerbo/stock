@@ -5,7 +5,7 @@ import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
 import {
   fetchBatchStockQuotes,
-  fetchStockIntraday,
+  fetchStockIntradayWithRetry,
   fetchTiantianFundPosition,
   normalizeStockCode,
   normalizeFundCode,
@@ -13,6 +13,8 @@ import {
   getShanghaiToday,
   toNumber,
   fetchMarketStats,
+  pMap,
+  isTradingHours,
   type StockHoldingConfig,
   type FundHoldingConfig,
   type StockPosition,
@@ -1466,7 +1468,7 @@ function clearIntradayIfStale(
     const loadStocks = async () => {
       setStocksLoading(true);
       try {
-        const { fetchBatchStockQuotes, fetchStockIntraday } = await import('../shared/fetch');
+        const { fetchBatchStockQuotes, fetchStockIntradayWithRetry, pMap } = await import('../shared/fetch');
         // 只拉取缺失的股票行情
         if (missingHoldings.length > 0) {
           const newRows = await fetchBatchStockQuotes(missingHoldings);
@@ -1485,27 +1487,51 @@ function clearIntradayIfStale(
         }
 
         if (!cancelled && intradayMissingCodes.length > 0) {
-          // 补拉空白分时图（包括已有持仓但 intraday 为空的情况）
-          intradayMissingCodes.forEach(async (code) => {
-            try {
-              const { data, prevClose } = await fetchStockIntraday(code);
-              if (cancelled) return;
-              if (!Array.isArray(data) || data.length === 0) return;
+          // 并发受限拉取分时数据（最多 4 个同时请求），带自动重试
+          const intradayResults = await pMap(
+            intradayMissingCodes,
+            async (code) => {
+              try {
+                const result = await fetchStockIntradayWithRetry(code);
+                return { code, data: result.data, prevClose: result.prevClose };
+              } catch {
+                console.warn('[StockIntraday] fetch failed after retry:', code);
+                return { code, data: [] as Array<{ time: string; price: number }>, prevClose: Number.NaN };
+              }
+            },
+            4,
+          );
 
+          if (!cancelled) {
+            const failedCodes = intradayResults.filter((r) => r.data.length === 0).map((r) => r.code);
+            if (failedCodes.length > 0) {
+              console.warn('[StockIntraday] still empty after fetch:', failedCodes.join(','));
+            }
+            const validResults = intradayResults.filter((r) => r.data.length > 0);
+            if (validResults.length > 0) {
               setStockPositions((prev) =>
-                prev.map((p) => (p.code === code ? { ...p, intraday: { data, prevClose } } : p)),
+                prev.map((p) => {
+                  const found = validResults.find((r) => r.code === p.code);
+                  return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
+                }),
               );
 
+              // 批量写回 storage
               if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                const result = await chrome.storage.local.get('stockPositions');
-                const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
-                const updated = existing.map((p) => (p.code === code ? { ...p, prevClose, intraday: { data, prevClose } } : p));
-                await chrome.storage.local.set({ stockPositions: updated });
+                try {
+                  const result = await chrome.storage.local.get('stockPositions');
+                  const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
+                  const updated = existing.map((p) => {
+                    const found = validResults.find((r) => r.code === p.code);
+                    return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
+                  });
+                  await chrome.storage.local.set({ stockPositions: updated });
+                } catch {
+                  // storage write failure is non-critical
+                }
               }
-            } catch {
-              // ignore single code failure
             }
-          });
+          }
         }
 
         if (!cancelled) {
@@ -1520,7 +1546,49 @@ function clearIntradayIfStale(
 
     void loadStocks();
     return () => { cancelled = true; };
-  }, [portfolioReady, stockHoldings, stockPositions]);
+  // 不依赖 stockPositions — 避免 storage 监听器更新时反复取消分时拉取
+  }, [portfolioReady, stockHoldings]);
+
+  // 交易时段内定时刷新缺分时数据的股票
+  useEffect(() => {
+    if (!portfolioReady || stockPositions.length === 0) return;
+
+    const refreshMissingIntraday = async () => {
+      if (!isTradingHours()) return;
+      const missingCodes = stockPositions
+        .filter((p) => !Array.isArray(p.intraday?.data) || p.intraday.data.length === 0)
+        .map((p) => p.code);
+      if (missingCodes.length === 0) return;
+
+      const { fetchStockIntradayWithRetry, pMap } = await import('../shared/fetch');
+      const results = await pMap(
+        missingCodes,
+        async (code) => {
+          try {
+            const result = await fetchStockIntradayWithRetry(code);
+            return { code, data: result.data, prevClose: result.prevClose };
+          } catch {
+            return null;
+          }
+        },
+        4,
+      );
+
+      if (!results) return;
+      const valid = results.filter((r): r is NonNullable<typeof r> => r !== null && r.data.length > 0);
+      if (valid.length === 0) return;
+
+      setStockPositions((prev) =>
+        prev.map((p) => {
+          const found = valid.find((r) => r.code === p.code);
+          return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
+        }),
+      );
+    };
+
+    const timer = setInterval(refreshMissingIntraday, 60_000);
+    return () => clearInterval(timer);
+  }, [portfolioReady, stockPositions]);
 
   useEffect(() => {
     if (!portfolioReady) return;
