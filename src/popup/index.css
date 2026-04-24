@@ -2316,6 +2316,16 @@ body.theme-light .row-context-menu {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
+/* Intraday valuation section (top of fund detail) */
+.fund-intraday-section {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+
+.fund-intraday-section .fund-section-title {
+  margin-bottom: 8px;
+}
+
 /* Performance section */
 .fund-performance-section {
   margin-bottom: 14px;

@@ -779,9 +779,32 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
 
 function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prevDayNav: number }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  // A股交易时段：09:30-11:30（120分钟）+ 13:00-15:00（120分钟）
+  const MORNING_START = 9 * 60 + 30;
+  const MORNING_END = 11 * 60 + 30;
+  const AFTERNOON_START = 13 * 60;
+  const AFTERNOON_END = 15 * 60;
+  const TOTAL_MINUTES = 240;
+
+  function parseTimeToMinutes(timeStr: string): number {
+    const m = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (!m) return -1;
+    return parseInt(m[1]) * 60 + parseInt(m[2]);
+  }
+
+  function timeToFraction(timeStr: string): number {
+    const minutes = parseTimeToMinutes(timeStr);
+    if (minutes < 0) return 0;
+    if (minutes <= MORNING_END) return (minutes - MORNING_START) / TOTAL_MINUTES;
+    if (minutes <= AFTERNOON_START) return 120 / TOTAL_MINUTES;
+    if (minutes <= AFTERNOON_END) return (120 + (minutes - AFTERNOON_START)) / TOTAL_MINUTES;
+    return 1;
+  }
+
   const width = 580;
-  const height = 100;
-  const padding = { top: 8, right: 10, bottom: 20, left: 10 };
+  const height = 150;
+  const padding = { top: 10, right: 48, bottom: 22, left: 56 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -793,29 +816,34 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
   const minPct = Math.min(...pcts);
   const maxPct = Math.max(...pcts);
   const range = Math.max(maxPct - minPct, 0.01);
-  const pad = range * 0.1;
-  const displayMin = minPct - pad;
-  const displayMax = maxPct + pad;
-  const displayRange = displayMax - displayMin;
+  const padAmt = range * 0.12;
+  const displayMin = minPct - padAmt;
+  const displayMax = maxPct + padAmt;
+  const displayRange = Math.max(displayMax - displayMin, 0.001);
 
-  const toX = (i: number) => padding.left + (i / (data.length - 1)) * chartWidth;
+  // X positions based on real trading time
+  const xs = data.map((d) => padding.left + timeToFraction(d.time) * chartWidth);
+
   const toY = (pct: number) => padding.top + (1 - (pct - displayMin) / displayRange) * chartHeight;
 
-  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(2)} ${toY(d.changePct).toFixed(2)}`).join(' ');
-  const areaPath = linePath + ` L ${toX(data.length - 1).toFixed(2)} ${(height - padding.bottom).toFixed(2)} L ${toX(0).toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xs[i].toFixed(2)} ${toY(d.changePct).toFixed(2)}`).join(' ');
+  const areaPath = linePath + ` L ${xs[xs.length - 1].toFixed(2)} ${(height - padding.bottom).toFixed(2)} L ${xs[0].toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
 
   const lastPct = pcts[pcts.length - 1];
-  const lineColor = lastPct >= 0 ? '#ff5e57' : '#1fc66d';
+  const lineColor = lastPct >= 0 ? '#e45555' : '#2aa568';
 
   const activeIndex = hoverIndex === null ? data.length - 1 : Math.max(0, Math.min(hoverIndex, data.length - 1));
   const activeItem = data[activeIndex];
-
-  // Estimated NAV at hover point
   const estNav = Number.isFinite(prevDayNav) && prevDayNav > 0
     ? prevDayNav * (1 + activeItem.changePct / 100)
     : Number.NaN;
 
-  const yTicks = 3;
+  // Baseline Y (0%)
+  const baselineY = toY(0);
+  const hasBaseline = displayMin <= 0 && displayMax >= 0;
+
+  // Y-axis ticks (change%)
+  const yTicks = 4;
   const yLabels = Array.from({ length: yTicks + 1 }, (_, i) => {
     const ratio = i / yTicks;
     const pct = displayMax - ratio * displayRange;
@@ -823,57 +851,90 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
     return { pct, y };
   });
 
+  // NAV values for left axis
+  const navLabels = yLabels.map((tick) => ({
+    nav: Number.isFinite(prevDayNav) && prevDayNav > 0 ? prevDayNav * (1 + tick.pct / 100) : 0,
+    y: tick.y,
+  }));
+
+  // Noon break X
+  const noonBreakX = padding.left + (120 / TOTAL_MINUTES) * chartWidth;
+
   return (
     <div className="fund-nav-chart"
       onMouseMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         if (rect.width <= 0) return;
-        const relX = Math.max(0, Math.min((event.clientX - rect.left) / rect.width, 0.9999));
-        setHoverIndex(Math.round(relX * (data.length - 1)));
+        const targetX = (event.clientX - rect.left) / rect.width * width;
+        let nearest = 0;
+        let nearestDist = Infinity;
+        for (let i = 0; i < xs.length; i++) {
+          const dist = Math.abs(xs[i] - targetX);
+          if (dist < nearestDist) { nearestDist = dist; nearest = i; }
+        }
+        setHoverIndex(nearest);
       }}
       onMouseLeave={() => setHoverIndex(null)}
     >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        {/* Zero line */}
-        {displayMin <= 0 && displayMax >= 0 && (
-          <line x1={padding.left} x2={width - padding.right} y1={toY(0).toFixed(2)} y2={toY(0).toFixed(2)} className="fund-chart-grid" strokeDasharray="2,2" />
-        )}
+        <defs>
+          <linearGradient id="intraday-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
 
-        {/* Grid */}
+        {/* Grid lines */}
         {yLabels.map((tick, i) => (
           <line key={i} x1={padding.left} x2={width - padding.right} y1={tick.y.toFixed(2)} y2={tick.y.toFixed(2)} className="fund-chart-grid" />
         ))}
+        {[0.25, 0.5, 0.75].map((r) => (
+          <line key={`v${r}`} x1={(padding.left + r * chartWidth).toFixed(2)} x2={(padding.left + r * chartWidth).toFixed(2)} y1={padding.top} y2={height - padding.bottom} className="fund-chart-grid" />
+        ))}
+
+        {/* Baseline (0%) */}
+        {hasBaseline && (
+          <line x1={padding.left} x2={width - padding.right} y1={baselineY.toFixed(2)} y2={baselineY.toFixed(2)} stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="3,3" />
+        )}
+
+        {/* Noon break line */}
+        <line x1={noonBreakX.toFixed(2)} x2={noonBreakX.toFixed(2)} y1={padding.top} y2={height - padding.bottom} className="fund-chart-grid" />
 
         {/* Area fill */}
-        <path d={areaPath} fill="url(#nav-fill-up)" opacity="0.15" />
+        <path d={areaPath} fill="url(#intraday-fill)" />
 
-        {/* Line */}
-        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Price line */}
+        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* Y-axis labels */}
+        {/* Left axis: estimated NAV */}
+        {navLabels.map((tick, i) => (
+          <text key={`nav-${i}`} x={2} y={tick.y + (i === 0 ? 10 : i === yTicks ? -2 : 3)} textAnchor="start" className="fund-axis-label" fontSize="9" fontFamily="monospace">
+            {tick.nav.toFixed(4)}
+          </text>
+        ))}
+
+        {/* Right axis: change % */}
         {yLabels.map((tick, i) => (
-          <text key={i} x={2} y={tick.y + 4} textAnchor="start" className="fund-axis-label" fontSize="9">
+          <text key={`pct-${i}`} x={width - 2} y={tick.y + (i === 0 ? 10 : i === yTicks ? -2 : 3)} textAnchor="end" className={`fund-axis-label ${tick.pct > 0.001 ? 'up' : tick.pct < -0.001 ? 'down' : ''}`} fontSize="9" fontFamily="monospace">
             {tick.pct >= 0 ? '+' : ''}{tick.pct.toFixed(2)}%
           </text>
         ))}
 
-        {/* X-axis time labels — show first, middle, last */}
-        {[0, Math.floor(data.length / 2), data.length - 1].map((i) => (
-          <text key={i} x={toX(i).toFixed(2)} y={height - 2} textAnchor="middle" className="fund-axis-label" fontSize="9">
-            {data[i]?.time || ''}
-          </text>
-        ))}
+        {/* X-axis time labels */}
+        <text x={padding.left} y={height - 2} textAnchor="middle" className="fund-axis-label" fontSize="9">09:30</text>
+        <text x={noonBreakX} y={height - 2} textAnchor="middle" className="fund-axis-label" fontSize="9">11:30/13:00</text>
+        <text x={width - padding.right} y={height - 2} textAnchor="middle" className="fund-axis-label" fontSize="9">15:00</text>
 
-        {/* Crosshair + dot */}
-        <line x1={toX(activeIndex).toFixed(2)} x2={toX(activeIndex).toFixed(2)} y1={padding.top} y2={height - padding.bottom} className="fund-crosshair" />
-        <circle cx={toX(activeIndex).toFixed(2)} cy={toY(activeItem.changePct).toFixed(2)} r="3" fill="white" stroke={lineColor} strokeWidth="2" />
+        {/* Crosshair */}
+        <line x1={xs[activeIndex].toFixed(2)} x2={xs[activeIndex].toFixed(2)} y1={padding.top} y2={height - padding.bottom} className="fund-crosshair" />
+        <circle cx={xs[activeIndex].toFixed(2)} cy={toY(activeItem.changePct).toFixed(2)} r="3.5" fill="white" stroke={lineColor} strokeWidth="2" />
       </svg>
 
       {/* Tooltip */}
       <div className="fund-nav-tooltip">
         <span className="fund-nav-tooltip-date">{activeItem.time}</span>
+        {Number.isFinite(estNav) && <span>估算净值 <strong className={toneClass(activeItem.changePct)}>{estNav.toFixed(4)}</strong></span>}
         <span className={toneClass(activeItem.changePct)}>{formatPercent(activeItem.changePct)}</span>
-        {Number.isFinite(estNav) && <span>估算净值 {estNav.toFixed(4)}</span>}
       </div>
     </div>
   );
@@ -1008,6 +1069,17 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
             </div>
           </div>
 
+          {/* ---- 实时估值分时图（始终显示，类似股票分时图） ---- */}
+          {detail.intradayValuation.length > 0 && (
+            <div className="fund-intraday-section">
+              <h3 className="fund-section-title">实时估值</h3>
+              <IntradayValChart
+                data={detail.intradayValuation}
+                prevDayNav={detail.prevDayNav}
+              />
+            </div>
+          )}
+
           {/* ---- Tab Bar ---- */}
           <div className="fund-detail-tabs">
             {FUND_DETAIL_TABS.map((tab) => {
@@ -1067,20 +1139,9 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
               </div>
             ) : null}
 
-            {/* 走势 tab — 分时估值 + 净值走势 + 阶段涨幅 */}
+            {/* 走势 tab — 净值走势 + 阶段涨幅 */}
             {activeTab === 'chart' && detail.navHistory.length >= 2 ? (
               <div className="fund-chart-section">
-                {/* 分时估值 */}
-                {detail.intradayValuation.length > 0 && (
-                  <>
-                    <h3 className="fund-section-title">分时估值</h3>
-                    <IntradayValChart
-                      data={detail.intradayValuation}
-                      prevDayNav={detail.prevDayNav}
-                    />
-                  </>
-                )}
-
                 {/* 净值走势 */}
                 <h3 className="fund-section-title">净值走势</h3>
                 <div className="fund-chart-range-row">
