@@ -1006,11 +1006,12 @@ function IntradayValChart({ data, prevDayNav }: { data: IntradayValPoint[]; prev
 // Tab definitions
 // -----------------------------------------------------------
 
-type FundDetailTab = 'holding' | 'chart' | 'yield' | 'holdings' | 'info';
+type FundDetailTab = 'holding' | 'chart' | 'yield' | 'holdings' | 'info' | 'intraday';
 
 const FUND_DETAIL_TABS: Array<{ label: string; value: FundDetailTab }> = [
   { label: '持仓', value: 'holding' },
   { label: '走势', value: 'chart' },
+  { label: '估值', value: 'intraday' },
   { label: '收益', value: 'yield' },
   { label: '重仓', value: 'holdings' },
   { label: '信息', value: 'info' },
@@ -1090,6 +1091,7 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
   useEffect(() => {
     if (detail) {
       if (hasHolding) setActiveTab('holding');
+      else if (detail.intradayValuation.length > 0) setActiveTab('intraday');
       else if (detail.navHistory.length >= 2) setActiveTab('chart');
       else if (detail.topHoldings.length > 0) setActiveTab('holdings');
       else setActiveTab('info');
@@ -1131,24 +1133,12 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
             </div>
           </div>
 
-          {/* ---- 实时估值分时图（始终显示区域） ---- */}
-          <div className="fund-intraday-section">
-            <h3 className="fund-section-title">实时估值</h3>
-            {detail.intradayValuation.length > 0 ? (
-              <IntradayValChart
-                data={detail.intradayValuation}
-                prevDayNav={detail.prevDayNav}
-              />
-            ) : (
-              <div className="fund-chart-empty">非交易时段或无实时估值数据</div>
-            )}
-          </div>
-
           {/* ---- Tab Bar ---- */}
           <div className="fund-detail-tabs">
             {FUND_DETAIL_TABS.map((tab) => {
               if (tab.value === 'holding' && !hasHolding) return null;
               if (tab.value === 'chart' && detail.navHistory.length < 2) return null;
+              if (tab.value === 'intraday' && detail.intradayValuation.length === 0) return null;
               if (tab.value === 'yield' && detail.yieldHistory.length < 2) return null;
               if (tab.value === 'holdings' && detail.topHoldings.length === 0) return null;
               return (
@@ -1200,6 +1190,20 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
                     <strong>{Number.isFinite(fundPosition.latestNav) ? fundPosition.latestNav.toFixed(4) : '-'}</strong>
                   </div>
                 </div>
+              </div>
+            ) : null}
+
+            {/* 估值 tab — 实时估值分时图 */}
+            {activeTab === 'intraday' ? (
+              <div className="fund-chart-section">
+                {detail.intradayValuation.length > 0 ? (
+                  <IntradayValChart
+                    data={detail.intradayValuation}
+                    prevDayNav={detail.prevDayNav}
+                  />
+                ) : (
+                  <div className="fund-chart-empty">非交易时段或无实时估值数据</div>
+                )}
               </div>
             ) : null}
 
