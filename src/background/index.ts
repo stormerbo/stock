@@ -575,13 +575,44 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     return;
   }
 
-  // 非工作模式：发送系统通知
+  // 非工作模式：发送系统通知（分行展示关键数据）
   for (const alert of allTriggered) {
+    const snap = snapshots.find((s) => s.code === alert.code);
+    const notifLines: string[] = [];
+
+    // 当前股价
+    if (snap && Number.isFinite(snap.price)) {
+      notifLines.push(`现价: ¥${snap.price.toFixed(2)}`);
+    }
+
+    // 当日涨跌幅
+    if (snap && Number.isFinite(snap.changePct)) {
+      const sign = snap.changePct >= 0 ? '+' : '';
+      notifLines.push(`当日涨跌: ${sign}${snap.changePct.toFixed(2)}%`);
+    }
+
+    // 最近几分钟涨跌幅（仅 spike 类型有）
+    const ruleIdPrefix = alert.ruleId.split('::')[0];
+    const ruleInfo = ruleTypeMap.get(ruleIdPrefix);
+    if (ruleInfo?.type === 'spike') {
+      const msgLines = alert.message.split('\n');
+      const intradayLine = msgLines.find((l) => l.includes('分钟内'));
+      if (intradayLine) {
+        const cleaned = intradayLine.replace(/^.*?[钟内]/, '').trim();
+        const spikeWindow = ruleInfo.config.rules.find((r) => r.id === ruleIdPrefix)?.spikeWindowMinutes ?? 5;
+        notifLines.push(`最近${spikeWindow}分钟: ${cleaned}`);
+      }
+    } else {
+      // 其他告警类型：从消息中提取简洁的触发原因
+      const shortReason = alert.message.replace(/^[^()]*\([^)]*\)\s*/, '').trim();
+      notifLines.push(`告警: ${shortReason}`);
+    }
+
     chrome.notifications.create(`alert_${alert.code}_${alert.ruleId}_${Date.now()}`, {
       type: 'basic',
       iconUrl: chrome.runtime.getURL('public/icon48.png'),
-      title: `🔔 股价告警 — ${alert.name}`,
-      message: alert.message,
+      title: `🔔 ${alert.name}`,
+      message: notifLines.join('\n'),
       priority: 2,
     });
   }

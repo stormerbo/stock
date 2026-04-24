@@ -2824,6 +2824,38 @@ body.theme-light .market-stats-panel {
   white-space: pre-line;
 }
 
+.notification-price-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.notif-price-label {
+  color: var(--text-2);
+  font-size: 10px;
+}
+
+.notif-price-value {
+  font-weight: 700;
+  color: var(--text-0);
+  font-family: monospace;
+}
+
+.notif-change-value {
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.notif-change-value.up {
+  color: var(--up);
+}
+
+.notif-change-value.down {
+  color: var(--down);
+}
+
 .notif-value {
   font-weight: 700;
   color: var(--text-0);

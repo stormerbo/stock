@@ -2545,19 +2545,32 @@ function clearIntradayIfStale(
                   <div className="notification-empty">暂无通知</div>
                 ) : (
                   <div className="notification-list">
-                    {notifications.map((item) => (
-                      <div key={item.id} className={`notification-item ${item.read ? '' : 'unread'}`}>
-                        <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
-                        <div className="notification-text">
-                          <span className="notification-stock">
-                            {item.name}
-                            <span className="notification-code">({item.code})</span>
-                          </span>
-                          <span className="notification-message">{renderNotificationMessage(item.message)}</span>
+                    {notifications.map((item) => {
+                      const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
+                      const priceValid = Number.isFinite(item.price) && item.price > 0;
+                      return (
+                        <div key={item.id} className={`notification-item ${item.read ? '' : 'unread'}`}>
+                          <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
+                          <div className="notification-text">
+                            <span className="notification-stock">
+                              {item.name}
+                              <span className="notification-code">({item.code})</span>
+                            </span>
+                            {priceValid && (
+                              <span className="notification-price-row">
+                                <span className="notif-price-label">现价 </span>
+                                <span className="notif-price-value">¥{item.price.toFixed(2)}</span>
+                                <span className={`notif-change-value ${changeUp ? 'up' : 'down'}`}>
+                                  {item.changePct >= 0 ? '+' : ''}{item.changePct.toFixed(2)}%
+                                </span>
+                              </span>
+                            )}
+                            <span className="notification-message">{renderNotificationMessage(item.message)}</span>
+                          </div>
+                          <span className="notification-time">{formatRelativeTime(item.firedAt)}</span>
                         </div>
-                        <span className="notification-time">{formatRelativeTime(item.firedAt)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
