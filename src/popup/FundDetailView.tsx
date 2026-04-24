@@ -1103,16 +1103,18 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
             </div>
           </div>
 
-          {/* ---- 实时估值分时图（始终显示，类似股票分时图） ---- */}
-          {detail.intradayValuation.length > 0 && (
-            <div className="fund-intraday-section">
-              <h3 className="fund-section-title">实时估值</h3>
+          {/* ---- 实时估值分时图（始终显示区域） ---- */}
+          <div className="fund-intraday-section">
+            <h3 className="fund-section-title">实时估值</h3>
+            {detail.intradayValuation.length > 0 ? (
               <IntradayValChart
                 data={detail.intradayValuation}
                 prevDayNav={detail.prevDayNav}
               />
-            </div>
-          )}
+            ) : (
+              <div className="fund-chart-empty">非交易时段或无实时估值数据</div>
+            )}
+          </div>
 
           {/* ---- Tab Bar ---- */}
           <div className="fund-detail-tabs">
