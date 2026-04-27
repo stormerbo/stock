@@ -709,12 +709,14 @@ export default function App() {
   // ---- Notification Panel ----
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [panelOpacity, setPanelOpacity] = useState(1.0);
+  const [notifSubTab, setNotifSubTab] = useState<'tech-report' | 'alerts'>('alerts');
   const [dailyProfitDetails, setDailyProfitDetails] = useState<DailyProfitDetailRecord[]>([]);
   const [techReportStatus, setTechReportStatus] = useState<{
     enabled: boolean; lastRunDate: string; lastRunTime: number; nextRunTime: number;
     status: string; stockCount: number; signalCount: number; details: string; errorMessage: string;
   } | 'loading'>('loading');
   const [techReportDetail, setTechReportDetail] = useState<{ name: string; message: string; firedAt: number } | null>(null);
+  const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number }> | null>(null);
 
   useEffect(() => {
     // Load notifications and work mode config
@@ -772,9 +774,15 @@ export default function App() {
     const loadStatus = () => {
       if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
       // 直接从 storage 读取，不依赖 background 消息
-      chrome.storage.local.get('technicalReportStatus').then((result) => {
+      chrome.storage.local.get(['technicalReportStatus', 'techReportSignalStocks']).then((result) => {
         const s = result.technicalReportStatus as typeof techReportStatus;
         if (s && s !== 'loading') setTechReportStatus(s);
+        const ss = result.techReportSignalStocks as { date: string; stocks: Record<string, { name: string; signalCount: number }> } | undefined;
+        if (ss) {
+          // 仅当日有效
+          const todayStr = new Date().toLocaleDateString('en-CA');
+          setSignalStocks(ss.date === todayStr ? ss.stocks : null);
+        }
       }).catch(() => { /* ignore */ });
     };
     loadStatus();
@@ -783,6 +791,13 @@ export default function App() {
       if (changes.technicalReportStatus) {
         const s = changes.technicalReportStatus.newValue as typeof techReportStatus;
         if (s && s !== 'loading') setTechReportStatus(s);
+      }
+      if (changes.techReportSignalStocks) {
+        const ss = changes.techReportSignalStocks.newValue as { date: string; stocks: Record<string, { name: string; signalCount: number }> } | undefined;
+        if (ss) {
+          const todayStr = new Date().toLocaleDateString('en-CA');
+          setSignalStocks(ss.date === todayStr ? ss.stocks : null);
+        }
       }
     };
     chrome.storage.onChanged.addListener(listener);
@@ -800,6 +815,14 @@ export default function App() {
     setNotifications(updated);
     chrome.storage.local.set({ notificationHistory: updated });
   }, [notifications]);
+
+  const markNotificationRead = useCallback((id: string) => {
+    setNotifications((prev) => {
+      const updated = prev.map((n) => n.id === id ? { ...n, read: true } : n);
+      chrome.storage.local.set({ notificationHistory: updated });
+      return updated;
+    });
+  }, []);
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
@@ -2676,130 +2699,188 @@ function clearIntradayIfStale(
                   </div>
                 </div>
 
-                {/* ---- 技术报告状态 ---- */}
-                <div className="tech-report-status">
-                  {techReportStatus === 'loading' ? (
-                    <div className="tech-report-loading">盘后技术报告加载中...</div>
-                  ) : techReportStatus ? (
-                    <>
-                      <div className="tech-report-header">
-                        <span className="tech-report-title">盘后技术报告</span>
-                        <span className={`tech-report-enabled ${techReportStatus.enabled ? 'on' : 'off'}`}>
-                          {techReportStatus.enabled ? '已启用' : '已禁用'}
-                        </span>
-                      </div>
-                      <div className="tech-report-body">
-                        {techReportStatus.enabled ? (
-                          <>
-                            <div className="tech-report-row">
-                              <span className="tech-report-label">上次运行</span>
-                              <span className="tech-report-value">
-                                {techReportStatus.lastRunDate
-                                  ? `${techReportStatus.lastRunDate} ${techReportStatus.lastRunTime ? formatRelativeTime(techReportStatus.lastRunTime) : ''}`
-                                  : '尚未运行'}
-                                {techReportStatus.lastRunDate && (
-                                  <span className={`tech-report-badge ${techReportStatus.status === 'success' ? 'ok' : techReportStatus.status === 'error' ? 'err' : 'idle'}`}>
-                                    {techReportStatus.status === 'success' ? `✓ ${techReportStatus.details}` : ''}
-                                    {techReportStatus.status === 'no_signal' ? '○ 无新信号' : ''}
-                                    {techReportStatus.status === 'error' ? '✗ 出错' : ''}
-                                    {techReportStatus.status === 'pending' ? '⋯ 运行中' : ''}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                            {techReportStatus.errorMessage && (
-                              <div className="tech-report-row">
-                                <span className="tech-report-label">错误信息</span>
-                                <span className="tech-report-value error">{techReportStatus.errorMessage}</span>
-                              </div>
-                            )}
-                            <div className="tech-report-row">
-                              <span className="tech-report-label">下次运行</span>
-                              <span className="tech-report-value">
-                                {techReportStatus.nextRunTime > 0 ? (
-                                  <>
-                                    {new Date(techReportStatus.nextRunTime).toLocaleString('zh-CN', {
-                                      month: '2-digit', day: '2-digit',
-                                      hour: '2-digit', minute: '2-digit',
-                                    })}
-                                    <button type="button" className="tech-report-run-btn" onClick={() => {
-                                      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-                                        void chrome.runtime.sendMessage({ type: 'trigger-tech-report' }).then(() => {
-                                          chrome.storage.local.get('technicalReportStatus').then((r) => {
-                                            const s = r.technicalReportStatus as typeof techReportStatus;
-                                            if (s) setTechReportStatus(s);
-                                          });
-                                        });
-                                      }
-                                    }}>
-                                      {(() => {
-                                        // 判断是否今日已运行
-                                        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-                                        return techReportStatus.lastRunDate === todayStr ? '重新生成' : '立即运行';
-                                      })()}
-                                    </button>
-                                  </>
-                                ) : '等待调度'}
-                              </span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="tech-report-row">
-                            <span className="tech-report-value disabled">请在设置页面启用盘后技术指标报告</span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : null}
+                {/* ---- 子标签切换 ---- */}
+                <div className="notif-sub-tabs">
+                  <button
+                    type="button"
+                    className={`notif-sub-tab ${notifSubTab === 'tech-report' ? 'active' : ''}`}
+                    onClick={() => setNotifSubTab('tech-report')}
+                  >
+                    技术报告
+                  </button>
+                  <button
+                    type="button"
+                    className={`notif-sub-tab ${notifSubTab === 'alerts' ? 'active' : ''}`}
+                    onClick={() => setNotifSubTab('alerts')}
+                  >
+                    股票告警
+                  </button>
                 </div>
 
-                {notifications.length === 0 ? (
-                  <div className="notification-empty">暂无通知</div>
-                ) : (
-                  <div className="notification-list">
-                    {notifications.map((item) => {
-                      const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
-                      const priceValid = Number.isFinite(item.price) && item.price > 0;
-                      return (
-                        <div
-                          key={item.id}
-                          className={`notification-item ${item.read ? '' : 'unread'} ${item.name === '盘后技术报告' ? 'clickable' : ''}`}
-                          onClick={item.name === '盘后技术报告' ? () => setTechReportDetail({ name: item.name, message: item.message, firedAt: item.firedAt }) : undefined}
-                        >
-                          <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
-                          <div className="notification-text">
-                            <span className="notification-stock">
-                              {item.name === '盘后技术报告' ? (
-                                (() => {
-                                  // 从消息中提取股票名
-                                  const stockLines = item.message.split('\n').filter(l => /^\S+\(\d{6}\)/.test(l.trim()));
-                                  const first = stockLines[0]?.trim().replace(/\(.*$/, '') || '';
-                                  return <>{'📊 '}<span className="tech-report-title-inline">盘后技术报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
-                                })()
-                              ) : item.name}
-                              {item.code && <span className="notification-code">({item.code})</span>}
+                {notifSubTab === 'tech-report' && (
+                  <>
+                    {/* ---- 技术报告状态 ---- */}
+                    <div className="tech-report-status">
+                      {techReportStatus === 'loading' ? (
+                        <div className="tech-report-loading">盘后技术报告加载中...</div>
+                      ) : techReportStatus ? (
+                        <>
+                          <div className="tech-report-header">
+                            <span className="tech-report-title">盘后技术报告</span>
+                            <span className={`tech-report-enabled ${techReportStatus.enabled ? 'on' : 'off'}`}>
+                              {techReportStatus.enabled ? '已启用' : '已禁用'}
                             </span>
-                            {priceValid && (
-                              <span className="notification-price-row">
-                                <span className="notif-price-label">现价 </span>
-                                <span className="notif-price-value">¥{item.price.toFixed(2)}</span>
-                                <span className={`notif-change-value ${changeUp ? 'up' : 'down'}`}>
-                                  {item.changePct >= 0 ? '+' : ''}{item.changePct.toFixed(2)}%
-                                </span>
-                              </span>
-                            )}
-                            <span className="notification-message">{renderNotificationMessage(item.message)}</span>
                           </div>
-                          <span className="notification-time">
-                            <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
-                              <X size={10} />
-                            </button>
-                            {formatRelativeTime(item.firedAt)}
-                          </span>
+                          <div className="tech-report-body">
+                            {techReportStatus.enabled ? (
+                              <>
+                                <div className="tech-report-row">
+                                  <span className="tech-report-label">上次运行</span>
+                                  <span className="tech-report-value">
+                                    {techReportStatus.lastRunDate
+                                      ? `${techReportStatus.lastRunDate} ${techReportStatus.lastRunTime ? formatRelativeTime(techReportStatus.lastRunTime) : ''}`
+                                      : '尚未运行'}
+                                    {techReportStatus.lastRunDate && (
+                                      <span className={`tech-report-badge ${techReportStatus.status === 'success' ? 'ok' : techReportStatus.status === 'error' ? 'err' : 'idle'}`}>
+                                        {techReportStatus.status === 'success' ? `✓ ${techReportStatus.details}` : ''}
+                                        {techReportStatus.status === 'no_signal' ? '○ 无新信号' : ''}
+                                        {techReportStatus.status === 'error' ? '✗ 出错' : ''}
+                                        {techReportStatus.status === 'pending' ? '⋯ 运行中' : ''}
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                {techReportStatus.errorMessage && (
+                                  <div className="tech-report-row">
+                                    <span className="tech-report-label">错误信息</span>
+                                    <span className="tech-report-value error">{techReportStatus.errorMessage}</span>
+                                  </div>
+                                )}
+                                <div className="tech-report-row">
+                                  <span className="tech-report-label">下次运行</span>
+                                  <span className="tech-report-value">
+                                    {techReportStatus.nextRunTime > 0 ? (
+                                      <>
+                                        {new Date(techReportStatus.nextRunTime).toLocaleString('zh-CN', {
+                                          month: '2-digit', day: '2-digit',
+                                          hour: '2-digit', minute: '2-digit',
+                                        })}
+                                        <button type="button" className="tech-report-run-btn" onClick={() => {
+                                          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                                            void chrome.runtime.sendMessage({ type: 'trigger-tech-report' }).then(() => {
+                                              chrome.storage.local.get('technicalReportStatus').then((r) => {
+                                                const s = r.technicalReportStatus as typeof techReportStatus;
+                                                if (s) setTechReportStatus(s);
+                                              });
+                                            });
+                                          }
+                                        }}>
+                                          {(() => {
+                                            const todayStr = new Date().toLocaleDateString('en-CA');
+                                            return techReportStatus.lastRunDate === todayStr ? '重新生成' : '立即运行';
+                                          })()}
+                                        </button>
+                                      </>
+                                    ) : '等待调度'}
+                                  </span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="tech-report-row">
+                                <span className="tech-report-value disabled">请在设置页面启用盘后技术指标报告</span>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+
+                    {(() => {
+                      const techNotifs = notifications.filter((n) => n.name === '盘后技术报告');
+                      return techNotifs.length === 0 ? (
+                        <div className="notification-empty">暂无技术报告</div>
+                      ) : (
+                        <div className="notification-list">
+                          {techNotifs.map((item) => (
+                            <div
+                              key={item.id}
+                              className={`notification-item ${item.read ? '' : 'unread'} clickable`}
+                              onClick={() => {
+                                markNotificationRead(item.id);
+                                setTechReportDetail({ name: item.name, message: item.message, firedAt: item.firedAt });
+                              }}
+                            >
+                              <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
+                              <div className="notification-text">
+                                <span className="notification-stock">
+                                  {(() => {
+                                    const stockLines = item.message.split('\n').filter(l => /^\S+\(\d{6}\)/.test(l.trim()));
+                                    const first = stockLines[0]?.trim().replace(/\(.*$/, '') || '';
+                                    return <>{'📊 '}<span className="tech-report-title-inline">盘后技术报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
+                                  })()}
+                                </span>
+                                <span className="notification-message">{renderNotificationMessage(item.message)}</span>
+                              </div>
+                              <span className="notification-time">
+                                <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
+                                  <X size={10} />
+                                </button>
+                                {formatRelativeTime(item.firedAt)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       );
-                    })}
-                  </div>
+                    })()}
+                  </>
+                )}
+
+                {notifSubTab === 'alerts' && (
+                  <>
+                    {(() => {
+                      const alertNotifs = notifications.filter((n) => n.name !== '盘后技术报告');
+                      return alertNotifs.length === 0 ? (
+                        <div className="notification-empty">暂无股票告警</div>
+                      ) : (
+                        <div className="notification-list">
+                          {alertNotifs.map((item) => {
+                            const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
+                            const priceValid = Number.isFinite(item.price) && item.price > 0;
+                            return (
+                              <div
+                                key={item.id}
+                                className={`notification-item ${item.read ? '' : 'unread'}`}
+                              >
+                                <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
+                                <div className="notification-text">
+                                  <span className="notification-stock">
+                                    {item.name}
+                                    {item.code && <span className="notification-code">({item.code})</span>}
+                                  </span>
+                                  {priceValid && (
+                                    <span className="notification-price-row">
+                                      <span className="notif-price-label">现价 </span>
+                                      <span className="notif-price-value">¥{item.price.toFixed(2)}</span>
+                                      <span className={`notif-change-value ${changeUp ? 'up' : 'down'}`}>
+                                        {item.changePct >= 0 ? '+' : ''}{item.changePct.toFixed(2)}%
+                                      </span>
+                                    </span>
+                                  )}
+                                  <span className="notification-message">{renderNotificationMessage(item.message)}</span>
+                                </div>
+                                <span className="notification-time">
+                                  <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
+                                    <X size={10} />
+                                  </button>
+                                  {formatRelativeTime(item.firedAt)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             ) : null}
@@ -2889,6 +2970,11 @@ function clearIntradayIfStale(
                                 <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                                 {badge ? (
                                   <span className={`stock-badge ${badge.tone}`}>{badge.label}</span>
+                                ) : null}
+                                {signalStocks?.[item.code] ? (
+                                  <span className="stock-badge signal" title={`${signalStocks[item.code].signalCount} 个技术信号`}>
+                                    技
+                                  </span>
                                 ) : null}
                                 {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                               </span>

@@ -1357,6 +1357,17 @@ body.theme-light .data-table thead th {
   background: linear-gradient(135deg, #1ec7a1, #149c7e);
 }
 
+.stock-badge.signal {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  animation: signal-blink 2s ease-in-out infinite;
+  cursor: help;
+}
+
+@keyframes signal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .special-star-icon {
   flex-shrink: 0;
   display: inline-flex;
@@ -2696,6 +2707,48 @@ body.theme-light .fund-nav-tooltip {
 
 body.theme-light .market-stats-panel {
   background: rgba(255, 255, 255, 0.34);
+}
+
+/* ---- Notification Sub Tabs ---- */
+
+.notif-sub-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
+}
+
+.notif-sub-tab {
+  flex: 1;
+  padding: 7px 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  text-align: center;
+}
+
+.notif-sub-tab:hover {
+  color: var(--text-0);
+}
+
+.notif-sub-tab.active {
+  color: var(--text-0);
+}
+
+.notif-sub-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent, #4f8cff);
 }
 
 /* ---- Notification Panel ---- */

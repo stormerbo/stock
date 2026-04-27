@@ -71,6 +71,7 @@ const REFRESH_STORAGE_KEY = 'refreshConfig';
 const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
 const TECH_REPORT_DATE_KEY = '_lastTechnicalReportDate';
 const TECH_REPORT_SIGNAL_KEY = '_lastTechnicalSignals';
+const TECH_REPORT_SIGNAL_STOCKS_KEY = 'techReportSignalStocks';
 const TECH_REPORT_STATUS_KEY = 'technicalReportStatus';
 const SPIKE_HISTORY_KEY = 'spikeHistory';
 const WORK_MODE_KEY = 'workModeConfig';
@@ -1071,6 +1072,19 @@ async function generateDailyTechnicalReport() {
   await chrome.storage.local.set({
     [TECH_REPORT_DATE_KEY]: today,
     [TECH_REPORT_SIGNAL_KEY]: currentSignals,
+  });
+
+  // 保存有信号的股票列表（用于 popup 列表打标）
+  const signalStocks: Record<string, { name: string; signalCount: number }> = {};
+  for (const result of klineResults) {
+    const types = currentSignals[result.code];
+    if (types && types !== 'insufficient_data' && types.length > 0) {
+      const count = types.split(';').length;
+      signalStocks[result.code] = { name: result.name, signalCount: count };
+    }
+  }
+  await chrome.storage.local.set({
+    [TECH_REPORT_SIGNAL_STOCKS_KEY]: { date: today, stocks: signalStocks },
   });
 
   // Save success status
