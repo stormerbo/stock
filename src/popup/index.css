@@ -2877,6 +2877,31 @@ body.theme-light .market-stats-panel {
   white-space: nowrap;
   margin-top: 1px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notif-del-btn {
+  background: none;
+  border: none;
+  color: var(--text-1);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.15s;
+}
+
+.notification-item:hover .notif-del-btn {
+  opacity: 0.6;
+}
+
+.notif-del-btn:hover {
+  opacity: 1 !important;
+  color: #ef4444;
 }
 
 .notification-empty {
@@ -3078,6 +3103,12 @@ body.theme-light .notification-item.clickable:hover {
   color: var(--text-0);
 }
 
+.tech-report-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .tech-report-detail-close {
   background: none;
   border: none;
@@ -3092,6 +3123,22 @@ body.theme-light .notification-item.clickable:hover {
 .tech-report-detail-close:hover {
   background: var(--glass-bg);
   color: var(--text-0);
+}
+
+.tech-report-detail-del {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  color: var(--text-1);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.tech-report-detail-del:hover {
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .tech-report-detail-time {

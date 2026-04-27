@@ -806,6 +806,14 @@ export default function App() {
     chrome.storage.local.set({ notificationHistory: [] });
   }, []);
 
+  const deleteNotification = useCallback((id: string) => {
+    setNotifications((prev) => {
+      const updated = prev.filter((n) => n.id !== id);
+      chrome.storage.local.set({ notificationHistory: updated });
+      return updated;
+    });
+  }, []);
+
   const [stockHoldings, setStockHoldings] = useState<StockHoldingConfig[]>([]);
   const [fundHoldings, setFundHoldings] = useState<FundHoldingConfig[]>([]);
   const [portfolioReady, setPortfolioReady] = useState(false);
@@ -2723,7 +2731,13 @@ function clearIntradayIfStale(
                                           });
                                         });
                                       }
-                                    }}>立即运行</button>
+                                    }}>
+                                      {(() => {
+                                        // 判断是否今日已运行
+                                        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                                        return techReportStatus.lastRunDate === todayStr ? '重新生成' : '立即运行';
+                                      })()}
+                                    </button>
                                   </>
                                 ) : '等待调度'}
                               </span>
@@ -2776,7 +2790,12 @@ function clearIntradayIfStale(
                             )}
                             <span className="notification-message">{renderNotificationMessage(item.message)}</span>
                           </div>
-                          <span className="notification-time">{formatRelativeTime(item.firedAt)}</span>
+                          <span className="notification-time">
+                            <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
+                              <X size={10} />
+                            </button>
+                            {formatRelativeTime(item.firedAt)}
+                          </span>
                         </div>
                       );
                     })}
@@ -3226,9 +3245,17 @@ function clearIntradayIfStale(
             <div className="tech-report-detail-modal" onClick={(e) => e.stopPropagation()}>
               <div className="tech-report-detail-header">
                 <span className="tech-report-detail-title">📊 盘后技术报告</span>
-                <button type="button" className="tech-report-detail-close" onClick={() => setTechReportDetail(null)}>
-                  <X size={14} />
-                </button>
+                <div className="tech-report-detail-actions">
+                  <button type="button" className="tech-report-detail-del" title="删除此报告" onClick={() => {
+                    // 查找并删除对应的通知
+                    const match = notifications.find((n) => n.name === '盘后技术报告' && n.firedAt === techReportDetail.firedAt);
+                    if (match) deleteNotification(match.id);
+                    setTechReportDetail(null);
+                  }}>删除</button>
+                  <button type="button" className="tech-report-detail-close" onClick={() => setTechReportDetail(null)}>
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
               <div className="tech-report-detail-time">
                 {formatRelativeTime(techReportDetail.firedAt)}

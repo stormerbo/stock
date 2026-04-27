@@ -1664,8 +1664,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (request.type === 'trigger-tech-report') {
     void (async () => {
       try {
-        // Clear date key so it can run again
-        await chrome.storage.local.remove(TECH_REPORT_DATE_KEY);
+        // Clear date + signal keys so manual re-run detects all signals fresh
+        await chrome.storage.local.remove([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY]);
         await generateDailyTechnicalReport();
         sendResponse({ ok: true });
       } catch (error) {
