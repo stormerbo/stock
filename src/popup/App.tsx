@@ -25,7 +25,6 @@ import {
   fetchTiantianFundPosition,
   normalizeStockCode,
   normalizeFundCode,
-  formatQuoteTime,
   getShanghaiToday,
   toNumber,
   fetchMarketStats,
@@ -39,7 +38,6 @@ import {
   type MarketStats,
   MARKET_INDEXES,
 } from '../shared/fetch';
-import { fetchTextWithEncoding } from '../shared/fetch';
 import {
   DAILY_PROFIT_DETAILS_KEY,
   normalizeDailyProfitDetailHistory,

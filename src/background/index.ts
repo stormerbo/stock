@@ -1382,7 +1382,6 @@ function formatBadgeNumber(value: number): string {
 // -----------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[Portfolio Pulse] extension initialized');
   const existing = await chrome.storage.sync.get(BADGE_STORAGE_KEY);
   if (!existing[BADGE_STORAGE_KEY]) {
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
@@ -1450,11 +1449,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (request.type === 'fetch-text' && typeof request.url === 'string') {
     const url = request.url;
-    console.log('[fetch-text] proxying:', url);
     keepAlive();
     void (async () => {
       try {
-        console.log('[fetch-text] fetching:', url);
         const response = await fetch(url);
         // Tencent finance uses GB18030 encoding
         const isGb18030 = url.includes('qt.gtimg.cn');
@@ -1465,7 +1462,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         } else {
           text = await response.text();
         }
-        console.log('[fetch-text] response status:', response.status, 'length:', text.length);
         sendResponse({ ok: response.ok, status: response.status, text });
       } catch (error) {
         console.error('[fetch-text] error:', error);

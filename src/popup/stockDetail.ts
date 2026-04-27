@@ -1,3 +1,6 @@
+import { toNumber, normalizeStockCode, toTencentStockCode, formatQuoteTime } from '../shared/fetch';
+export { calcMA, calcMACD } from '../shared/technical-analysis';
+
 export type StockDetailKlinePoint = {
   date: string;
   open: number;
@@ -38,12 +41,6 @@ export type StockDetailData = {
   updatedAt: string;
   period: StockPeriod;
   kline: StockDetailKlinePoint[];
-};
-
-export type MacdResult = {
-  dif: Array<number | null>;
-  dea: Array<number | null>;
-  macd: Array<number | null>;
 };
 
 type TencentKlineResponse = {
@@ -87,101 +84,6 @@ type TencentMklineResponse = {
     qt?: Record<string, string[]>;
   }>;
 };
-
-function toNumber(value: unknown): number {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : Number.NaN;
-}
-
-function normalizeStockCode(code: string): string {
-  const raw = code.trim().toLowerCase();
-  const plain = raw.replace(/^(sh|sz)/, "");
-  return /^\d{6}$/.test(plain) ? plain : "";
-}
-
-function toTencentStockCode(code: string): string {
-  const plain = normalizeStockCode(code);
-  if (!plain) return "";
-  return /^[689]/.test(plain) ? `sh${plain}` : `sz${plain}`;
-}
-
-export function formatQuoteTime(raw: string): string {
-  if (!/^\d{14}$/.test(raw)) return "-";
-  return `${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`;
-}
-
-export function calcMA(values: number[], period: number): Array<number | null> {
-  const result: Array<number | null> = [];
-  let rolling = 0;
-  for (let i = 0; i < values.length; i += 1) {
-    rolling += values[i];
-    if (i >= period) {
-      rolling -= values[i - period];
-    }
-    if (i < period - 1) {
-      result.push(null);
-      continue;
-    }
-    result.push(rolling / period);
-  }
-  return result;
-}
-
-function calcEMA(values: number[], period: number): Array<number | null> {
-  const alpha = 2 / (period + 1);
-  const result: Array<number | null> = [];
-  let prev: number | null = null;
-
-  values.forEach((value) => {
-    if (!Number.isFinite(value)) {
-      result.push(null);
-      return;
-    }
-    if (prev === null) {
-      prev = value;
-      result.push(value);
-      return;
-    }
-    prev = prev + alpha * (value - prev);
-    result.push(prev);
-  });
-  return result;
-}
-
-export function calcMACD(values: number[]): MacdResult {
-  const ema12 = calcEMA(values, 12);
-  const ema26 = calcEMA(values, 26);
-  const dif: Array<number | null> = ema12.map((item, index) => {
-    const slow = ema26[index];
-    if (item === null || slow === null) return null;
-    return item - slow;
-  });
-
-  const dea: Array<number | null> = [];
-  const alpha = 2 / (9 + 1);
-  let prevDea: number | null = null;
-  dif.forEach((item) => {
-    if (item === null) {
-      dea.push(null);
-      return;
-    }
-    if (prevDea === null) {
-      prevDea = item;
-      dea.push(item);
-      return;
-    }
-    prevDea = prevDea + alpha * (item - prevDea);
-    dea.push(prevDea);
-  });
-
-  const macd = dif.map((item, index) => {
-    const signal = dea[index];
-    if (item === null || signal === null) return null;
-    return (item - signal) * 2;
-  });
-
-  return { dif, dea, macd };
-}
 
 function parseKlineRows(rows: string[][] | undefined): StockDetailKlinePoint[] {
   if (!Array.isArray(rows)) return [];

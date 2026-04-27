@@ -256,60 +256,10 @@ function evaluateRule(
       break;
     }
 
-    case 'volatility': {
-      const days = rule.volatilityDays ?? 5;
-      const threshold = rule.volatilityThreshold ?? 10;
-      // Volatility is evaluated externally with historical data
-      // This rule type requires a separate evaluation path
+    case 'volatility':
+    case 'drawdown':
+      // Evaluated externally (volatility via intraday data, drawdown via K-line)
       return null;
-    }
-
-    case 'drawdown': {
-      // Drawdown is evaluated externally with K-line data (once per day)
-      return null;
-    }
-  }
-
-  return null;
-}
-
-// Evaluate volatility rule — needs intraday or multi-day price range
-export function evaluateVolatilityRule(
-  rule: AlertRule,
-  code: string,
-  name: string,
-  highPrices: number[],
-  lowPrices: number[],
-  firedHistory: AlertFiredRecord[]
-): { triggered: boolean; message: string } | null {
-  if (!rule.enabled || rule.type !== 'volatility') return null;
-
-  const cooldown = rule.cooldownSeconds ?? 600;
-  if (isInCooldown(firedHistory, code, rule.id, cooldown)) return null;
-
-  const days = rule.volatilityDays ?? 5;
-  const threshold = rule.volatilityThreshold ?? 10;
-
-  if (highPrices.length < 2 || lowPrices.length < 2) return null;
-
-  // Calculate max daily amplitude over the lookback window
-  const amplitudes: number[] = [];
-  for (let i = 0; i < Math.min(days, highPrices.length); i++) {
-    const h = highPrices[i];
-    const l = lowPrices[i];
-    if (Number.isFinite(h) && Number.isFinite(l) && l > 0) {
-      amplitudes.push(((h - l) / l) * 100);
-    }
-  }
-
-  if (amplitudes.length === 0) return null;
-
-  const maxAmplitude = Math.max(...amplitudes);
-  if (maxAmplitude >= threshold) {
-    return {
-      triggered: true,
-      message: `${name}(${code}) 近${days}日最大振幅 ${maxAmplitude.toFixed(2)}%，超过阈值 ${threshold}%，注意风险`,
-    };
   }
 
   return null;

@@ -398,19 +398,15 @@ async function fetchTopHoldings(code: string): Promise<{ holdings: FundHoldingSt
     }
     const secids = secidsArr.join(',');
 
-    console.log('[FundDetail] secids:', secids);
-
     // Price results indexed by position in secids list
     let priceResults: { f2: number; f3: number }[] = [];
     if (secids) {
       try {
         const priceUrl = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f2,f3&secids=${secids}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`;
         const priceText = await proxyFetchText(priceUrl);
-        console.log('[FundDetail] price response:', priceText.slice(0, 500));
         if (priceText) {
           const priceData = JSON.parse(priceText) as { data?: { diff?: Array<{ f2: number; f3: number }> } };
           priceResults = priceData.data?.diff ?? [];
-          console.log('[FundDetail] price results count:', priceResults.length);
         }
       } catch (e) {
         console.error('[FundDetail] price fetch error:', e);
@@ -1181,7 +1177,7 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
       else if (detail.topHoldings.length > 0) setActiveTab('holdings');
       else setActiveTab('info');
     }
-  }, [detail?.info.code]);
+  }, [detail, hasHolding]);
 
   return (
     <section className="fund-detail-panel">

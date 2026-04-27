@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import {
   type StockTradeRecord,
-  type TradeComputedPosition,
   type TradeType,
   computePositionFromTrades,
   getTradesForStock,

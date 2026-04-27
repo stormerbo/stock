@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { isTradingHours } from './stockDetail';
 
 const UP_COLOR = '#e45555';
