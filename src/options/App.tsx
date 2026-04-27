@@ -664,12 +664,6 @@ export default function App() {
     });
   }, []);
 
-  const filteredStocks = allStocks.filter((h) => {
-    if (alertDraft.scope === 'special') return h.special;
-    if (alertDraft.scope === 'holding') return h.shares > 0;
-    return true;
-  });
-
   // Manually added stocks (in alertDraft but not in allStocks)
   const manualStocks = alertDraft.stocks
     .filter((s) => !allStocks.some((h) => h.code === s.code))
@@ -1091,28 +1085,6 @@ export default function App() {
               </label>
             </div>
 
-            <div className="config-row">
-              <div>
-                <span className="config-label">告警范围</span>
-              </div>
-              <div className="scope-tab-row">
-                {[
-                  { value: 'all' as AlertScope, label: '全部自选' },
-                  { value: 'special' as AlertScope, label: '特别关注' },
-                  { value: 'holding' as AlertScope, label: '仅持仓' },
-                ].map((tab) => (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    className={`scope-tab-btn ${alertDraft.scope === tab.value ? 'active' : ''}`}
-                    onClick={() => setAlertDraft((prev) => ({ ...prev, scope: tab.value }))}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* ---- 工作模式 ---- */}
             <div className="work-mode-section">
               <div className="config-row">
@@ -1163,9 +1135,9 @@ export default function App() {
             {allStocks.length === 0 ? (
               <div className="alert-empty-hint">当前没有自选股</div>
             ) : (
-              [...filteredStocks, ...manualStocks].map((stock) => {
+              [...allStocks, ...manualStocks].map((stock) => {
                 const existingConfig = alertDraft.stocks.find((s) => s.code === stock.code);
-                const defaultConfig = createDefaultStockAlertConfig(stock.code, alertDraft.scope);
+                const defaultConfig = createDefaultStockAlertConfig(stock.code, 'all');
                 const config = existingConfig || defaultConfig;
 
                 return (
