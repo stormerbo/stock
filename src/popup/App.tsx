@@ -2703,17 +2703,17 @@ function clearIntradayIfStale(
                 <div className="notif-sub-tabs">
                   <button
                     type="button"
-                    className={`notif-sub-tab ${notifSubTab === 'tech-report' ? 'active' : ''}`}
-                    onClick={() => setNotifSubTab('tech-report')}
-                  >
-                    技术报告
-                  </button>
-                  <button
-                    type="button"
                     className={`notif-sub-tab ${notifSubTab === 'alerts' ? 'active' : ''}`}
                     onClick={() => setNotifSubTab('alerts')}
                   >
                     股票告警
+                  </button>
+                  <button
+                    type="button"
+                    className={`notif-sub-tab ${notifSubTab === 'tech-report' ? 'active' : ''}`}
+                    onClick={() => setNotifSubTab('tech-report')}
+                  >
+                    技术报告
                   </button>
                 </div>
 

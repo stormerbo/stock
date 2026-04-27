@@ -478,6 +478,9 @@ export default function App() {
   // ---- Donate ----
   const [showDonate, setShowDonate] = useState(false);
 
+  // ---- Settings Tabs ----
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'tech-report' | 'other'>('basic');
+
   // ---- Work Mode Config ----
   const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
   const [workModeDraft, setWorkModeDraft] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
@@ -823,8 +826,17 @@ export default function App() {
           </div>
         </header>
 
-        {/* ---- 角标设置 ---- */}
-        <section className="options-section">
+        {/* ---- 设置标签页切换 ---- */}
+        <div className="settings-tabs">
+          <button type="button" className={`settings-tab ${settingsTab === 'basic' ? 'active' : ''}`} onClick={() => setSettingsTab('basic')}>基本</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'alerts' ? 'active' : ''}`} onClick={() => setSettingsTab('alerts')}>告警</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'tech-report' ? 'active' : ''}`} onClick={() => setSettingsTab('tech-report')}>技术报告</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'other' ? 'active' : ''}`} onClick={() => setSettingsTab('other')}>其他</button>
+        </div>
+
+        {/* ---- 基本: 角标设置 ---- */}
+        {settingsTab === 'basic' && (
+          <section className="options-section">
           <h2>角标设置 <span className="badge-tag">即时生效</span></h2>
           <div className="config-card">
             <div className="badge-compact-group">
@@ -875,10 +887,10 @@ export default function App() {
               </div>
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 显示偏好 ---- */}
-        <section className="options-section">
+        {settingsTab === 'basic' && (<section className="options-section">
           <h2>
             显示偏好
             <span className={`dirty-tag ${displayDirty ? 'dirty' : ''}`}>{displayDirty ? '未保存' : '已保存'}</span>
@@ -924,10 +936,10 @@ export default function App() {
               />
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 刷新策略 ---- */}
-        <section className="options-section">
+        {settingsTab === 'basic' && (<section className="options-section">
           <h2>
             刷新策略
             <span className={`dirty-tag ${refreshDirty ? 'dirty' : ''}`}>{refreshDirty ? '未保存' : '已保存'}</span>
@@ -1025,10 +1037,10 @@ export default function App() {
               </div>
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 标签管理 ---- */}
-        <section className="options-section">
+        {settingsTab === 'basic' && (<section className="options-section">
           <h2>标签管理</h2>
           <div className="config-card">
             <div className="config-row">
@@ -1052,10 +1064,10 @@ export default function App() {
               )}
             </div>
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 告警设置 ---- */}
-        <section className="options-section">
+        {settingsTab === 'alerts' && (<section className="options-section">
           <h2>
             告警设置
             <span className={`dirty-tag ${alertDirty ? 'dirty' : ''}`}>{alertDirty ? '未保存' : '已保存'}</span>
@@ -1180,10 +1192,10 @@ export default function App() {
               })
             )}
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 盘后技术指标报告 ---- */}
-        <section className="options-section">
+        {settingsTab === 'tech-report' && (<section className="options-section">
           <h2>
             盘后技术指标报告
             <span className={`dirty-tag ${techReportDirty ? 'dirty' : ''}`}>{techReportDirty ? '未保存' : '已保存'}</span>
@@ -1213,10 +1225,10 @@ export default function App() {
               </div>
             )}
           </div>
-        </section>
+        </section>)}
 
         {/* ---- 数据迁移 ---- */}
-        <section className="options-section">
+        {settingsTab === 'other' && (<section className="options-section">
           <h2>数据迁移</h2>
           <p className="section-desc">用于跨扩展 ID 迁移全部数据（自选、持仓、告警、通知、收益明细、显示设置等）。</p>
           <div className="config-card">
@@ -1255,7 +1267,7 @@ export default function App() {
             {backupMessage ? <div className="backup-status success">{backupMessage}</div> : null}
             {backupError ? <div className="backup-status error">{backupError}</div> : null}
           </div>
-        </section>
+        </section>)}
 
         {/* ---- Actions ---- */}
         <div className={`actions-bar ${hasUnsaved ? 'visible' : ''}`}>

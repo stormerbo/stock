@@ -88,6 +88,46 @@ body.theme-light {
   font-size: 14px;
 }
 
+/* ---- Settings Tabs ---- */
+
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-tab {
+  padding: 10px 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.settings-tab:hover {
+  color: var(--text-0);
+}
+
+.settings-tab.active {
+  color: var(--text-0);
+}
+
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent, #4f8cff);
+  border-radius: 1px 1px 0 0;
+}
+
 .header-actions {
   position: absolute;
   top: 4px;
