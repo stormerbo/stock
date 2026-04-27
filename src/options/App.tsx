@@ -5,12 +5,14 @@ import {
   saveAlertConfig,
   createAlertRule,
   DEFAULT_ALERT_CONFIG,
+  DEFAULT_SPIKE_CONFIG,
   type AlertConfig,
   type AlertRule,
   type StockAlertConfig,
   type AlertRuleType,
   type AlertDirection,
   type AlertScope,
+  type SpikeGlobalConfig,
 } from '../shared/alerts';
 import {
   loadTagConfig,
@@ -82,7 +84,7 @@ const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
   price_down: '跌破目标价',
   change_pct: '涨跌幅波动',
   volatility: '振幅波动',
-  spike: '急速异动',
+  spike: '急速异动',  // kept for legacy, no longer shown in add-rule UI
   drawdown: '最大回撤',
   trailing_stop: '移动止盈',
   batch_buy: '分批买入',
@@ -187,42 +189,6 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
                     onChange={(e) => updateRule(ri, (prev) => ({ ...prev, changeThreshold: Number(e.target.value) || 0 }))}
                   />
                   <span>%</span>
-                  <select
-                    className="number-input small"
-                    value={rule.direction ?? 'both'}
-                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, direction: e.target.value as AlertDirection }))}
-                  >
-                    {ALERT_DIRECTION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {rule.type === 'spike' && (
-                <div className="alert-rule-inputs">
-                  <input
-                    type="number"
-                    className="number-input small"
-                    value={rule.spikePctThreshold ?? ''}
-                    placeholder="幅度"
-                    min={0.5}
-                    max={10}
-                    step={0.5}
-                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, spikePctThreshold: Number(e.target.value) || 0 }))}
-                  />
-                  <span>%</span>
-                  <span style={{ color: 'var(--text-1)', margin: '0 4px' }}>·</span>
-                  <input
-                    type="number"
-                    className="number-input small"
-                    value={rule.spikeWindowMinutes ?? ''}
-                    placeholder="窗口"
-                    min={1}
-                    max={30}
-                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, spikeWindowMinutes: Number(e.target.value) || 1 }))}
-                  />
-                  <span>分钟</span>
                   <select
                     className="number-input small"
                     value={rule.direction ?? 'both'}
@@ -381,7 +347,7 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
 
           {/* Add rule button */}
           <div className="alert-add-rule">
-            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility', 'drawdown', 'trailing_stop', 'batch_buy', 'grid_trading'] as AlertRuleType[]).map((type) => (
+            {(['price_up', 'price_down', 'change_pct', 'volatility', 'drawdown', 'trailing_stop', 'batch_buy', 'grid_trading'] as AlertRuleType[]).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -1211,6 +1177,78 @@ export default function App() {
               </label>
             </div>
 
+            {/* ---- 急速异动（全局） ---- */}
+            <div className="work-mode-section">
+              <div className="config-row">
+                <div>
+                  <span className="config-label">急速异动</span>
+                  <span className="config-hint">所有自选股统一使用此参数检测急速拉升/打压</span>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={alertDraft.spikeConfig?.enabled ?? DEFAULT_SPIKE_CONFIG.enabled}
+                    onChange={(e) => setAlertDraft((prev) => ({
+                      ...prev,
+                      spikeConfig: { ...(prev.spikeConfig || DEFAULT_SPIKE_CONFIG), enabled: e.target.checked },
+                    }))}
+                  />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
+
+              {(alertDraft.spikeConfig?.enabled ?? DEFAULT_SPIKE_CONFIG.enabled) && (
+                <div className="work-mode-details">
+                  <div className="work-mode-row">
+                    <span className="work-mode-label">幅度</span>
+                    <input
+                      type="number"
+                      className="number-input small"
+                      value={alertDraft.spikeConfig?.pctThreshold ?? DEFAULT_SPIKE_CONFIG.pctThreshold}
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      onChange={(e) => setAlertDraft((prev) => ({
+                        ...prev,
+                        spikeConfig: { ...(prev.spikeConfig || DEFAULT_SPIKE_CONFIG), pctThreshold: Number(e.target.value) || 2 },
+                      }))}
+                    />
+                    <span style={{ marginLeft: 4 }}>%</span>
+                  </div>
+                  <div className="work-mode-row">
+                    <span className="work-mode-label">窗口</span>
+                    <input
+                      type="number"
+                      className="number-input small"
+                      value={alertDraft.spikeConfig?.windowMinutes ?? DEFAULT_SPIKE_CONFIG.windowMinutes}
+                      min={1}
+                      max={30}
+                      onChange={(e) => setAlertDraft((prev) => ({
+                        ...prev,
+                        spikeConfig: { ...(prev.spikeConfig || DEFAULT_SPIKE_CONFIG), windowMinutes: Number(e.target.value) || 5 },
+                      }))}
+                    />
+                    <span style={{ marginLeft: 4 }}>分钟</span>
+                  </div>
+                  <div className="work-mode-row">
+                    <span className="work-mode-label">方向</span>
+                    <select
+                      className="number-input small"
+                      value={alertDraft.spikeConfig?.direction ?? DEFAULT_SPIKE_CONFIG.direction}
+                      onChange={(e) => setAlertDraft((prev) => ({
+                        ...prev,
+                        spikeConfig: { ...(prev.spikeConfig || DEFAULT_SPIKE_CONFIG), direction: e.target.value as AlertDirection },
+                      }))}
+                    >
+                      {ALERT_DIRECTION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* ---- 工作模式 ---- */}
             <div className="work-mode-section">
               <div className="config-row">
@@ -1255,7 +1293,7 @@ export default function App() {
           <div className="alert-stocks-list">
             <div className="alert-stocks-header">
               <span>个股告警规则</span>
-              <span className="alert-count-hint">自选股自动开通急速异动告警</span>
+              <span className="alert-count-hint">设置各股票的价格/涨跌幅/波动等告警</span>
             </div>
 
             {allStocks.length === 0 ? (

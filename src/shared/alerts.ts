@@ -69,11 +69,28 @@ export const TRAILING_STOP_STATE_KEY = 'trailingStopState';
 export const BATCH_BUY_STATE_KEY = 'batchBuyState';
 export const GRID_STATE_KEY = 'gridState';
 
+export type SpikeGlobalConfig = {
+  enabled: boolean;
+  pctThreshold: number;    // default 2
+  windowMinutes: number;   // default 5
+  direction: AlertDirection; // default 'both'
+  cooldownSeconds: number; // default 60
+};
+
+export const DEFAULT_SPIKE_CONFIG: SpikeGlobalConfig = {
+  enabled: true,
+  pctThreshold: 2,
+  windowMinutes: 5,
+  direction: 'both',
+  cooldownSeconds: 60,
+};
+
 export type AlertConfig = {
   globalEnabled: boolean;
   scope: AlertScope;
   stocks: StockAlertConfig[];
   firedHistory: AlertFiredRecord[];
+  spikeConfig?: SpikeGlobalConfig;
 };
 
 export const DEFAULT_ALERT_CONFIG: AlertConfig = {
@@ -298,6 +315,48 @@ function evaluateRule(
   }
 
   return null;
+}
+
+/**
+ * Migrate per-stock spike rules to global spikeConfig.
+ * Scans stocks[].rules for spike rules, extracts parameters from the first one found,
+ * removes all spike rules from per-stock rules, and sets spikeConfig.
+ * If spikeConfig already exists, only cleans up any lingering per-stock spike rules.
+ */
+export function migrateSpikeConfig(config: AlertConfig): AlertConfig {
+  let spikeConfig = config.spikeConfig ? { ...config.spikeConfig } : null;
+
+  let changed = false;
+  const nextStocks = config.stocks.map((stock) => {
+    const spikeRules = stock.rules.filter((r) => r.type === 'spike');
+    if (spikeRules.length === 0) return stock;
+
+    changed = true;
+
+    // Use first spike rule to seed global config if not set
+    if (!spikeConfig) {
+      const first = spikeRules[0];
+      spikeConfig = {
+        enabled: first.enabled !== false,
+        pctThreshold: first.spikePctThreshold ?? 2,
+        windowMinutes: first.spikeWindowMinutes ?? 5,
+        direction: first.direction ?? 'both',
+        cooldownSeconds: first.cooldownSeconds ?? 60,
+      };
+    }
+
+    // Remove all spike rules from this stock
+    return { ...stock, rules: stock.rules.filter((r) => r.type !== 'spike') };
+  });
+
+  if (!changed && config.spikeConfig) return config;
+  if (!spikeConfig) spikeConfig = { ...DEFAULT_SPIKE_CONFIG };
+
+  return {
+    ...config,
+    spikeConfig,
+    stocks: nextStocks,
+  };
 }
 
 export function checkAlerts(

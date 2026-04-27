@@ -21,7 +21,6 @@ import {
   upsertDailyProfitDetailHistory,
 } from '../shared/profit-details';
 import {
-  createAlertRule,
   loadAlertConfig,
   saveAlertConfig,
   checkAlerts,
@@ -36,6 +35,8 @@ import {
   TRAILING_STOP_STATE_KEY,
   BATCH_BUY_STATE_KEY,
   GRID_STATE_KEY,
+  migrateSpikeConfig,
+  DEFAULT_SPIKE_CONFIG,
   type AlertConfig,
   type AlertFiredRecord,
   type AlertRule,
@@ -47,6 +48,7 @@ import {
   type TrailingStopState,
   type BatchBuyState,
   type GridState,
+  type SpikeGlobalConfig,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
 import { TRADE_HISTORY_KEY } from '../shared/trade-history';
@@ -467,78 +469,6 @@ async function refreshStocks() {
 // 告警检查与通知
 // -----------------------------------------------------------
 
-function ensureSpikeRuleForWatchlist(config: AlertConfig, watchlistCodes: string[]): { config: AlertConfig; changed: boolean } {
-  const normalizedCodes = Array.from(
-    new Set(
-      watchlistCodes
-        .map((code) => normalizeStockCode(code))
-        .filter((code): code is string => Boolean(code))
-    )
-  );
-
-  if (normalizedCodes.length === 0) return { config, changed: false };
-
-  const next: AlertConfig = {
-    ...config,
-    globalEnabled: true,
-    stocks: [...config.stocks],
-  };
-  let changed = config.globalEnabled !== true;
-
-  for (const code of normalizedCodes) {
-    let stockConfig = next.stocks.find((item) => item.code === code);
-    if (!stockConfig) {
-      stockConfig = { code, scope: 'all', rules: [] };
-      next.stocks.push(stockConfig);
-      changed = true;
-    }
-
-    const spikeRule = stockConfig.rules.find((rule) => rule.type === 'spike');
-    if (!spikeRule) {
-      const newRule = createAlertRule('spike');
-      newRule.spikePctThreshold = 2;
-      newRule.spikeWindowMinutes = 5;
-      newRule.direction = 'both';
-      newRule.enabled = true;
-      newRule.cooldownSeconds = 60;
-      stockConfig.rules = [...stockConfig.rules, newRule];
-      changed = true;
-      continue;
-    }
-
-    const shouldPatch =
-      spikeRule.enabled !== true ||
-      (spikeRule.spikePctThreshold ?? 2) !== 2 ||
-      (spikeRule.spikeWindowMinutes ?? 5) !== 5 ||
-      (spikeRule.direction ?? 'both') !== 'both' ||
-      (spikeRule.cooldownSeconds ?? 300) !== 60;
-
-    if (shouldPatch) {
-      spikeRule.enabled = true;
-      spikeRule.spikePctThreshold = 2;
-      spikeRule.spikeWindowMinutes = 5;
-      spikeRule.direction = 'both';
-      spikeRule.cooldownSeconds = 60;
-      changed = true;
-    }
-  }
-
-  return { config: next, changed };
-}
-
-async function syncAutoSpikeRulesFromHoldings() {
-  const [syncResult, config] = await Promise.all([
-    chrome.storage.sync.get(['stockHoldings']),
-    loadAlertConfig(),
-  ]);
-  const holdings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
-  const watchlistCodes = holdings.map((item) => item.code);
-  const { config: nextConfig, changed } = ensureSpikeRuleForWatchlist(config, watchlistCodes);
-  if (changed) {
-    await saveAlertConfig(nextConfig);
-  }
-}
-
 async function checkAndNotifyAlerts(positions: StockPosition[]) {
   const [config, spikeResult, notifResult, workModeResult, trailingResult, batchResult, gridResult] = await Promise.all([
     loadAlertConfig(),
@@ -552,12 +482,8 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   const trailingStopState: TrailingStopState = (trailingResult[TRAILING_STOP_STATE_KEY] || {}) as TrailingStopState;
   const batchBuyState: BatchBuyState = (batchResult[BATCH_BUY_STATE_KEY] || {}) as BatchBuyState;
   const gridState: GridState = (gridResult[GRID_STATE_KEY] || {}) as GridState;
-  const watchlistCodes = positions.map((item) => item.code);
-  const { config: effectiveConfig, changed: autoPatched } = ensureSpikeRuleForWatchlist(config, watchlistCodes);
-  if (!effectiveConfig.globalEnabled || effectiveConfig.stocks.length === 0) {
-    if (autoPatched) {
-      await saveAlertConfig(effectiveConfig);
-    }
+  const effectiveConfig = migrateSpikeConfig(config);
+  if (!effectiveConfig.globalEnabled) {
     return;
   }
 
@@ -575,9 +501,6 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     }));
 
   if (snapshots.length === 0) {
-    if (autoPatched) {
-      await saveAlertConfig(effectiveConfig);
-    }
     return;
   }
 
@@ -592,40 +515,40 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
       ruleTypeMap.set(rule.id, { type: rule.type, config: sc });
     }
   }
+  // Global spike rule (used when no per-stock spike rules exist)
+  ruleTypeMap.set('global_spike', { type: 'spike', config: { code: '', scope: 'all', rules: [] } });
 
   // Evaluate regular rules
   const { triggered, spikeHistory: updatedSpikeHistory } = checkAlerts(
     effectiveConfig, snapshots, firedHistory, spikeHistory
   );
 
-  // Evaluate spike rules
+  // Evaluate spike rules (global config)
   const spikeTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
   const finalSpikeHistory: SpikePriceHistory = { ...updatedSpikeHistory };
   const spikeFiredInRun: Array<{ code: string; ruleId: string; firedAt: number }> = [];
+  const spikeConfig: SpikeGlobalConfig = effectiveConfig.spikeConfig || DEFAULT_SPIKE_CONFIG;
+  const now = Date.now();
 
-  for (const stockConfig of effectiveConfig.stocks) {
-    const snapshot = snapshots.find((s) => s.code === stockConfig.code);
-    if (!snapshot) continue;
+  if (spikeConfig.enabled) {
+    const spikeRule: AlertRule = {
+      id: 'global_spike',
+      type: 'spike',
+      enabled: true,
+      spikePctThreshold: spikeConfig.pctThreshold,
+      spikeWindowMinutes: spikeConfig.windowMinutes,
+      direction: spikeConfig.direction,
+      cooldownSeconds: spikeConfig.cooldownSeconds,
+    };
+    const maxWindowMs = spikeConfig.windowMinutes * 60 * 1000;
 
-    const spikeRulesRaw = stockConfig.rules.filter((r) => r.type === 'spike' && r.enabled);
-    const seenSpikeRuleKey = new Set<string>();
-    const spikeRules = spikeRulesRaw.filter((rule) => {
-      const key = `${rule.spikePctThreshold ?? 2}|${rule.spikeWindowMinutes ?? 5}|${rule.direction ?? 'both'}`;
-      if (seenSpikeRuleKey.has(key)) return false;
-      seenSpikeRuleKey.add(key);
-      return true;
-    });
-    if (spikeRules.length === 0) continue;
+    for (const snapshot of snapshots) {
+      const baseCodeHistory = spikeHistory[snapshot.code] || [];
+      const rollingHistory = baseCodeHistory.filter((entry) => now - entry.timestamp < maxWindowMs * 2);
 
-    const now = Date.now();
-    const maxWindowMs = Math.max(...spikeRules.map((rule) => (rule.spikeWindowMinutes ?? 5) * 60 * 1000));
-    const baseCodeHistory = spikeHistory[stockConfig.code] || [];
-    const rollingHistory = baseCodeHistory.filter((entry) => now - entry.timestamp < maxWindowMs * 2);
-
-    for (const spikeRule of spikeRules) {
       const result = evaluateSpikeRule(
         spikeRule,
-        stockConfig.code,
+        snapshot.code,
         snapshot.name,
         snapshot.price,
         rollingHistory,
@@ -634,20 +557,20 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
 
       if (result?.triggered) {
         spikeTriggered.push({
-          code: stockConfig.code,
+          code: snapshot.code,
           name: snapshot.name,
           message: result.message,
           ruleId: result.ruleId || spikeRule.id,
         });
         spikeFiredInRun.push({
-          code: stockConfig.code,
+          code: snapshot.code,
           ruleId: result.ruleId || spikeRule.id,
           firedAt: now,
         });
       }
-    }
 
-    finalSpikeHistory[stockConfig.code] = [...rollingHistory, { price: snapshot.price, timestamp: now }];
+      finalSpikeHistory[snapshot.code] = [...rollingHistory, { price: snapshot.price, timestamp: now }];
+    }
   }
 
   // Evaluate stateful rules (trailing_stop, batch_buy, grid_trading)
@@ -744,7 +667,6 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
         [BATCH_BUY_STATE_KEY]: finalBatchBuyState,
         [GRID_STATE_KEY]: finalGridState,
       }),
-      autoPatched ? saveAlertConfig(effectiveConfig) : Promise.resolve(),
     ]);
     return;
   }
@@ -1538,7 +1460,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!existing[BADGE_STORAGE_KEY]) {
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
   }
-  await syncAutoSpikeRulesFromHoldings();
   startRefreshLoop();
   // 等数据刷新后更新悬浮标题
   setTimeout(() => void updateHoverTitleFromStorage(), 3000);
@@ -1546,7 +1467,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 // Service worker 重启后重新注册 alarms
 startRefreshLoop();
-void syncAutoSpikeRulesFromHoldings();
 // Service worker 重启后也更新标题
 setTimeout(() => void updateHoverTitleFromStorage(), 2000);
 
@@ -1558,9 +1478,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   // holdings 变化 → 立即刷新
   if (area === 'sync' && (changes.stockHoldings || changes.fundHoldings)) {
-    if (changes.stockHoldings) {
-      void syncAutoSpikeRulesFromHoldings();
-    }
     void refreshStocks();
     void refreshFunds();
   }
