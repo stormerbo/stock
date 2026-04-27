@@ -71,6 +71,7 @@ const REFRESH_STORAGE_KEY = 'refreshConfig';
 const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
 const TECH_REPORT_DATE_KEY = '_lastTechnicalReportDate';
 const TECH_REPORT_SIGNAL_KEY = '_lastTechnicalSignals';
+const TECH_REPORT_STATUS_KEY = 'technicalReportStatus';
 const SPIKE_HISTORY_KEY = 'spikeHistory';
 const WORK_MODE_KEY = 'workModeConfig';
 const DRAWDOWN_EVAL_DATE_KEY = '_lastDrawdownEvalDate';
@@ -239,6 +240,18 @@ const DEFAULT_TECH_REPORT: TechnicalReportConfig = {
   trackWr: true,
 };
 
+type TechReportStatus = {
+  enabled: boolean;
+  lastRunDate: string;
+  lastRunTime: number;
+  nextRunTime: number;
+  status: 'pending' | 'success' | 'no_signal' | 'error' | 'disabled';
+  stockCount: number;
+  signalCount: number;
+  details: string;
+  errorMessage: string;
+};
+
 async function loadTechReportConfig(): Promise<TechnicalReportConfig> {
   try {
     const result = await chrome.storage.sync.get(TECH_REPORT_STORAGE_KEY);
@@ -246,6 +259,24 @@ async function loadTechReportConfig(): Promise<TechnicalReportConfig> {
     return config || DEFAULT_TECH_REPORT;
   } catch {
     return DEFAULT_TECH_REPORT;
+  }
+}
+
+function getDefaultTechReportStatus(): TechReportStatus {
+  return {
+    enabled: false, lastRunDate: '', lastRunTime: 0, nextRunTime: 0,
+    status: 'disabled', stockCount: 0, signalCount: 0,
+    details: '', errorMessage: '',
+  };
+}
+
+async function saveTechReportStatus(update: Partial<TechReportStatus>) {
+  try {
+    const existing = await chrome.storage.local.get(TECH_REPORT_STATUS_KEY);
+    const current = (existing[TECH_REPORT_STATUS_KEY] as TechReportStatus | undefined) || getDefaultTechReportStatus();
+    await chrome.storage.local.set({ [TECH_REPORT_STATUS_KEY]: { ...current, ...update } });
+  } catch {
+    // silently fail
   }
 }
 
@@ -327,7 +358,24 @@ function startRefreshLoop() {
     void refreshIndexes();
   });
   void loadTechReportConfig().then((config) => {
-    if (config.enabled) setupTechnicalReportAlarm();
+    if (config.enabled) {
+      setupTechnicalReportAlarm();
+      // Save enabled status + compute next run time for the popup status UI
+      const now = new Date();
+      const shParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(new Date());
+      const shHour = Number(shParts.find((p) => p.type === 'hour')?.value ?? '15');
+      const shMinute = Number(shParts.find((p) => p.type === 'minute')?.value ?? '30');
+      const localTarget = new Date();
+      localTarget.setUTCHours((shHour - 8 + 24) % 24, shMinute >= 30 ? shMinute : 30, 0, 0);
+      if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
+      void saveTechReportStatus({ enabled: true, status: 'pending', nextRunTime: localTarget.getTime() });
+    } else {
+      void saveTechReportStatus({ enabled: false, status: 'disabled' });
+    }
   });
 }
 
@@ -922,69 +970,77 @@ async function generateDailyTechnicalReport() {
   if (!config.enabled) return;
 
   // 检查重复
-  const local = await chrome.storage.local.get([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY, NOTIFICATION_HISTORY_KEY]);
+  const local = await chrome.storage.local.get([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY, NOTIFICATION_HISTORY_KEY, TECH_REPORT_STATUS_KEY]);
   const today = getShanghaiToday();
   if (local[TECH_REPORT_DATE_KEY] === today) return;
 
-  // 加载持仓股票
-  const syncResult = await chrome.storage.sync.get(['stockHoldings']);
-  const holdings = (syncResult.stockHoldings || []) as StockHoldingConfig[];
-  const heldStocks = holdings.filter((h) => Number(h.shares) > 0);
-  if (heldStocks.length === 0) return;
+  // Save pending status
+  await saveTechReportStatus({ status: 'pending', lastRunDate: today });
 
-  // 获取每只持仓股票的 K 线数据
-  const klineResults = await pMap(
-    heldStocks,
-    async (holding) => {
-      try {
-        const kline = await fetchDayFqKline(holding.code, 60);
-        return { code: holding.code, name: holding.name || holding.code, kline };
-      } catch {
-        return { code: holding.code, name: holding.name || holding.code, kline: [] };
+  try {
+    // 加载持仓股票
+    const syncResult = await chrome.storage.sync.get(['stockHoldings']);
+    const holdings = (syncResult.stockHoldings || []) as StockHoldingConfig[];
+    const heldStocks = holdings.filter((h) => Number(h.shares) > 0);
+    if (heldStocks.length === 0) {
+      await saveTechReportStatus({ status: 'no_signal', stockCount: 0, signalCount: 0, lastRunTime: Date.now(), details: '无持仓股票' });
+      await chrome.storage.local.set({ [TECH_REPORT_DATE_KEY]: today });
+      return;
+    }
+
+    // 获取每只持仓股票的 K 线数据
+    const klineResults = await pMap(
+      heldStocks,
+      async (holding) => {
+        try {
+          const kline = await fetchDayFqKline(holding.code, 60);
+          return { code: holding.code, name: holding.name || holding.code, kline };
+        } catch {
+          return { code: holding.code, name: holding.name || holding.code, kline: [] };
+        }
+      },
+      4,
+    );
+
+    // 检测所有信号，按配置过滤，与上次状态比较去重
+    const lastSignals = (local[TECH_REPORT_SIGNAL_KEY] as Record<string, string>) || {};
+    const newSignalsByStock: Record<string, Array<{ code: string; name: string; signal: import('../shared/technical-analysis').TechnicalSignal }>> = {};
+    const currentSignals: Record<string, string> = {};
+    let totalNewSignals = 0;
+
+    for (const result of klineResults) {
+      if (result.kline.length < 30) {
+        currentSignals[result.code] = 'insufficient_data';
+        continue;
       }
-    },
-    4,
-  );
 
-  // 检测所有信号，按配置过滤，与上次状态比较去重
-  const lastSignals = (local[TECH_REPORT_SIGNAL_KEY] as Record<string, string>) || {};
-  const newSignalsByStock: Record<string, Array<{ code: string; name: string; signal: import('../shared/technical-analysis').TechnicalSignal }>> = {};
-  const currentSignals: Record<string, string> = {};
-  let totalNewSignals = 0;
+      // 检测全部信号
+      const allSignals = detectAllSignals(result.kline);
 
-  for (const result of klineResults) {
-    if (result.kline.length < 30) {
-      currentSignals[result.code] = 'insufficient_data';
-      continue;
+      // 按配置过滤
+      const trackedSignals = allSignals.filter((s) => filterSignalByConfig(s, config));
+
+      // 与上次状态比较去重
+      const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
+      const prevSet = new Set(prevList);
+      const newForStock = trackedSignals.filter((s) => !prevSet.has(s.type));
+
+      if (newForStock.length > 0) {
+        newSignalsByStock[result.code] = newForStock.map((s) => ({
+          code: result.code,
+          name: result.name,
+          signal: s,
+        }));
+        totalNewSignals += newForStock.length;
+      }
+
+      // 更新当前状态（所有的 type 列表）
+      const allTypes = trackedSignals.map((s) => s.type);
+      currentSignals[result.code] = allTypes.join(';');
     }
 
-    // 检测全部信号
-    const allSignals = detectAllSignals(result.kline);
-
-    // 按配置过滤
-    const trackedSignals = allSignals.filter((s) => filterSignalByConfig(s, config));
-
-    // 与上次状态比较去重
-    const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
-    const prevSet = new Set(prevList);
-    const newForStock = trackedSignals.filter((s) => !prevSet.has(s.type));
-
-    if (newForStock.length > 0) {
-      newSignalsByStock[result.code] = newForStock.map((s) => ({
-        code: result.code,
-        name: result.name,
-        signal: s,
-      }));
-      totalNewSignals += newForStock.length;
-    }
-
-    // 更新当前状态（所有的 type 列表）
-    const allTypes = trackedSignals.map((s) => s.type);
-    currentSignals[result.code] = allTypes.join(';');
-  }
-
-  // 生成通知
-  if (totalNewSignals > 0) {
+    // 生成通知
+    if (totalNewSignals > 0) {
     const stockCodes = Object.keys(newSignalsByStock);
     const stockCount = stockCodes.length;
 
@@ -1038,6 +1094,25 @@ async function generateDailyTechnicalReport() {
     [TECH_REPORT_DATE_KEY]: today,
     [TECH_REPORT_SIGNAL_KEY]: currentSignals,
   });
+
+  // Save success status
+  const stockSignalCount = Object.keys(newSignalsByStock).length;
+  await saveTechReportStatus({
+    status: totalNewSignals > 0 ? 'success' : 'no_signal',
+    lastRunTime: Date.now(),
+    stockCount: heldStocks.length,
+    signalCount: totalNewSignals,
+    details: totalNewSignals > 0
+      ? `${stockSignalCount}只股票出现${totalNewSignals}个技术信号`
+      : '已检测，无新信号',
+    errorMessage: '',
+  });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[TechReport] error:', msg);
+    await saveTechReportStatus({ status: 'error', errorMessage: msg, lastRunTime: Date.now() });
+    await chrome.storage.local.set({ [TECH_REPORT_DATE_KEY]: today });
+  }
 }
 
 async function refreshFunds() {
@@ -1548,6 +1623,56 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (request.type === 'update-badge' && request.badge && request.metrics) {
     applyBadgeText(request.badge, request.metrics);
     return;
+  }
+
+  if (request.type === 'get-tech-report-status') {
+    void (async () => {
+      try {
+        const result = await chrome.storage.local.get(TECH_REPORT_STATUS_KEY);
+        const status = (result[TECH_REPORT_STATUS_KEY] as TechReportStatus | undefined) || getDefaultTechReportStatus();
+
+        // Compute next run time from alarm if enabled
+        if (status.enabled) {
+          const alarm = await chrome.alarms.get(ALARM_TECH_REPORT);
+          if (alarm?.scheduledTime) {
+            status.nextRunTime = alarm.scheduledTime;
+          } else {
+            // Alarm not yet set — calculate from config
+            const now = new Date();
+            const shParts = new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'Asia/Shanghai',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', hour12: false,
+            }).formatToParts(new Date());
+            const shHour = Number(shParts.find((p) => p.type === 'hour')?.value ?? '15');
+            const shMinute = Number(shParts.find((p) => p.type === 'minute')?.value ?? '30');
+            const localTarget = new Date();
+            localTarget.setUTCHours((shHour - 8 + 24) % 24, shMinute >= 30 ? shMinute : 30, 0, 0);
+            if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
+            status.nextRunTime = localTarget.getTime();
+          }
+        }
+
+        sendResponse({ status });
+      } catch {
+        sendResponse({ status: getDefaultTechReportStatus() });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'trigger-tech-report') {
+    void (async () => {
+      try {
+        // Clear date key so it can run again
+        await chrome.storage.local.remove(TECH_REPORT_DATE_KEY);
+        await generateDailyTechnicalReport();
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });
+      }
+    })();
+    return true;
   }
 
   return undefined;

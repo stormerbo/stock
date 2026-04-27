@@ -710,6 +710,11 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [panelOpacity, setPanelOpacity] = useState(1.0);
   const [dailyProfitDetails, setDailyProfitDetails] = useState<DailyProfitDetailRecord[]>([]);
+  const [techReportStatus, setTechReportStatus] = useState<{
+    enabled: boolean; lastRunDate: string; lastRunTime: number; nextRunTime: number;
+    status: string; stockCount: number; signalCount: number; details: string; errorMessage: string;
+  } | 'loading'>('loading');
+  const [techReportDetail, setTechReportDetail] = useState<{ name: string; message: string; firedAt: number } | null>(null);
 
   useEffect(() => {
     // Load notifications and work mode config
@@ -760,6 +765,32 @@ export default function App() {
       chrome.storage.onChanged.addListener(listener);
       return () => chrome.storage.onChanged.removeListener(listener);
     }
+  }, []);
+
+  // ---- Tech Report Status ----
+  useEffect(() => {
+    const loadStatus = () => {
+      if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
+      // 直接从 storage 读取，不依赖 background 消息
+      chrome.storage.local.get('technicalReportStatus').then((result) => {
+        const s = result.technicalReportStatus as typeof techReportStatus;
+        if (s && s !== 'loading') setTechReportStatus(s);
+      }).catch(() => { /* ignore */ });
+    };
+    loadStatus();
+    // 也监听 storage 变化
+    const listener = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if (changes.technicalReportStatus) {
+        const s = changes.technicalReportStatus.newValue as typeof techReportStatus;
+        if (s && s !== 'loading') setTechReportStatus(s);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    const timer = window.setInterval(loadStatus, 30_000);
+    return () => {
+      window.clearInterval(timer);
+      chrome.storage.onChanged.removeListener(listener);
+    };
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -2636,6 +2667,78 @@ function clearIntradayIfStale(
                     )}
                   </div>
                 </div>
+
+                {/* ---- 技术报告状态 ---- */}
+                <div className="tech-report-status">
+                  {techReportStatus === 'loading' ? (
+                    <div className="tech-report-loading">盘后技术报告加载中...</div>
+                  ) : techReportStatus ? (
+                    <>
+                      <div className="tech-report-header">
+                        <span className="tech-report-title">盘后技术报告</span>
+                        <span className={`tech-report-enabled ${techReportStatus.enabled ? 'on' : 'off'}`}>
+                          {techReportStatus.enabled ? '已启用' : '已禁用'}
+                        </span>
+                      </div>
+                      <div className="tech-report-body">
+                        {techReportStatus.enabled ? (
+                          <>
+                            <div className="tech-report-row">
+                              <span className="tech-report-label">上次运行</span>
+                              <span className="tech-report-value">
+                                {techReportStatus.lastRunDate
+                                  ? `${techReportStatus.lastRunDate} ${techReportStatus.lastRunTime ? formatRelativeTime(techReportStatus.lastRunTime) : ''}`
+                                  : '尚未运行'}
+                                {techReportStatus.lastRunDate && (
+                                  <span className={`tech-report-badge ${techReportStatus.status === 'success' ? 'ok' : techReportStatus.status === 'error' ? 'err' : 'idle'}`}>
+                                    {techReportStatus.status === 'success' ? `✓ ${techReportStatus.details}` : ''}
+                                    {techReportStatus.status === 'no_signal' ? '○ 无新信号' : ''}
+                                    {techReportStatus.status === 'error' ? '✗ 出错' : ''}
+                                    {techReportStatus.status === 'pending' ? '⋯ 运行中' : ''}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            {techReportStatus.errorMessage && (
+                              <div className="tech-report-row">
+                                <span className="tech-report-label">错误信息</span>
+                                <span className="tech-report-value error">{techReportStatus.errorMessage}</span>
+                              </div>
+                            )}
+                            <div className="tech-report-row">
+                              <span className="tech-report-label">下次运行</span>
+                              <span className="tech-report-value">
+                                {techReportStatus.nextRunTime > 0 ? (
+                                  <>
+                                    {new Date(techReportStatus.nextRunTime).toLocaleString('zh-CN', {
+                                      month: '2-digit', day: '2-digit',
+                                      hour: '2-digit', minute: '2-digit',
+                                    })}
+                                    <button type="button" className="tech-report-run-btn" onClick={() => {
+                                      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+                                        void chrome.runtime.sendMessage({ type: 'trigger-tech-report' }).then(() => {
+                                          chrome.storage.local.get('technicalReportStatus').then((r) => {
+                                            const s = r.technicalReportStatus as typeof techReportStatus;
+                                            if (s) setTechReportStatus(s);
+                                          });
+                                        });
+                                      }
+                                    }}>立即运行</button>
+                                  </>
+                                ) : '等待调度'}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="tech-report-row">
+                            <span className="tech-report-value disabled">请在设置页面启用盘后技术指标报告</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
                 {notifications.length === 0 ? (
                   <div className="notification-empty">暂无通知</div>
                 ) : (
@@ -2644,12 +2747,16 @@ function clearIntradayIfStale(
                       const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
                       const priceValid = Number.isFinite(item.price) && item.price > 0;
                       return (
-                        <div key={item.id} className={`notification-item ${item.read ? '' : 'unread'}`}>
+                        <div
+                          key={item.id}
+                          className={`notification-item ${item.read ? '' : 'unread'} ${item.name === '盘后技术报告' ? 'clickable' : ''}`}
+                          onClick={item.name === '盘后技术报告' ? () => setTechReportDetail({ name: item.name, message: item.message, firedAt: item.firedAt }) : undefined}
+                        >
                           <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
                           <div className="notification-text">
                             <span className="notification-stock">
-                              {item.name}
-                              <span className="notification-code">({item.code})</span>
+                              {item.name === '盘后技术报告' ? '📊 盘后技术报告' : item.name}
+                              {item.code && <span className="notification-code">({item.code})</span>}
                             </span>
                             {priceValid && (
                               <span className="notification-price-row">
@@ -3106,6 +3213,39 @@ function clearIntradayIfStale(
             ) : null}
           </section>
         </main>
+
+        {techReportDetail ? (
+          <div className="tech-report-detail-overlay" onClick={() => setTechReportDetail(null)}>
+            <div className="tech-report-detail-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="tech-report-detail-header">
+                <span className="tech-report-detail-title">📊 盘后技术报告</span>
+                <button type="button" className="tech-report-detail-close" onClick={() => setTechReportDetail(null)}>
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="tech-report-detail-time">
+                {formatRelativeTime(techReportDetail.firedAt)}
+              </div>
+              <div className="tech-report-detail-body">
+                {techReportDetail.message.split('\n').map((line, i) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return <br key={i} />;
+                  if (trimmed.startsWith('•')) {
+                    return <div key={i} className="tech-report-detail-signal">{trimmed}</div>;
+                  }
+                  if (trimmed.startsWith('📊')) {
+                    return <div key={i} className="tech-report-detail-date">{trimmed}</div>;
+                  }
+                  if (trimmed.includes('(') && trimmed.includes(')')) {
+                    const [stockName] = trimmed.split('(');
+                    return <div key={i} className="tech-report-detail-stock">{trimmed}</div>;
+                  }
+                  return <div key={i} className="tech-report-detail-line">{trimmed}</div>;
+                })}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {indexDetailTarget ? (
           <IndexDetailModal
