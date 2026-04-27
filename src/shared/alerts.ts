@@ -5,7 +5,7 @@
 export type AlertScope = 'all' | 'special' | 'holding';
 export type AlertDirection = 'up' | 'down' | 'both';
 
-export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility' | 'spike' | 'drawdown';
+export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility' | 'spike' | 'drawdown' | 'trailing_stop' | 'batch_buy' | 'grid_trading';
 
 export type AlertRule = {
   id: string;
@@ -27,6 +27,16 @@ export type AlertRule = {
   spikeWindowMinutes?: number; // lookback window in minutes, default 5
   // drawdown — max drawdown threshold
   drawdownThreshold?: number;   // percentage threshold, default 20
+  // trailing_stop — trailing stop loss
+  trailingStopPct?: number;     // percentage drop from peak to trigger, default 5
+  // batch_buy — batch buy price levels (range mode)
+  batchBuyStartPrice?: number;
+  batchBuyEndPrice?: number;
+  batchBuyCount?: number;       // number of tiers, default 3
+  // grid_trading — grid trading signal
+  gridUpperPrice?: number;
+  gridLowerPrice?: number;
+  gridCount?: number;           // number of grid lines, default 5
   // cooldown in seconds (default 300 = 5 min)
   cooldownSeconds?: number;
 };
@@ -50,6 +60,15 @@ export type SpikePriceEntry = {
 
 export type SpikePriceHistory = Record<string, SpikePriceEntry[]>;
 
+// Stateful rule tracking (persisted in chrome.storage.local)
+export type TrailingStopState = Record<string, { peakPrice: number }>;
+export type BatchBuyState = Record<string, { triggeredLevels: number[] }>;
+export type GridState = Record<string, { lastGridIndex: number | null }>;
+
+export const TRAILING_STOP_STATE_KEY = 'trailingStopState';
+export const BATCH_BUY_STATE_KEY = 'batchBuyState';
+export const GRID_STATE_KEY = 'gridState';
+
 export type AlertConfig = {
   globalEnabled: boolean;
   scope: AlertScope;
@@ -66,7 +85,7 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
 
 const ALERT_STORAGE_KEY = 'alertConfig';
 
-const VALID_RULE_TYPES: AlertRuleType[] = ['price_up', 'price_down', 'change_pct', 'volatility', 'spike'];
+const VALID_RULE_TYPES: AlertRuleType[] = ['price_up', 'price_down', 'change_pct', 'volatility', 'spike', 'trailing_stop', 'batch_buy', 'grid_trading'];
 
 function normalizeNumber(value: unknown, fallback: number, min?: number, max?: number): number {
   const n = Number(value);
@@ -114,6 +133,22 @@ function normalizeRule(rule: Partial<AlertRule> | undefined): AlertRule {
     normalized.spikePctThreshold = normalizeNumber(rule?.spikePctThreshold, 2, 0.1);
     normalized.spikeWindowMinutes = normalizeNumber(rule?.spikeWindowMinutes, 5, 1, 120);
     normalized.direction = normalizeDirection(rule?.direction);
+  }
+
+  if (type === 'trailing_stop') {
+    normalized.trailingStopPct = normalizeNumber(rule?.trailingStopPct, 5, 0.5, 50);
+  }
+
+  if (type === 'batch_buy') {
+    normalized.batchBuyStartPrice = normalizeNumber(rule?.batchBuyStartPrice, 0, 0);
+    normalized.batchBuyEndPrice = normalizeNumber(rule?.batchBuyEndPrice, 0, 0);
+    normalized.batchBuyCount = normalizeNumber(rule?.batchBuyCount, 3, 2, 20);
+  }
+
+  if (type === 'grid_trading') {
+    normalized.gridUpperPrice = normalizeNumber(rule?.gridUpperPrice, 0, 0);
+    normalized.gridLowerPrice = normalizeNumber(rule?.gridLowerPrice, 0, 0);
+    normalized.gridCount = normalizeNumber(rule?.gridCount, 5, 2, 50);
   }
 
   return normalized;
@@ -289,6 +324,10 @@ export function checkAlerts(
         // Spike evaluation happens in background (needs price history tracking)
         continue;
       }
+      if ((rule.type === 'trailing_stop' || rule.type === 'batch_buy' || rule.type === 'grid_trading') && rule.enabled) {
+        // Stateful rule evaluation happens in background
+        continue;
+      }
 
       const result = evaluateRule(rule, snapshot, [...firedHistory, ...newFired]);
       if (result?.triggered) {
@@ -394,6 +433,153 @@ export function evaluateSpikeRule(
 }
 
 // -----------------------------------------------------------
+// Trailing stop rule evaluation
+// -----------------------------------------------------------
+
+export function evaluateTrailingStopRule(
+  rule: AlertRule,
+  snapshot: StockSnapshot,
+  state: TrailingStopState,
+  firedHistory: AlertFiredRecord[],
+): { triggered: boolean; message: string; newState: TrailingStopState } | null {
+  if (!rule.enabled || rule.type !== 'trailing_stop') return null;
+  if (!Number.isFinite(snapshot.price) || snapshot.price <= 0) return null;
+
+  const pct = rule.trailingStopPct ?? 5;
+  const stateKey = `${snapshot.code}_${rule.id}`;
+  const current = state[stateKey];
+  const prevPeak = current?.peakPrice ?? snapshot.price;
+  const newPeak = Math.max(prevPeak, snapshot.price);
+  const newState: TrailingStopState = { ...state, [stateKey]: { peakPrice: newPeak } };
+
+  // First observation — no trigger, just record peak
+  if (!current) {
+    return { triggered: false, message: '', newState };
+  }
+
+  const dropPct = newPeak > 0 ? ((newPeak - snapshot.price) / newPeak) * 100 : 0;
+  if (dropPct >= pct) {
+    return {
+      triggered: true,
+      message: `${snapshot.name}(${snapshot.code}) 移动止盈触发：峰值 ¥${newPeak.toFixed(2)}，现价 ¥${snapshot.price.toFixed(2)}，回落 ${dropPct.toFixed(2)}%（阈值 ${pct}%）`,
+      newState,
+    };
+  }
+
+  return { triggered: false, message: '', newState };
+}
+
+// -----------------------------------------------------------
+// Batch buy rule evaluation
+// -----------------------------------------------------------
+
+export function evaluateBatchBuyRule(
+  rule: AlertRule,
+  snapshot: StockSnapshot,
+  state: BatchBuyState,
+  firedHistory: AlertFiredRecord[],
+): { triggered: boolean; message: string; newState: BatchBuyState } | null {
+  if (!rule.enabled || rule.type !== 'batch_buy') return null;
+  if (!Number.isFinite(snapshot.price) || snapshot.price <= 0) return null;
+
+  const stateKey = `${snapshot.code}_${rule.id}`;
+  const existing = state[stateKey];
+  const alreadyTriggered = new Set(existing?.triggeredLevels ?? []);
+
+  // Compute price levels from range mode
+  const start = rule.batchBuyStartPrice ?? 0;
+  const end = rule.batchBuyEndPrice ?? 0;
+  const count = rule.batchBuyCount ?? 3;
+  if (start <= 0 || end <= 0 || count < 2 || end <= start) {
+    return { triggered: false, message: '', newState: state };
+  }
+  const step = (end - start) / (count - 1);
+  const targets = Array.from({ length: count }, (_, i) => start + step * i);
+
+  const newTriggered = [...(existing?.triggeredLevels ?? [])];
+  let triggeredThisRun = false;
+
+  for (const level of targets) {
+    if (alreadyTriggered.has(level)) continue;
+    if (snapshot.price <= level) {
+      newTriggered.push(level);
+      triggeredThisRun = true;
+      break; // one level per run
+    }
+  }
+
+  if (triggeredThisRun) {
+    return {
+      triggered: true,
+      message: `${snapshot.name}(${snapshot.code}) 分批买入信号：价格 ¥${snapshot.price.toFixed(2)} 触及买入位 ¥${targets[newTriggered.length - 1].toFixed(2)}（已触发 ${newTriggered.length}/${targets.length} 档）`,
+      newState: { ...state, [stateKey]: { triggeredLevels: newTriggered } },
+    };
+  }
+
+  return { triggered: false, message: '', newState: state };
+}
+
+// -----------------------------------------------------------
+// Grid trading rule evaluation
+// -----------------------------------------------------------
+
+export function evaluateGridRule(
+  rule: AlertRule,
+  snapshot: StockSnapshot,
+  state: GridState,
+  firedHistory: AlertFiredRecord[],
+): { triggered: boolean; message: string; newState: GridState } | null {
+  if (!rule.enabled || rule.type !== 'grid_trading') return null;
+  if (!Number.isFinite(snapshot.price) || snapshot.price <= 0) return null;
+
+  const upper = rule.gridUpperPrice ?? 0;
+  const lower = rule.gridLowerPrice ?? 0;
+  const count = rule.gridCount ?? 5;
+  if (upper <= lower || count < 2) return null;
+
+  // Compute grid lines
+  const gridLines = Array.from({ length: count }, (_, i) => lower + (upper - lower) * (i / (count - 1)));
+
+  // Determine current grid position: index of the highest grid line ≤ price, or -1 / count-1 for extremes
+  let currentIndex = -1;
+  for (let i = 0; i < gridLines.length; i++) {
+    if (snapshot.price >= gridLines[i]) currentIndex = i;
+  }
+
+  const stateKey = `${snapshot.code}_${rule.id}`;
+  const lastGridIndex = state[stateKey]?.lastGridIndex ?? null;
+
+  if (lastGridIndex === null) {
+    // First observation — initialize state only
+    return {
+      triggered: false,
+      message: '',
+      newState: { ...state, [stateKey]: { lastGridIndex: currentIndex } },
+    };
+  }
+
+  if (currentIndex === lastGridIndex) {
+    // No grid line crossed
+    return {
+      triggered: false,
+      message: '',
+      newState: { ...state, [stateKey]: { lastGridIndex: currentIndex } },
+    };
+  }
+
+  // Grid line crossed — generate signal
+  const direction = currentIndex > lastGridIndex ? 'up' : 'down';
+  const signal = direction === 'up' ? '卖出' : '买入';
+  const crossedLine = gridLines[Math.max(0, Math.min(currentIndex, lastGridIndex))];
+
+  return {
+    triggered: true,
+    message: `${snapshot.name}(${snapshot.code}) 网格交易信号：价格 ${direction === 'up' ? '上涨突破' : '下跌跌破'} ${crossedLine.toFixed(2)}，现价 ¥${snapshot.price.toFixed(2)}，${signal}信号（网格 ${currentIndex + 1}/${count}）`,
+    newState: { ...state, [stateKey]: { lastGridIndex: currentIndex } },
+  };
+}
+
+// -----------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------
 
@@ -441,6 +627,40 @@ export function createAlertRule(type: AlertRuleType): AlertRule {
       enabled: true,
       drawdownThreshold: 20,
       cooldownSeconds: 86400, // 24 hours — evaluated once per day
+    };
+  }
+
+  if (type === 'trailing_stop') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      trailingStopPct: 5,
+      cooldownSeconds: 300,
+    };
+  }
+
+  if (type === 'batch_buy') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      batchBuyStartPrice: 0,
+      batchBuyEndPrice: 0,
+      batchBuyCount: 3,
+      cooldownSeconds: 86400, // once per level per day
+    };
+  }
+
+  if (type === 'grid_trading') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      gridUpperPrice: 0,
+      gridLowerPrice: 0,
+      gridCount: 5,
+      cooldownSeconds: 300,
     };
   }
 

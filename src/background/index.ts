@@ -27,9 +27,15 @@ import {
   checkAlerts,
   pruneFiredHistory,
   evaluateSpikeRule,
+  evaluateTrailingStopRule,
+  evaluateBatchBuyRule,
+  evaluateGridRule,
   pruneNotificationHistory,
   isInCooldown,
   NOTIFICATION_HISTORY_KEY,
+  TRAILING_STOP_STATE_KEY,
+  BATCH_BUY_STATE_KEY,
+  GRID_STATE_KEY,
   type AlertConfig,
   type AlertFiredRecord,
   type AlertRule,
@@ -38,6 +44,9 @@ import {
   type StockSnapshot,
   type SpikePriceEntry,
   type SpikePriceHistory,
+  type TrailingStopState,
+  type BatchBuyState,
+  type GridState,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
 import { TRADE_HISTORY_KEY } from '../shared/trade-history';
@@ -531,12 +540,18 @@ async function syncAutoSpikeRulesFromHoldings() {
 }
 
 async function checkAndNotifyAlerts(positions: StockPosition[]) {
-  const [config, spikeResult, notifResult, workModeResult] = await Promise.all([
+  const [config, spikeResult, notifResult, workModeResult, trailingResult, batchResult, gridResult] = await Promise.all([
     loadAlertConfig(),
     chrome.storage.local.get([SPIKE_HISTORY_KEY]),
     chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]),
     chrome.storage.sync.get([WORK_MODE_KEY]),
+    chrome.storage.local.get([TRAILING_STOP_STATE_KEY]),
+    chrome.storage.local.get([BATCH_BUY_STATE_KEY]),
+    chrome.storage.local.get([GRID_STATE_KEY]),
   ]);
+  const trailingStopState: TrailingStopState = (trailingResult[TRAILING_STOP_STATE_KEY] || {}) as TrailingStopState;
+  const batchBuyState: BatchBuyState = (batchResult[BATCH_BUY_STATE_KEY] || {}) as BatchBuyState;
+  const gridState: GridState = (gridResult[GRID_STATE_KEY] || {}) as GridState;
   const watchlistCodes = positions.map((item) => item.code);
   const { config: effectiveConfig, changed: autoPatched } = ensureSpikeRuleForWatchlist(config, watchlistCodes);
   if (!effectiveConfig.globalEnabled || effectiveConfig.stocks.length === 0) {
@@ -635,7 +650,65 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     finalSpikeHistory[stockConfig.code] = [...rollingHistory, { price: snapshot.price, timestamp: now }];
   }
 
-  const allTriggered = [...triggered, ...spikeTriggered];
+  // Evaluate stateful rules (trailing_stop, batch_buy, grid_trading)
+  const statefulTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
+  const statefulFired: Array<{ code: string; ruleId: string; firedAt: number }> = [];
+  let finalTrailingStopState = { ...trailingStopState };
+  let finalBatchBuyState = { ...batchBuyState };
+  let finalGridState = { ...gridState };
+
+  for (const stockConfig of effectiveConfig.stocks) {
+    const snapshot = snapshots.find((s) => s.code === stockConfig.code);
+    if (!snapshot) continue;
+
+    for (const rule of stockConfig.rules) {
+      if (!rule.enabled) continue;
+
+      if (rule.type === 'trailing_stop') {
+        const result = evaluateTrailingStopRule(
+          rule, snapshot, finalTrailingStopState,
+          [...firedHistory, ...spikeFiredInRun, ...statefulFired]
+        );
+        if (result) {
+          finalTrailingStopState = result.newState;
+          if (result.triggered) {
+            statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+          }
+        }
+      }
+
+      if (rule.type === 'batch_buy') {
+        const result = evaluateBatchBuyRule(
+          rule, snapshot, finalBatchBuyState,
+          [...firedHistory, ...spikeFiredInRun, ...statefulFired]
+        );
+        if (result) {
+          finalBatchBuyState = result.newState;
+          if (result.triggered) {
+            statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+          }
+        }
+      }
+
+      if (rule.type === 'grid_trading') {
+        const result = evaluateGridRule(
+          rule, snapshot, finalGridState,
+          [...firedHistory, ...spikeFiredInRun, ...statefulFired]
+        );
+        if (result) {
+          finalGridState = result.newState;
+          if (result.triggered) {
+            statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+          }
+        }
+      }
+    }
+  }
+
+  const allTriggered = [...triggered, ...spikeTriggered, ...statefulTriggered];
 
   // Write to notification history
   const newRecords: NotificationRecord[] = allTriggered.map((a) => {
@@ -667,6 +740,9 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
       chrome.storage.local.set({
         [SPIKE_HISTORY_KEY]: finalSpikeHistory,
         [NOTIFICATION_HISTORY_KEY]: updatedHistory,
+        [TRAILING_STOP_STATE_KEY]: finalTrailingStopState,
+        [BATCH_BUY_STATE_KEY]: finalBatchBuyState,
+        [GRID_STATE_KEY]: finalGridState,
       }),
       autoPatched ? saveAlertConfig(effectiveConfig) : Promise.resolve(),
     ]);
@@ -683,7 +759,13 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     effectiveConfig.firedHistory = [...firedHistory, ...newFired];
     await Promise.all([
       saveAlertConfig(effectiveConfig),
-      chrome.storage.local.set({ [SPIKE_HISTORY_KEY]: finalSpikeHistory, [NOTIFICATION_HISTORY_KEY]: updatedHistory }),
+      chrome.storage.local.set({
+        [SPIKE_HISTORY_KEY]: finalSpikeHistory,
+        [NOTIFICATION_HISTORY_KEY]: updatedHistory,
+        [TRAILING_STOP_STATE_KEY]: finalTrailingStopState,
+        [BATCH_BUY_STATE_KEY]: finalBatchBuyState,
+        [GRID_STATE_KEY]: finalGridState,
+      }),
     ]);
     return;
   }
@@ -769,6 +851,9 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     chrome.storage.local.set({
       [SPIKE_HISTORY_KEY]: finalSpikeHistory,
       [NOTIFICATION_HISTORY_KEY]: updatedHistory,
+      [TRAILING_STOP_STATE_KEY]: finalTrailingStopState,
+      [BATCH_BUY_STATE_KEY]: finalBatchBuyState,
+      [GRID_STATE_KEY]: finalGridState,
     }),
   ]);
 }

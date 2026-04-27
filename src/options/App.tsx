@@ -84,6 +84,9 @@ const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
   volatility: '振幅波动',
   spike: '急速异动',
   drawdown: '最大回撤',
+  trailing_stop: '移动止盈',
+  batch_buy: '分批买入',
+  grid_trading: '网格交易',
 };
 
 const ALERT_DIRECTION_OPTIONS: Array<{ value: AlertDirection; label: string }> = [
@@ -275,6 +278,88 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
                 </div>
               )}
 
+              {rule.type === 'trailing_stop' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.trailingStopPct ?? ''}
+                    placeholder="回落 %"
+                    min={0.5}
+                    max={50}
+                    step={0.5}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, trailingStopPct: Number(e.target.value) || 5 }))}
+                  />
+                  <span>%</span>
+                  <span className="alert-rule-hint">从峰值回落触发</span>
+                </div>
+              )}
+
+              {rule.type === 'batch_buy' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.batchBuyStartPrice ?? ''}
+                    placeholder="起始价"
+                    min={0}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, batchBuyStartPrice: Number(e.target.value) || 0 }))}
+                  />
+                  <span>~</span>
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.batchBuyEndPrice ?? ''}
+                    placeholder="终止价"
+                    min={0}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, batchBuyEndPrice: Number(e.target.value) || 0 }))}
+                  />
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.batchBuyCount ?? ''}
+                    placeholder="档位"
+                    min={2}
+                    max={20}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, batchBuyCount: Number(e.target.value) || 3 }))}
+                  />
+                  <span>档</span>
+                  <span className="alert-rule-hint">价格触及买入信号</span>
+                </div>
+              )}
+
+              {rule.type === 'grid_trading' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.gridLowerPrice ?? ''}
+                    placeholder="下轨"
+                    min={0}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, gridLowerPrice: Number(e.target.value) || 0 }))}
+                  />
+                  <span>~</span>
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.gridUpperPrice ?? ''}
+                    placeholder="上轨"
+                    min={0}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, gridUpperPrice: Number(e.target.value) || 0 }))}
+                  />
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.gridCount ?? ''}
+                    placeholder="格数"
+                    min={2}
+                    max={50}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, gridCount: Number(e.target.value) || 5 }))}
+                  />
+                  <span>格</span>
+                </div>
+              )}
+
               <div className="alert-rule-cooldown">
                 <span>冷却</span>
                 <input
@@ -296,7 +381,7 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
 
           {/* Add rule button */}
           <div className="alert-add-rule">
-            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility', 'drawdown'] as AlertRuleType[]).map((type) => (
+            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility', 'drawdown', 'trailing_stop', 'batch_buy', 'grid_trading'] as AlertRuleType[]).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -624,7 +709,7 @@ export default function App() {
 
   // ---- Load stock holdings (all stocks, with name + position data) ----
   const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
-  const [stockPositions, setStockPositions] = useState<Map<string, { price: number; dailyChangePct: number }>>(new Map());
+  const [stockPositions, setStockPositions] = useState<Map<string, { price: number; dailyChangePct: number; name: string }>>(new Map());
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -643,7 +728,7 @@ export default function App() {
             const pos = posMap.get(h.code);
             return {
               code: h.code,
-              name: h.name || pos?.name || h.code,
+              name: pos?.name || h.name || h.code,
               shares: h.shares || 0,
               special: h.special || false,
             };
@@ -664,10 +749,51 @@ export default function App() {
     });
   }, []);
 
+  // Fetch names for stocks that have no valid name (code shown as name)
+  const [fetchedAlertStockNames, setFetchedAlertStockNames] = useState<Map<string, string>>(new Map());
+  const fetchedNameCodesRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const codesToFetch = [
+      // alert-only stocks not in position data
+      ...alertDraft.stocks
+        .filter((s) => !allStocks.some((h) => h.code === s.code))
+        .filter((s) => !stockPositions.has(s.code))
+        .map((s) => s.code),
+      // stocks in allStocks whose name is just the code (no valid name found)
+      ...allStocks
+        .filter((s) => !s.name || s.name === s.code)
+        .map((s) => s.code),
+    ].filter((code) => !fetchedNameCodesRef.current.has(code));
+
+    if (codesToFetch.length === 0) return;
+
+    let cancelled = false;
+    const fetch = async () => {
+      const { fetchBatchStockQuotes } = await import('../shared/fetch');
+      const results = await fetchBatchStockQuotes(
+        codesToFetch.map((code) => ({ code, shares: 0, cost: 0 }))
+      );
+      if (cancelled) return;
+      setFetchedAlertStockNames((prev) => {
+        const next = new Map(prev);
+        for (const r of results) {
+          if (r.name && r.name !== r.code) {
+            next.set(r.code, r.name);
+            fetchedNameCodesRef.current.add(r.code);
+          }
+        }
+        return next;
+      });
+    };
+    void fetch();
+    return () => { cancelled = true; };
+  }, [alertDraft.stocks, allStocks, stockPositions]);
+
   // Manually added stocks (in alertDraft but not in allStocks)
   const manualStocks = alertDraft.stocks
     .filter((s) => !allStocks.some((h) => h.code === s.code))
-    .map((s) => ({ code: s.code, name: s.code, shares: 0, special: false }));
+    .map((s) => ({ code: s.code, name: stockPositions.get(s.code)?.name || fetchedAlertStockNames.get(s.code) || s.code, shares: 0, special: false }));
 
   const createDefaultStockAlertConfig = useCallback((code: string, scope: AlertScope): StockAlertConfig => ({
     code,
@@ -1144,7 +1270,7 @@ export default function App() {
                   <StockAlertEditor
                     key={stock.code}
                     config={config}
-                    stockName={stock.name}
+                    stockName={fetchedAlertStockNames.get(stock.code) || stock.name}
                     onUpdate={(updated) => {
                       setAlertDraft((prev) => ({
                         ...prev,

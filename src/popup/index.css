@@ -3733,3 +3733,63 @@ body.theme-light .notification-item.clickable:hover {
   font-weight: 500;
   color: var(--text-0);
 }
+
+/* ─── Fundamental Panel ─── */
+.fundamental-panel {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fundamental-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-0);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.fundamental-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fundamental-category-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fundamental-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.fundamental-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  min-height: 32px;
+}
+
+.fundamental-cell-label {
+  font-size: 11px;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.fundamental-cell-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-0);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
