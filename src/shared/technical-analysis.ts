@@ -348,7 +348,8 @@ export type TechnicalSignal = {
 
 /**
  * Detect all technical signals from K-line data.
- * Includes: MACD, RSI, KDJ, Bollinger, Volume MA, WR
+ * Includes: MACD (cross + histogram), RSI, KDJ, Bollinger, Volume MA,
+ *           MA Cross (MA5/10), BIAS, WR
  */
 export function detectAllSignals(kline: KlinePoint[]): TechnicalSignal[] {
   if (kline.length < 30) return [];
@@ -533,7 +534,100 @@ export function detectAllSignals(kline: KlinePoint[]): TechnicalSignal[] {
     }
   }
 
-  // 6. WR
+  // 6. MA Cross (MA5 / MA10 golden / death cross)
+  if (kline.length >= 10) {
+    const ma5 = calcMA(closes, 5);
+    const ma10 = calcMA(closes, 10);
+    let lastIdx = ma5.length - 1;
+    let prevIdx = lastIdx - 1;
+    while (lastIdx > 0 && (ma5[lastIdx] === null || ma10[lastIdx] === null)) lastIdx--;
+    prevIdx = lastIdx - 1;
+    while (prevIdx > 0 && (ma5[prevIdx] === null || ma10[prevIdx] === null)) prevIdx--;
+    if (prevIdx >= 0 && ma5[lastIdx] !== null && ma10[lastIdx] !== null && ma5[prevIdx] !== null && ma10[prevIdx] !== null) {
+      const p5 = ma5[prevIdx]!;
+      const p10 = ma10[prevIdx]!;
+      const c5 = ma5[lastIdx]!;
+      const c10 = ma10[lastIdx]!;
+      if (p5 <= p10 && c5 > c10) {
+        signals.push({
+          type: 'ma5_10_golden_cross',
+          indicator: 'ma_cross',
+          label: 'MA5/10 金叉',
+          guidance: '5日均线上穿10日均线，短线趋势转强，可积极关注',
+          severity: 'positive',
+        });
+      } else if (p5 >= p10 && c5 < c10) {
+        signals.push({
+          type: 'ma5_10_death_cross',
+          indicator: 'ma_cross',
+          label: 'MA5/10 死叉',
+          guidance: '5日均线下穿10日均线，短线趋势转弱，注意防范风险',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 7. BIAS (乖离率) — price deviation from MA5
+  if (kline.length >= 5) {
+    const ma5 = calcMA(closes, 5);
+    const lastMa5 = ma5[ma5.length - 1];
+    const lastClose = closes[closes.length - 1];
+    if (lastMa5 !== null && lastMa5 > 0 && Number.isFinite(lastClose)) {
+      const bias = ((lastClose - lastMa5) / lastMa5) * 100;
+      if (bias > 8) {
+        signals.push({
+          type: 'bias_high',
+          indicator: 'bias',
+          label: `乖离率偏高(${bias.toFixed(1)}%)`,
+          guidance: `股价偏离5日均线 ${bias.toFixed(1)}%，短期涨幅过大，注意回调风险`,
+          severity: 'negative',
+        });
+      } else if (bias < -8) {
+        signals.push({
+          type: 'bias_low',
+          indicator: 'bias',
+          label: `乖离率偏低(${bias.toFixed(1)}%)`,
+          guidance: `股价偏离5日均线 ${bias.toFixed(1)}%，短期跌幅过大，存在反弹需求`,
+          severity: 'positive',
+        });
+      }
+    }
+  }
+
+  // 8. MACD histogram turning (red/green bar flip)
+  if (kline.length >= 26) {
+    const macd = calcMACD(closes);
+    const m = macd.macd;
+    let lastIdx = m.length - 1;
+    let prevIdx = lastIdx - 1;
+    while (lastIdx > 0 && (m[lastIdx] === null)) lastIdx--;
+    prevIdx = lastIdx - 1;
+    while (prevIdx > 0 && (m[prevIdx] === null)) prevIdx--;
+    if (prevIdx >= 0 && m[lastIdx] !== null && m[prevIdx] !== null) {
+      const pm = m[prevIdx]!;
+      const cm = m[lastIdx]!;
+      if (pm <= 0 && cm > 0) {
+        signals.push({
+          type: 'macd_histogram_turn_positive',
+          indicator: 'macd',
+          label: 'MACD 翻红',
+          guidance: 'MACD 柱由负转正，空方力量减弱，有望形成金叉',
+          severity: 'positive',
+        });
+      } else if (pm >= 0 && cm < 0) {
+        signals.push({
+          type: 'macd_histogram_turn_negative',
+          indicator: 'macd',
+          label: 'MACD 翻绿',
+          guidance: 'MACD 柱由正转负，多头力量减弱，注意死叉风险',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 9. WR
   if (kline.length >= 14) {
     const wr = calcWR(highs, lows, closes);
     const lastWr = wr[wr.length - 1];

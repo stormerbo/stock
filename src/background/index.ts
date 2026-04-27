@@ -220,24 +220,10 @@ async function loadRefreshConfig(): Promise<RefreshConfig> {
 
 type TechnicalReportConfig = {
   enabled: boolean;
-  trackGoldenCross: boolean;
-  trackDeathCross: boolean;
-  trackRsi: boolean;
-  trackKdj: boolean;
-  trackBollinger: boolean;
-  trackVolume: boolean;
-  trackWr: boolean;
 };
 
 const DEFAULT_TECH_REPORT: TechnicalReportConfig = {
   enabled: false,
-  trackGoldenCross: true,
-  trackDeathCross: true,
-  trackRsi: true,
-  trackKdj: true,
-  trackBollinger: true,
-  trackVolume: true,
-  trackWr: true,
 };
 
 type TechReportStatus = {
@@ -951,20 +937,6 @@ async function evaluateDrawdownRules(positions: StockPosition[]) {
 // 盘后技术指标报告 — 每日 15:30 计算多指标信号
 // -----------------------------------------------------------
 
-/** 根据配置过滤需要跟踪的信号类型 */
-function filterSignalByConfig(signal: import('../shared/technical-analysis').TechnicalSignal, config: TechnicalReportConfig): boolean {
-  const { indicator } = signal;
-  if (indicator === 'macd') {
-    return signal.type === 'macd_golden_cross' ? config.trackGoldenCross : config.trackDeathCross;
-  }
-  if (indicator === 'rsi') return config.trackRsi;
-  if (indicator === 'kdj') return config.trackKdj;
-  if (indicator === 'bollinger') return config.trackBollinger;
-  if (indicator === 'volume') return config.trackVolume;
-  if (indicator === 'wr') return config.trackWr;
-  return false;
-}
-
 async function generateDailyTechnicalReport() {
   const config = await loadTechReportConfig();
   if (!config.enabled) return;
@@ -1024,15 +996,12 @@ async function generateDailyTechnicalReport() {
       }
 
       // 检测全部信号
-      const allSignals = detectAllSignals(result.kline);
-
-      // 按配置过滤
-      const trackedSignals = allSignals.filter((s) => filterSignalByConfig(s, config));
+      const signals = detectAllSignals(result.kline);
 
       // 与上次状态比较去重
       const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
       const prevSet = new Set(prevList);
-      const newForStock = trackedSignals.filter((s) => !prevSet.has(s.type));
+      const newForStock = signals.filter((s) => !prevSet.has(s.type));
 
       if (newForStock.length > 0) {
         newSignalsByStock[result.code] = newForStock.map((s) => ({
@@ -1044,7 +1013,7 @@ async function generateDailyTechnicalReport() {
       }
 
       // 更新当前状态（所有的 type 列表）
-      const allTypes = trackedSignals.map((s) => s.type);
+      const allTypes = signals.map((s) => s.type);
       currentSignals[result.code] = allTypes.join(';');
     }
 

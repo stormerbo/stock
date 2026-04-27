@@ -510,24 +510,10 @@ export default function App() {
 
   type TechReportConfig = {
     enabled: boolean;
-    trackGoldenCross: boolean;
-    trackDeathCross: boolean;
-    trackRsi: boolean;
-    trackKdj: boolean;
-    trackBollinger: boolean;
-    trackVolume: boolean;
-    trackWr: boolean;
   };
 
   const DEFAULT_TECH_REPORT: TechReportConfig = {
     enabled: false,
-    trackGoldenCross: true,
-    trackDeathCross: true,
-    trackRsi: true,
-    trackKdj: true,
-    trackBollinger: true,
-    trackVolume: true,
-    trackWr: true,
   };
 
   const [techReportConfig, setTechReportConfig] = useState<TechReportConfig>(DEFAULT_TECH_REPORT);
@@ -1219,114 +1205,12 @@ export default function App() {
             </div>
 
             {techReportDraft.enabled && (
-              <>
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">MACD 金叉信号</span>
-                    <span className="config-hint">DIF 线上穿 DEA 线时推送通知</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackGoldenCross}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackGoldenCross: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
+              <div className="config-row" style={{ opacity: 0.7 }}>
+                <div>
+                  <span className="config-label">所有技术指标自动开启</span>
+                  <span className="config-hint">包括 MACD（金叉/死叉/翻红翻绿）、RSI（超买超卖）、KDJ、布林带、成交量、均线交叉(MA5/10)、乖离率(BIAS)、威廉指标(WR) — 全部默认开启，无需单独配置</span>
                 </div>
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">MACD 死叉信号</span>
-                    <span className="config-hint">DIF 线下穿 DEA 线时推送通知</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackDeathCross}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackDeathCross: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-
-                <div className="section-divider" style={{ margin: '8px 0', height: 1, background: 'var(--line)', opacity: 0.3 }} />
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">RSI 超买/超卖</span>
-                    <span className="config-hint">RSI(14) 超过 70 或低于 30 时推送</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackRsi}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackRsi: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">KDJ 信号</span>
-                    <span className="config-hint">KDJ 金叉/死叉及超买超卖提示</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackKdj}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackKdj: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">布林带信号</span>
-                    <span className="config-hint">突破上下轨及收窄提示</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackBollinger}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackBollinger: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">成交量异动</span>
-                    <span className="config-hint">成交量放大或萎缩至 5 日均量的倍数阈值</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackVolume}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackVolume: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-
-                <div className="config-row">
-                  <div>
-                    <span className="config-label">威廉指标(WR)</span>
-                    <span className="config-hint">WR 超买({'>'}-20)或超卖({'<'}-80)时推送</span>
-                  </div>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={techReportDraft.trackWr}
-                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackWr: e.target.checked }))}
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                </div>
-              </>
+              </div>
             )}
           </div>
         </section>
