@@ -14,3 +14,7 @@ dist/
 
 # release zips
 release/*.zip
+
+# debug / test artifacts
+.playwright-mcp/
+fund-detail-page*.txt
