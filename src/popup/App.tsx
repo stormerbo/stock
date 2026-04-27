@@ -2755,7 +2755,14 @@ function clearIntradayIfStale(
                           <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
                           <div className="notification-text">
                             <span className="notification-stock">
-                              {item.name === '盘后技术报告' ? '📊 盘后技术报告' : item.name}
+                              {item.name === '盘后技术报告' ? (
+                                (() => {
+                                  // 从消息中提取股票名
+                                  const stockLines = item.message.split('\n').filter(l => /^\S+\(\d{6}\)/.test(l.trim()));
+                                  const first = stockLines[0]?.trim().replace(/\(.*$/, '') || '';
+                                  return <>{'📊 '}<span className="tech-report-title-inline">盘后技术报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
+                                })()
+                              ) : item.name}
                               {item.code && <span className="notification-code">({item.code})</span>}
                             </span>
                             {priceValid && (

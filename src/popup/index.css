@@ -2934,6 +2934,11 @@ body.theme-light .notification-item.clickable:hover {
   color: var(--text-0);
 }
 
+.tech-report-title-inline {
+  font-weight: 700;
+  color: var(--text-0);
+}
+
 .tech-report-enabled {
   font-size: 10px;
   font-weight: 600;
