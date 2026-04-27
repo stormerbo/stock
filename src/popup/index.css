@@ -3039,15 +3039,16 @@ body.theme-light .notification-item.clickable:hover {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
 }
 
 .tech-report-detail-modal {
-  background: var(--bg);
+  background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: 12px;
   width: 100%;
