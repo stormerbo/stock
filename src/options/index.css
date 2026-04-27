@@ -462,6 +462,37 @@ body.theme-light .badge-option.active {
   margin-top: 2px;
 }
 
+/* ---- Tech Report Indicator Grid ---- */
+
+.indicator-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.indicator-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.indicator-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.indicator-desc {
+  font-size: 11px;
+  color: var(--text-1);
+  line-height: 1.4;
+}
+
 .number-input {
   width: 72px;
   padding: 8px 10px;

@@ -1189,10 +1189,38 @@ export default function App() {
             </div>
 
             {techReportDraft.enabled && (
-              <div className="config-row" style={{ opacity: 0.7 }}>
-                <div>
-                  <span className="config-label">所有技术指标自动开启</span>
-                  <span className="config-hint">包括 MACD（金叉/死叉/翻红翻绿）、RSI（超买超卖）、KDJ、布林带、成交量、均线交叉(MA5/10)、乖离率(BIAS)、威廉指标(WR) — 全部默认开启，无需单独配置</span>
+              <div className="indicator-grid">
+                <div className="indicator-card">
+                  <span className="indicator-name">MACD</span>
+                  <span className="indicator-desc">趋势跟踪指标，DIF/DEA 金叉死叉及柱状图翻红翻绿，判断趋势转折</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">RSI</span>
+                  <span className="indicator-desc">相对强弱指标，超买(&gt;70)/超卖(&lt;30)提示价格反转</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">KDJ</span>
+                  <span className="indicator-desc">随机指标，金叉死叉及超买超卖区域判断短期买卖时机</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">布林带</span>
+                  <span className="indicator-desc">标准差通道，突破上下轨提示超涨超跌，收窄预示变盘</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">成交量</span>
+                  <span className="indicator-desc">量能异动，成交量为5日均量的倍数时提示放量/缩量</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">均线交叉</span>
+                  <span className="indicator-desc">MA5/10 金叉死叉，判断短期趋势强弱转换</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">乖离率(BIAS)</span>
+                  <span className="indicator-desc">股价偏离5日均线百分比，偏离过大提示回归需求</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">威廉指标(WR)</span>
+                  <span className="indicator-desc">超买超卖区间判断短期回调或反弹机会</span>
                 </div>
               </div>
             )}
