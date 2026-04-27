@@ -12,6 +12,14 @@ import {
   type AlertDirection,
   type AlertScope,
 } from '../shared/alerts';
+import {
+  loadTagConfig,
+  saveTagConfig,
+  MAX_TAG_NAME_LENGTH,
+  MAX_GLOBAL_TAGS,
+  type TagConfig,
+  type TagDefinition,
+} from '../shared/tags';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const DISPLAY_STORAGE_KEY = 'displayConfig';
@@ -75,6 +83,7 @@ const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
   change_pct: '涨跌幅波动',
   volatility: '振幅波动',
   spike: '急速异动',
+  drawdown: '最大回撤',
 };
 
 const ALERT_DIRECTION_OPTIONS: Array<{ value: AlertDirection; label: string }> = [
@@ -250,6 +259,22 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
                 </div>
               )}
 
+              {rule.type === 'drawdown' && (
+                <div className="alert-rule-inputs">
+                  <input
+                    type="number"
+                    className="number-input small"
+                    value={rule.drawdownThreshold ?? ''}
+                    placeholder="阈值"
+                    min={5}
+                    max={100}
+                    onChange={(e) => updateRule(ri, (prev) => ({ ...prev, drawdownThreshold: Number(e.target.value) || 0 }))}
+                  />
+                  <span>%</span>
+                  <span className="alert-rule-hint">每日收盘后检测</span>
+                </div>
+              )}
+
               <div className="alert-rule-cooldown">
                 <span>冷却</span>
                 <input
@@ -271,7 +296,7 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
 
           {/* Add rule button */}
           <div className="alert-add-rule">
-            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility'] as AlertRuleType[]).map((type) => (
+            {(['price_up', 'price_down', 'change_pct', 'spike', 'volatility', 'drawdown'] as AlertRuleType[]).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -306,22 +331,42 @@ function ensureRecord(value: unknown): Record<string, unknown> {
 }
 
 // -----------------------------------------------------------
-// Test notification
+// Test notification — demo: spike up + spike down
 // -----------------------------------------------------------
 
 function sendTestNotification() {
   if (typeof chrome?.runtime?.sendMessage !== 'function') return;
-  void chrome.runtime.sendMessage({
-    type: 'test-notification',
-    data: {
+
+  const now = Date.now();
+  const payloads = [
+    {
+      // 急速拉升 demo
       code: '600519',
       name: '贵州茅台',
-      message: '贵州茅台(600519) 急速拉升\n近5分钟内上涨 +2.50%，现价 ¥1750.00',
+      message: '贵州茅台(600519) 急速拉升\n近5分钟内上涨 +3.25%，触发第1档(2.00%)，现价 ¥1820.50',
       ruleType: 'spike',
-      price: 1750.00,
-      changePct: 2.5,
+      price: 1820.50,
+      changePct: 3.25,
+      _ruleId: `spike_demo_up::up::L1`,
     },
-  }).catch(() => undefined);
+    {
+      // 急速打压 demo
+      code: '000001',
+      name: '平安银行',
+      message: '平安银行(000001) 急速打压\n近5分钟内下跌 -2.80%，触发第1档(2.00%)，现价 ¥11.35',
+      ruleType: 'spike',
+      price: 11.35,
+      changePct: -2.80,
+      _ruleId: `spike_demo_down::down::L1`,
+    },
+  ];
+
+  for (const p of payloads) {
+    void chrome.runtime.sendMessage({
+      type: 'test-notification',
+      data: p,
+    }).catch(() => undefined);
+  }
 }
 
 // -----------------------------------------------------------
@@ -460,6 +505,106 @@ export default function App() {
 
   const workModeDirty = JSON.stringify(workModeDraft) !== JSON.stringify(workModeConfig);
 
+  // ---- Technical Report Config ----
+  const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
+
+  type TechReportConfig = {
+    enabled: boolean;
+    trackGoldenCross: boolean;
+    trackDeathCross: boolean;
+    trackRsi: boolean;
+    trackKdj: boolean;
+    trackBollinger: boolean;
+    trackVolume: boolean;
+    trackWr: boolean;
+  };
+
+  const DEFAULT_TECH_REPORT: TechReportConfig = {
+    enabled: false,
+    trackGoldenCross: true,
+    trackDeathCross: true,
+    trackRsi: true,
+    trackKdj: true,
+    trackBollinger: true,
+    trackVolume: true,
+    trackWr: true,
+  };
+
+  const [techReportConfig, setTechReportConfig] = useState<TechReportConfig>(DEFAULT_TECH_REPORT);
+  const [techReportDraft, setTechReportDraft] = useState<TechReportConfig>(DEFAULT_TECH_REPORT);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(TECH_REPORT_STORAGE_KEY, (result: Record<string, unknown>) => {
+        const config = result[TECH_REPORT_STORAGE_KEY] as TechReportConfig | undefined;
+        const resolved = config || DEFAULT_TECH_REPORT;
+        setTechReportConfig(resolved);
+        setTechReportDraft(resolved);
+      });
+    }
+  }, []);
+
+  const techReportDirty = JSON.stringify(techReportDraft) !== JSON.stringify(techReportConfig);
+
+  // ---- Tag Config ----
+  const [tagConfig, setTagConfig] = useState<TagConfig>({ tags: [] });
+
+  useEffect(() => {
+    loadTagConfig().then(setTagConfig);
+  }, []);
+
+  const handleCreateTag = (name: string) => {
+    const trimmed = name.trim().slice(0, MAX_TAG_NAME_LENGTH);
+    if (!trimmed || tagConfig.tags.length >= MAX_GLOBAL_TAGS) return;
+    if (tagConfig.tags.some(t => t.name === trimmed)) return;
+    const newDef: TagDefinition = { name: trimmed, createdAt: Date.now() };
+    const next = { ...tagConfig, tags: [...tagConfig.tags, newDef] };
+    setTagConfig(next);
+    void saveTagConfig(next);
+  };
+
+  const handleRenameTag = (oldName: string, newName: string) => {
+    const trimmed = newName.trim().slice(0, MAX_TAG_NAME_LENGTH);
+    if (!trimmed || oldName === trimmed) return;
+    if (tagConfig.tags.some(t => t.name === trimmed)) return;
+    const next = {
+      ...tagConfig,
+      tags: tagConfig.tags.map(t => t.name === oldName ? { ...t, name: trimmed } : t),
+    };
+    setTagConfig(next);
+    void saveTagConfig(next);
+  };
+
+  const handleDeleteTag = async (name: string) => {
+    // Remove from global registry
+    const nextConfig = {
+      ...tagConfig,
+      tags: tagConfig.tags.filter(t => t.name !== name),
+    };
+    setTagConfig(nextConfig);
+    void saveTagConfig(nextConfig);
+
+    // Remove from all holdings
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      const result = await chrome.storage.sync.get(['stockHoldings', 'fundHoldings']);
+      const stockHoldings: Array<Record<string, unknown>> = Array.isArray(result.stockHoldings) ? result.stockHoldings : [];
+      const fundHoldings: Array<Record<string, unknown>> = Array.isArray(result.fundHoldings) ? result.fundHoldings : [];
+      const updatedStocks = stockHoldings.map((h: Record<string, unknown>) => {
+        const tags = Array.isArray(h.tags) ? (h.tags as string[]).filter(t => t !== name) : [];
+        return tags.length !== (Array.isArray(h.tags) ? (h.tags as string[]).length : 0)
+          ? { ...h, tags }
+          : h;
+      });
+      const updatedFunds = fundHoldings.map((h: Record<string, unknown>) => {
+        const tags = Array.isArray(h.tags) ? (h.tags as string[]).filter(t => t !== name) : [];
+        return tags.length !== (Array.isArray(h.tags) ? (h.tags as string[]).length : 0)
+          ? { ...h, tags }
+          : h;
+      });
+      await chrome.storage.sync.set({ stockHoldings: updatedStocks, fundHoldings: updatedFunds });
+    }
+  };
+
   // ---- Save ----
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -468,22 +613,25 @@ export default function App() {
         saveStorageItem(DISPLAY_STORAGE_KEY, displayDraft),
         saveStorageItem(REFRESH_STORAGE_KEY, refreshDraft),
         saveStorageItem(WORK_MODE_STORAGE_KEY, workModeDraft),
+        saveStorageItem(TECH_REPORT_STORAGE_KEY, techReportDraft),
       ]);
       setDisplayConfig(displayDraft);
       setRefreshConfig(refreshDraft);
       setWorkModeConfig(workModeDraft);
+      setTechReportConfig(techReportDraft);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
     }
-  }, [displayDraft, refreshDraft, workModeDraft]);
+  }, [displayDraft, refreshDraft, workModeDraft, techReportDraft]);
 
   const handleReset = useCallback(() => {
     setDisplayDraft(displayConfig);
     setRefreshDraft(refreshConfig);
     setWorkModeDraft(workModeConfig);
-  }, [displayConfig, refreshConfig, workModeConfig]);
+    setTechReportDraft(techReportConfig);
+  }, [displayConfig, refreshConfig, workModeConfig, techReportConfig]);
 
   // ---- Load stock holdings (all stocks, with name + position data) ----
   const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
@@ -561,7 +709,7 @@ export default function App() {
   }, [alertDraft]);
 
   const alertDirty = JSON.stringify(alertDraft) !== JSON.stringify(alertConfig);
-  const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty;
+  const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty || techReportDirty;
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMessage, setBackupMessage] = useState('');
@@ -893,6 +1041,33 @@ export default function App() {
           </div>
         </section>
 
+        {/* ---- 标签管理 ---- */}
+        <section className="options-section">
+          <h2>标签管理</h2>
+          <div className="config-card">
+            <div className="config-row">
+              <div>
+                <span className="config-label">已建标签</span>
+                <span className="config-hint">{tagConfig.tags.length}/{MAX_GLOBAL_TAGS}，点击标签可重命名</span>
+              </div>
+            </div>
+            <div className="tag-management-list">
+              {tagConfig.tags.length === 0 ? (
+                <div className="tag-empty-hint">暂无标签，在弹出页的右键菜单中创建</div>
+              ) : (
+                tagConfig.tags.map((tag) => (
+                  <TagRow
+                    key={tag.name}
+                    tag={tag}
+                    onRename={handleRenameTag}
+                    onDelete={handleDeleteTag}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* ---- 告警设置 ---- */}
         <section className="options-section">
           <h2>
@@ -1021,6 +1196,141 @@ export default function App() {
           </div>
         </section>
 
+        {/* ---- 盘后技术指标报告 ---- */}
+        <section className="options-section">
+          <h2>
+            盘后技术指标报告
+            <span className={`dirty-tag ${techReportDirty ? 'dirty' : ''}`}>{techReportDirty ? '未保存' : '已保存'}</span>
+          </h2>
+          <div className="config-card">
+            <div className="config-row">
+              <div>
+                <span className="config-label">启用收盘后技术分析</span>
+                <span className="config-hint">每日收盘后（15:30）自动计算持仓股票的技术指标</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={techReportDraft.enabled}
+                  onChange={(e) => setTechReportDraft((prev) => ({ ...prev, enabled: e.target.checked }))}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            {techReportDraft.enabled && (
+              <>
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">MACD 金叉信号</span>
+                    <span className="config-hint">DIF 线上穿 DEA 线时推送通知</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackGoldenCross}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackGoldenCross: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">MACD 死叉信号</span>
+                    <span className="config-hint">DIF 线下穿 DEA 线时推送通知</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackDeathCross}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackDeathCross: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="section-divider" style={{ margin: '8px 0', height: 1, background: 'var(--line)', opacity: 0.3 }} />
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">RSI 超买/超卖</span>
+                    <span className="config-hint">RSI(14) 超过 70 或低于 30 时推送</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackRsi}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackRsi: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">KDJ 信号</span>
+                    <span className="config-hint">KDJ 金叉/死叉及超买超卖提示</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackKdj}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackKdj: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">布林带信号</span>
+                    <span className="config-hint">突破上下轨及收窄提示</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackBollinger}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackBollinger: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">成交量异动</span>
+                    <span className="config-hint">成交量放大或萎缩至 5 日均量的倍数阈值</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackVolume}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackVolume: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+
+                <div className="config-row">
+                  <div>
+                    <span className="config-label">威廉指标(WR)</span>
+                    <span className="config-hint">WR 超买({'>'}-20)或超卖({'<'}-80)时推送</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={techReportDraft.trackWr}
+                      onChange={(e) => setTechReportDraft((prev) => ({ ...prev, trackWr: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
         {/* ---- 数据迁移 ---- */}
         <section className="options-section">
           <h2>数据迁移</h2>
@@ -1096,6 +1406,60 @@ export default function App() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---- Tag Row Component ----
+type TagRowProps = {
+  tag: TagDefinition;
+  onRename: (oldName: string, newName: string) => void;
+  onDelete: (name: string) => void;
+};
+
+function TagRow({ tag, onRename, onDelete }: TagRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(tag.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const handleSubmit = () => {
+    if (value.trim() && value.trim() !== tag.name) {
+      onRename(tag.name, value.trim());
+    }
+    setEditing(false);
+    setValue(tag.name);
+  };
+
+  return (
+    <div className="tag-manage-row">
+      {editing ? (
+        <input
+          ref={inputRef}
+          className="tag-rename-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value.slice(0, MAX_TAG_NAME_LENGTH))}
+          onBlur={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSubmit();
+            if (e.key === 'Escape') { setEditing(false); setValue(tag.name); }
+          }}
+          maxLength={MAX_TAG_NAME_LENGTH}
+        />
+      ) : (
+        <span className="tag-manage-name" onClick={() => setEditing(true)} title="点击重命名">
+          {tag.name}
+        </span>
+      )}
+      <button type="button" className="btn-tiny danger" onClick={() => onDelete(tag.name)} title="删除标签">
+        删除
+      </button>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { FundHoldingConfig, FundPosition, StockHoldingConfig, StockPosition } from './fetch';
+import { computePositionFromTrades, type StockTradeRecord } from './trade-history';
 
 export const DAILY_PROFIT_DETAILS_KEY = 'dailyProfitDetails';
 export const DAILY_PROFIT_PENDING_SNAPSHOT_KEY = 'dailyProfitPendingSnapshot';
@@ -69,6 +70,7 @@ export function buildDailyProfitDetailRecord(
   stockHoldings: StockHoldingConfig[],
   fundHoldings: FundHoldingConfig[],
   updatedAt = new Date().toISOString(),
+  stockTradeHistory?: Record<string, StockTradeRecord[]>,
 ): DailyProfitDetailRecord {
   const stockMap = new Map(stockPositions.map((item) => [item.code, item]));
   const fundMap = new Map(fundPositions.map((item) => [item.code, item]));
@@ -77,12 +79,24 @@ export function buildDailyProfitDetailRecord(
     .filter((holding) => Number(holding.shares) > 0)
     .map((holding) => {
       const row = stockMap.get(holding.code);
-      const shares = Math.max(0, Number(holding.shares) || 0);
-      const cost = Math.max(0, Number(holding.cost) || 0);
+
+      // If trade history exists, derive shares/cost from trades
+      let shares: number;
+      let cost: number;
+      const trades = stockTradeHistory?.[holding.code];
+      if (trades && trades.length > 0) {
+        const computed = computePositionFromTrades(trades);
+        shares = computed.shares;
+        cost = computed.avgCost;
+      } else {
+        shares = Math.max(0, Number(holding.shares) || 0);
+        cost = Math.max(0, Number(holding.cost) || 0);
+      }
+
       const price = toSafeNumber(row?.price);
       const dailyPnl = toSafeNumber(row?.dailyPnl);
       const dailyChangePct = toSafeNumber(row?.dailyChangePct);
-      const floatingPnl = toSafeNumber(row?.floatingPnl);
+      const floatingPnl = Number.isFinite(price) && shares > 0 ? (price - cost) * shares : Number.NaN;
       const positionValue = Number.isFinite(price) ? price * shares : Number.NaN;
 
       return {

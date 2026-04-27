@@ -8,6 +8,7 @@ import {
   type StockDetailData,
   type StockPeriod,
 } from "./stockDetail";
+import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../shared/risk-metrics";
 
 const UP_COLOR = "#e45555";
 const DN_COLOR = "#2aa568";
@@ -494,6 +495,23 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
 
   // Noon break is always at 50% of the chart (120 / 240 = 0.5)
   const noonBreakX = isSingleMinute ? SVG_W * 0.5 : -1;
+  const minuteVolumeBarWidth = useMemo(() => {
+    if (!isMinuteStyle) {
+      return visibleKline.length > 0 ? SVG_W / visibleKline.length : 1;
+    }
+    if (minuteXs.length < 2) return 2;
+
+    let minGap = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < minuteXs.length; i += 1) {
+      const gap = minuteXs[i] - minuteXs[i - 1];
+      if (gap > 0 && gap < minGap) {
+        minGap = gap;
+      }
+    }
+
+    if (!Number.isFinite(minGap)) return 2;
+    return clamp(minGap * 0.78, 1.2, 6);
+  }, [SVG_W, isMinuteStyle, minuteXs, visibleKline.length]);
 
   const volumeMax = Math.max(...volumes, 1);
   const volumeUnit = getVolumeDisplayUnit(volumeMax);
@@ -728,12 +746,10 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
         {/* Volume chart */}
         <svg className="kline-volume" viewBox={`0 0 ${SVG_W} ${volumeHeight}`}>
           {volumes.map((vol, i) => {
+            const w = isMinuteStyle ? minuteVolumeBarWidth : SVG_W / volumes.length;
             const x = isMinuteStyle
-              ? minuteXs[i]
+              ? minuteXs[i] - w / 2
               : (i / volumes.length) * SVG_W;
-            const w = isMinuteStyle
-              ? Math.max(1, SVG_W / (visibleKline.length * 240 / TOTAL_TRADING_MINUTES) - 0.5)
-              : SVG_W / volumes.length;
             const h = (vol / volumeMax) * (volumeHeight - 2);
             const y = volumeHeight - h;
             const up = closes[i] >= (i > 0 ? closes[i - 1] : closes[i]);
@@ -968,6 +984,11 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
               <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
               <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
             </div>
+
+            {/* ─── Risk Metrics Strip ─── */}
+            {detail.period === "day" && detail.kline.length >= 10 ? (
+              <RiskMetrics kline={detail.kline} />
+            ) : null}
           </div>
 
           {/* ─── Chart ─── */}
@@ -989,5 +1010,34 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/* ─── Risk Metrics Sub-component ─── */
+function RiskMetrics({ kline }: { kline: Array<{ date: string; close: number }> }) {
+  const drawdown = useMemo(() => calcMaxDrawdownFromKline(kline), [kline]);
+  const volatility = useMemo(() => calcVolatilityFromKline(kline), [kline]);
+
+  return (
+    <div className="risk-metrics-strip">
+      {drawdown ? (
+        <div className="risk-metric-cell">
+          <span className="risk-metric-label">最大回撤</span>
+          <span className="risk-metric-value" style={{ color: '#ef4444' }}>
+            {formatNumber(drawdown.maxDrawdown * 100, 1)}%
+          </span>
+          <span className="risk-metric-sub">{drawdown.peakDate} → {drawdown.troughDate}</span>
+        </div>
+      ) : null}
+      {volatility ? (
+        <div className="risk-metric-cell">
+          <span className="risk-metric-label">年化波动率</span>
+          <span className="risk-metric-value">{formatNumber(volatility.annualizedVolatility * 100, 1)}%</span>
+        </div>
+      ) : null}
+      {!drawdown && !volatility ? (
+        <span className="risk-metric-label">数据不足，无法计算风险指标</span>
+      ) : null}
+    </div>
   );
 }

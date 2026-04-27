@@ -3,6 +3,22 @@ import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, Search, S
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
+import DiagnosticPanel from './DiagnosticPanel';
+import TagBadge from './TagBadge';
+import TagFilterBar from './TagFilterBar';
+import TagEditor from './TagEditor';
+import TradeHistoryModal from './TradeHistoryModal';
+import {
+  loadTradeHistory,
+  computePositionFromTrades,
+  type StockTradeRecord,
+} from '../shared/trade-history';
+import {
+  loadTagConfig,
+  saveTagConfig,
+  type TagConfig,
+  type TagDefinition,
+} from '../shared/tags';
 import {
   fetchBatchStockQuotes,
   fetchStockIntradayWithRetry,
@@ -71,13 +87,17 @@ type FundDetailTarget = {
 type StockRow = StockPosition & {
   pinned: boolean;
   special: boolean;
+  tags: string[];
   addedPrice?: number;
   addedAt?: string;
+  realizedPnl?: number;
+  tradeDerived?: boolean;
 };
 
 type FundRow = FundPosition & {
   pinned: boolean;
   special: boolean;
+  tags: string[];
   addedNav?: number;
   addedAt?: string;
 };
@@ -660,7 +680,7 @@ function IntradayChart({
             d={`M ${path}`}
             fill="none"
             stroke={color}
-            strokeWidth="1.7"
+            strokeWidth="1.2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -797,6 +817,13 @@ export default function App() {
     field: 'cost' | 'shares' | 'units';
     value: string;
   } | null>(null);
+
+  // 标签系统
+  const [tagConfig, setTagConfig] = useState<TagConfig>({ tags: [] });
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [tagEditorTarget, setTagEditorTarget] = useState<{ kind: 'stock' | 'fund'; code: string } | null>(null);
+  const [stockTradeHistory, setStockTradeHistory] = useState<Record<string, StockTradeRecord[]>>({});
+  const [tradeHistoryTarget, setTradeHistoryTarget] = useState<{ code: string; name: string } | null>(null);
 
   const popupRootRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1013,6 +1040,7 @@ export default function App() {
         ...row,
         pinned: Boolean(holding.pinned),
         special: Boolean(holding.special),
+        tags: Array.isArray(holding.tags) ? holding.tags.slice(0, 5) : [],
       };
       if (Number.isFinite(holding.addedPrice) && (holding.addedPrice as number) > 0) {
         next.addedPrice = holding.addedPrice;
@@ -1020,10 +1048,21 @@ export default function App() {
       if (holding.addedAt) {
         next.addedAt = holding.addedAt;
       }
+
+      // If trade history exists, derive shares/cost from trades
+      const trades = stockTradeHistory[holding.code];
+      if (trades && trades.length > 0) {
+        const computed = computePositionFromTrades(trades);
+        next.shares = computed.shares;
+        next.cost = computed.avgCost;
+        next.realizedPnl = computed.realizedPnl;
+        next.tradeDerived = true;
+      }
+
       rows.push(next);
     }
     return rows;
-  }, [stockHoldings, stockPositions]);
+  }, [stockHoldings, stockPositions, stockTradeHistory]);
 
   const fundRows = useMemo<FundRow[]>(() => {
     const positionMap = new Map(fundPositions.map((item) => [item.code, item]));
@@ -1035,6 +1074,7 @@ export default function App() {
         ...row,
         pinned: Boolean(holding.pinned),
         special: Boolean(holding.special),
+        tags: Array.isArray(holding.tags) ? holding.tags.slice(0, 5) : [],
       };
       if (Number.isFinite(holding.addedNav) && (holding.addedNav as number) > 0) {
         next.addedNav = holding.addedNav;
@@ -1047,18 +1087,26 @@ export default function App() {
     return rows;
   }, [fundHoldings, fundPositions]);
 
-  const stockDisplayRows = useMemo(() => (
-    sortingMode === 'stocks' && stockSortDraft
+  const stockDisplayRows = useMemo(() => {
+    let rows = sortingMode === 'stocks' && stockSortDraft
       ? sortRowsByCodes(stockRows, stockSortDraft)
-      : stockRows
-  ), [sortingMode, stockRows, stockSortDraft]);
+      : stockRows;
+    if (tagFilter.length > 0) {
+      rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
+    }
+    return rows;
+  }, [sortingMode, stockRows, stockSortDraft, tagFilter]);
 
 
-  const fundDisplayRows = useMemo(() => (
-    sortingMode === 'funds' && fundSortDraft
+  const fundDisplayRows = useMemo(() => {
+    let rows = sortingMode === 'funds' && fundSortDraft
       ? sortRowsByCodes(fundRows, fundSortDraft)
-      : fundRows
-  ), [fundRows, fundSortDraft, sortingMode]);
+      : fundRows;
+    if (tagFilter.length > 0) {
+      rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
+    }
+    return rows;
+  }, [fundRows, fundSortDraft, sortingMode, tagFilter]);
 
   const stockTotalHoldingAmount = useMemo(() => (
     stockDisplayRows.reduce((sum, item) => {
@@ -1135,6 +1183,16 @@ export default function App() {
       setStockHoldings(config.stockHoldings);
       setFundHoldings(config.fundHoldings);
       setPortfolioReady(true);
+    });
+
+    loadTagConfig().then((cfg) => {
+      if (!mounted) return;
+      setTagConfig(cfg);
+    });
+
+    loadTradeHistory().then((history) => {
+      if (!mounted) return;
+      setStockTradeHistory(history);
     });
 
     return () => {
@@ -1677,6 +1735,40 @@ function clearIntradayIfStale(
     };
   }, [keyword, isSearchOpen, activeTab]);
 
+  // ---- Tag handlers ----
+
+  const handleTagToggle = (tagName: string) => {
+    setTagFilter(prev =>
+      prev.includes(tagName) ? prev.filter(t => t !== tagName) : [...prev, tagName]
+    );
+  };
+
+  const handleTagClear = () => setTagFilter([]);
+
+  const handleSaveTags = (kind: 'stock' | 'fund', code: string, newTags: string[]) => {
+    if (kind === 'stock') {
+      setStockHoldings(prev => prev.map(h => h.code === code ? { ...h, tags: newTags } : h));
+    } else {
+      setFundHoldings(prev => prev.map(h => h.code === code ? { ...h, tags: newTags } : h));
+    }
+    setTagEditorTarget(null);
+  };
+
+  const handleCreateTag = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (tagConfig.tags.some(t => t.name === trimmed)) return;
+    const newDef: TagDefinition = { name: trimmed, createdAt: Date.now() };
+    const next = { ...tagConfig, tags: [...tagConfig.tags, newDef] };
+    setTagConfig(next);
+    void saveTagConfig(next);
+  };
+
+  const handleOpenTagEditor = (kind: 'stock' | 'fund', code: string) => {
+    setRowContextMenu(null);
+    setTagEditorTarget({ kind, code });
+  };
+
   const openSearch = () => setIsSearchOpen(true);
   const closeSearch = () => {
     setIsSearchOpen(false);
@@ -1990,7 +2082,7 @@ function clearIntradayIfStale(
       } else if (field === 'shares') {
         const trimmed = value.trim();
         const num = trimmed === '' ? 0 : parseInt(trimmed, 10);
-        if (!Number.isNaN(num) && num >= 0 && num % 100 === 0) {
+        if (!Number.isNaN(num) && num >= 0) {
           setStockHoldings((prev) =>
             prev.map((h) => (h.code === code ? { ...h, shares: num } : h))
           );
@@ -2466,6 +2558,11 @@ function clearIntradayIfStale(
                   </article>
                 </div>
 
+                <DiagnosticPanel
+                  stockPositions={stockPositions}
+                  fundPositions={fundPositions}
+                />
+
               </div>
             ) : null}
 
@@ -2576,6 +2673,15 @@ function clearIntradayIfStale(
               </div>
             ) : null}
 
+            {(activeTab === 'stocks' || activeTab === 'funds') && !stockDetailTarget && !fundDetailTarget ? (
+              <TagFilterBar
+                tags={tagConfig.tags}
+                selected={tagFilter}
+                onToggle={handleTagToggle}
+                onClear={handleTagClear}
+              />
+            ) : null}
+
             {activeTab === 'stocks' && !stockDetailTarget ? (
               <div className="table-panel">
                 <table className="data-table stock-table">
@@ -2655,6 +2761,16 @@ function clearIntradayIfStale(
                                 ) : null}
                                 {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                               </span>
+                              {item.tags.length > 0 ? (
+                                <span className="tag-row">
+                                  {item.tags.slice(0, 2).map(tag => (
+                                    <TagBadge key={tag} tag={tag} />
+                                  ))}
+                                  {item.tags.length > 2 ? (
+                                    <span className="tag-badge-more">+{item.tags.length - 2}</span>
+                                  ) : null}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="secondary">{item.code}</span>
                           </td>
@@ -2683,6 +2799,11 @@ function clearIntradayIfStale(
                           <td className="dual-value">
                             <span className={toneClass(item.floatingPnl)}>{formatNumber(item.floatingPnl, 1)}</span>
                             <span className={toneClass(holdingRate)}>{formatPercent(holdingRate)}</span>
+                            {item.tradeDerived && Number.isFinite(item.realizedPnl) ? (
+                              <span className={toneClass(item.realizedPnl!)} style={{ fontSize: 9, opacity: 0.7 }}>
+                                已实现 {item.realizedPnl! >= 0 ? '+' : ''}{formatNumber(item.realizedPnl!, 1)}
+                              </span>
+                            ) : null}
                           </td>
                           <td className="dual-value">
                             <span className={toneClass(item.dailyPnl)}>{formatNumber(item.dailyPnl, 0)}</span>
@@ -2710,8 +2831,10 @@ function clearIntradayIfStale(
                                 className={hasCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (item.tradeDerived) return;
                                   startEditing('stock', item.code, 'cost');
                                 }}
+                                title={item.tradeDerived ? '由交易记录自动计算' : '点击编辑成本价'}
                               >
                                 {hasCost ? formatNumber(item.cost, 3) : '输入成本价'}
                               </span>
@@ -2740,8 +2863,10 @@ function clearIntradayIfStale(
                                 className={hasShares ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (item.tradeDerived) return;
                                   startEditing('stock', item.code, 'shares');
                                 }}
+                                title={item.tradeDerived ? '由交易记录自动计算' : '点击编辑股数'}
                               >
                                 {hasShares ? formatNumber(item.shares, 0) : '输入股数'}
                               </span>
@@ -2855,6 +2980,16 @@ function clearIntradayIfStale(
                               <span className="name-text">{item.name}</span>
                               {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                             </span>
+                            {item.tags.length > 0 ? (
+                              <span className="tag-row">
+                                {item.tags.slice(0, 2).map(tag => (
+                                  <TagBadge key={tag} tag={tag} />
+                                ))}
+                                {item.tags.length > 2 ? (
+                                  <span className="tag-badge-more">+{item.tags.length - 2}</span>
+                                ) : null}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="secondary">{item.code}</span>
                         </td>
@@ -2996,6 +3131,15 @@ function clearIntradayIfStale(
                 <button type="button" onClick={() => toggleStockSpecial(rowContextMenu.code)}>
                   {stockHoldings.find((item) => item.code === rowContextMenu.code)?.special ? '取消特别关注' : '特别关注'}
                 </button>
+                <button type="button" onClick={() => handleOpenTagEditor('stock', rowContextMenu.code)}>
+                  管理标签
+                </button>
+                <button type="button" onClick={() => {
+                  setTradeHistoryTarget({ code: rowContextMenu.code, name: stockHoldings.find((item) => item.code === rowContextMenu.code)?.name || rowContextMenu.code });
+                  setRowContextMenu(null);
+                }}>
+                  交易记录
+                </button>
                 <button type="button" onClick={() => beginSorting('stocks')}>
                   指定排序
                 </button>
@@ -3011,6 +3155,9 @@ function clearIntradayIfStale(
                 <button type="button" onClick={() => toggleFundSpecial(rowContextMenu.code)}>
                   {fundHoldings.find((item) => item.code === rowContextMenu.code)?.special ? '取消特别关注' : '特别关注'}
                 </button>
+                <button type="button" onClick={() => handleOpenTagEditor('fund', rowContextMenu.code)}>
+                  管理标签
+                </button>
                 <button type="button" onClick={() => beginSorting('funds')}>
                   指定排序
                 </button>
@@ -3020,6 +3167,29 @@ function clearIntradayIfStale(
               </>
             )}
           </div>
+        ) : null}
+
+        {tagEditorTarget ? (
+          <TagEditor
+            currentTags={
+              tagEditorTarget.kind === 'stock'
+                ? (stockHoldings.find(h => h.code === tagEditorTarget.code)?.tags ?? [])
+                : (fundHoldings.find(h => h.code === tagEditorTarget.code)?.tags ?? [])
+            }
+            globalTags={tagConfig.tags}
+            onSave={(newTags) => handleSaveTags(tagEditorTarget.kind, tagEditorTarget.code, newTags)}
+            onClose={() => setTagEditorTarget(null)}
+            onCreateTag={handleCreateTag}
+            onDeleteTag={() => {}}
+          />
+        ) : null}
+        {tradeHistoryTarget ? (
+          <TradeHistoryModal
+            code={tradeHistoryTarget.code}
+            name={tradeHistoryTarget.name}
+            onClose={() => setTradeHistoryTarget(null)}
+            onUpdate={() => loadTradeHistory().then(setStockTradeHistory)}
+          />
         ) : null}
       </div>
     </div>

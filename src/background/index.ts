@@ -28,14 +28,20 @@ import {
   pruneFiredHistory,
   evaluateSpikeRule,
   pruneNotificationHistory,
+  isInCooldown,
   NOTIFICATION_HISTORY_KEY,
   type AlertConfig,
+  type AlertFiredRecord,
+  type AlertRule,
   type NotificationRecord,
   type StockAlertConfig,
   type StockSnapshot,
   type SpikePriceEntry,
   type SpikePriceHistory,
 } from '../shared/alerts';
+import { calcMaxDrawdown } from '../shared/risk-metrics';
+import { TRADE_HISTORY_KEY } from '../shared/trade-history';
+import { detectAllSignals, fetchDayFqKline } from '../shared/technical-analysis';
 
 export type BadgeMode =
   | 'off'
@@ -62,13 +68,18 @@ type RefreshConfig = {
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
+const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
+const TECH_REPORT_DATE_KEY = '_lastTechnicalReportDate';
+const TECH_REPORT_SIGNAL_KEY = '_lastTechnicalSignals';
 const SPIKE_HISTORY_KEY = 'spikeHistory';
 const WORK_MODE_KEY = 'workModeConfig';
+const DRAWDOWN_EVAL_DATE_KEY = '_lastDrawdownEvalDate';
 const NOTIFICATION_KEEP_HOURS = 24;
 
 const ALARM_STOCK = 'refresh-stocks';
 const ALARM_FUND = 'refresh-funds';
 const ALARM_INDEX = 'refresh-indexes';
+const ALARM_TECH_REPORT = 'daily-technical-report';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
 let refreshStocksInFlight = false;
 
@@ -206,6 +217,38 @@ async function loadRefreshConfig(): Promise<RefreshConfig> {
   }
 }
 
+type TechnicalReportConfig = {
+  enabled: boolean;
+  trackGoldenCross: boolean;
+  trackDeathCross: boolean;
+  trackRsi: boolean;
+  trackKdj: boolean;
+  trackBollinger: boolean;
+  trackVolume: boolean;
+  trackWr: boolean;
+};
+
+const DEFAULT_TECH_REPORT: TechnicalReportConfig = {
+  enabled: false,
+  trackGoldenCross: true,
+  trackDeathCross: true,
+  trackRsi: true,
+  trackKdj: true,
+  trackBollinger: true,
+  trackVolume: true,
+  trackWr: true,
+};
+
+async function loadTechReportConfig(): Promise<TechnicalReportConfig> {
+  try {
+    const result = await chrome.storage.sync.get(TECH_REPORT_STORAGE_KEY);
+    const config = result[TECH_REPORT_STORAGE_KEY] as TechnicalReportConfig | undefined;
+    return config || DEFAULT_TECH_REPORT;
+  } catch {
+    return DEFAULT_TECH_REPORT;
+  }
+}
+
 async function loadBadgeConfig(): Promise<BadgeConfig> {
   try {
     const result = await chrome.storage.sync.get(BADGE_STORAGE_KEY);
@@ -230,16 +273,44 @@ function setupAlarms(config: RefreshConfig) {
   chrome.alarms.create(ALARM_INDEX, { periodInMinutes: indexSec / 60 });
 }
 
+/** 设置盘后技术报告告警（15:30 上海时间） */
+function setupTechnicalReportAlarm() {
+  chrome.alarms.clear(ALARM_TECH_REPORT);
+  const now = new Date();
+  const target = new Date(now);
+  // 设置为上海时区的 15:30
+  const shanghaiParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const shHour = Number(shanghaiParts.find((p) => p.type === 'hour')?.value ?? '15');
+  const shMinute = Number(shanghaiParts.find((p) => p.type === 'minute')?.value ?? '30');
+
+  // 计算下一次 15:30 上海时间对应的本地时间
+  const localTarget = new Date();
+  const utcHours = (Number(shHour) - 8 + 24) % 24; // Shanghai = UTC+8
+  localTarget.setUTCHours(utcHours, shMinute >= 30 ? shMinute : 30, 0, 0);
+  if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
+
+  chrome.alarms.create(ALARM_TECH_REPORT, {
+    when: localTarget.getTime(),
+    periodInMinutes: 24 * 60,
+  });
+}
+
 function clearAlarms() {
   chrome.alarms.clear(ALARM_STOCK);
   chrome.alarms.clear(ALARM_FUND);
   chrome.alarms.clear(ALARM_INDEX);
+  chrome.alarms.clear(ALARM_TECH_REPORT);
 }
 
 async function handleAlarm(name: string) {
   if (name === ALARM_STOCK) await refreshStocks();
   else if (name === ALARM_FUND) await refreshFunds();
   else if (name === ALARM_INDEX) await refreshIndexes();
+  else if (name === ALARM_TECH_REPORT) await generateDailyTechnicalReport();
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -254,6 +325,9 @@ function startRefreshLoop() {
     void refreshStocks();
     void refreshFunds();
     void refreshIndexes();
+  });
+  void loadTechReportConfig().then((config) => {
+    if (config.enabled) setupTechnicalReportAlarm();
   });
 }
 
@@ -320,6 +394,8 @@ async function refreshStocks() {
       void recordDailyProfitDetail();
       // 检查告警
       void checkAndNotifyAlerts(final);
+      // 回撤告警（每日首次）
+      void evaluateDrawdownRules(final);
       // 更新悬浮提示
       void updateHoverTitleFromStorage();
     } else {
@@ -331,6 +407,8 @@ async function refreshStocks() {
       void recordDailyProfitDetail();
       // 检查告警
       void checkAndNotifyAlerts(merged);
+      // 回撤告警（每日首次）
+      void evaluateDrawdownRules(merged);
       // 更新悬浮提示
       void updateHoverTitleFromStorage();
     }
@@ -660,6 +738,308 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   ]);
 }
 
+// -----------------------------------------------------------
+// 回撤告警评估 — 每日首次刷新时检查
+// -----------------------------------------------------------
+
+/** 转为腾讯 API 格式（sh/sz 前缀） */
+function toTencentStockCode(code: string): string {
+  const plain = normalizeStockCode(code);
+  if (!plain) return '';
+  return /^[689]/.test(plain) ? `sh${plain}` : `sz${plain}`;
+}
+
+/** 获取日 K-line 的收盘价和日期数组 */
+async function fetchDayKlineClosePrices(code: string): Promise<{ closePrices: number[]; dates: string[] } | null> {
+  const tencentCode = toTencentStockCode(code);
+  if (!tencentCode) return null;
+  try {
+    const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tencentCode},day,,,800,qfq`);
+    const json = await response.json() as Record<string, unknown>;
+    const data = (json as { data?: Record<string, { qfqday?: string[][] }> }).data;
+    const payload = data?.[tencentCode];
+    const rows = payload?.qfqday;
+    if (!rows || !Array.isArray(rows)) return null;
+
+    const closePrices: number[] = [];
+    const dates: string[] = [];
+
+    for (const row of rows) {
+      if (!Array.isArray(row) || row.length < 4) continue;
+      const date = String(row[0]);
+      const close = Number(row[2]);
+      if (Number.isFinite(close)) {
+        closePrices.push(close);
+        dates.push(date);
+      }
+    }
+
+    if (closePrices.length < 10) return null;
+    return { closePrices, dates };
+  } catch {
+    return null;
+  }
+}
+
+/** 评估所有已开启回撤告警规则的股票 */
+async function evaluateDrawdownRules(positions: StockPosition[]) {
+  if (positions.length === 0) return;
+
+  const [alertConfig, evalDateResult, notifResult, workModeResult] = await Promise.all([
+    loadAlertConfig(),
+    chrome.storage.local.get([DRAWDOWN_EVAL_DATE_KEY]),
+    chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]),
+    chrome.storage.sync.get([WORK_MODE_KEY]),
+  ]);
+
+  if (!alertConfig.globalEnabled) return;
+
+  const today = getShanghaiToday();
+  const lastEvalDates = (evalDateResult[DRAWDOWN_EVAL_DATE_KEY] as Record<string, string>) || {};
+  const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
+  const inWorkMode = isWorkModeHours(workModeConfig);
+
+  // 找出有回撤规则且今日尚未评估的股票
+  const stocksToEval: Array<{ code: string; rules: AlertRule[]; name: string }> = [];
+
+  for (const stockConfig of alertConfig.stocks) {
+    const drawdownRules = stockConfig.rules.filter((r) => r.type === 'drawdown' && r.enabled);
+    if (drawdownRules.length === 0) continue;
+    if (lastEvalDates[stockConfig.code] === today) continue;
+
+    const pos = positions.find((p) => p.code === stockConfig.code);
+    if (!pos) continue;
+
+    stocksToEval.push({ code: stockConfig.code, rules: drawdownRules, name: pos.name });
+  }
+
+  if (stocksToEval.length === 0) return;
+
+  const firedHistory = pruneFiredHistory(alertConfig.firedHistory);
+  const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
+  const newRecords: NotificationRecord[] = [];
+  const newFired: AlertFiredRecord[] = [];
+
+  for (const item of stocksToEval) {
+    const klineData = await fetchDayKlineClosePrices(item.code);
+    if (!klineData) continue;
+
+    const ddResult = calcMaxDrawdown(klineData.closePrices, klineData.dates);
+    if (!ddResult) continue;
+
+    const ddPct = Math.abs(ddResult.maxDrawdown) * 100;
+
+    for (const rule of item.rules) {
+      const threshold = rule.drawdownThreshold ?? 20;
+
+      // 检查冷却期（drawdown 默认 24h）
+      const inCooldown = isInCooldown(firedHistory, item.code, rule.id, rule.cooldownSeconds ?? 86400);
+      if (inCooldown) continue;
+
+      if (ddPct >= threshold) {
+        const message = `${item.name}(${item.code}) 最大回撤已达 ${ddPct.toFixed(2)}%（阈值 ${threshold}%），峰值 ${ddResult.peakDate}，谷值 ${ddResult.troughDate}`;
+        const pos = positions.find((p) => p.code === item.code);
+
+        newRecords.push({
+          id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          code: item.code,
+          name: item.name,
+          message,
+          ruleType: 'drawdown',
+          price: pos?.price ?? 0,
+          changePct: pos?.dailyChangePct ?? 0,
+          firedAt: Date.now(),
+          read: false,
+        });
+
+        newFired.push({
+          code: item.code,
+          ruleId: rule.id,
+          firedAt: Date.now(),
+        });
+
+        // 非工作模式弹系统通知
+        if (!inWorkMode) {
+          chrome.notifications.create(`drawdown_${item.code}_${Date.now()}`, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('public/icon48.png'),
+            title: `🔔 ${item.name}(${item.code}) 最大回撤告警`,
+            message: `最大回撤 ${ddPct.toFixed(2)}%，峰值 ${ddResult.peakDate} → 谷值 ${ddResult.troughDate}`,
+            priority: 2,
+          });
+        }
+      }
+    }
+  }
+
+  // 更新评估日期标记（即使未触发也要标记，避免重复拉取 K-line）
+  const nextEvalDates = { ...lastEvalDates };
+  for (const item of stocksToEval) {
+    nextEvalDates[item.code] = today;
+  }
+
+  if (newRecords.length === 0 && newFired.length === 0) {
+    await chrome.storage.local.set({ [DRAWDOWN_EVAL_DATE_KEY]: nextEvalDates });
+    return;
+  }
+
+  const updatedHistory = pruneNotificationHistory(
+    [...existingNotifHistory, ...newRecords],
+    NOTIFICATION_KEEP_HOURS
+  );
+
+  alertConfig.firedHistory = [...firedHistory, ...newFired];
+
+  await Promise.all([
+    saveAlertConfig(alertConfig),
+    chrome.storage.local.set({
+      [NOTIFICATION_HISTORY_KEY]: updatedHistory,
+      [DRAWDOWN_EVAL_DATE_KEY]: nextEvalDates,
+    }),
+  ]);
+}
+
+// -----------------------------------------------------------
+// 盘后技术指标报告 — 每日 15:30 计算多指标信号
+// -----------------------------------------------------------
+
+/** 根据配置过滤需要跟踪的信号类型 */
+function filterSignalByConfig(signal: import('../shared/technical-analysis').TechnicalSignal, config: TechnicalReportConfig): boolean {
+  const { indicator } = signal;
+  if (indicator === 'macd') {
+    return signal.type === 'macd_golden_cross' ? config.trackGoldenCross : config.trackDeathCross;
+  }
+  if (indicator === 'rsi') return config.trackRsi;
+  if (indicator === 'kdj') return config.trackKdj;
+  if (indicator === 'bollinger') return config.trackBollinger;
+  if (indicator === 'volume') return config.trackVolume;
+  if (indicator === 'wr') return config.trackWr;
+  return false;
+}
+
+async function generateDailyTechnicalReport() {
+  const config = await loadTechReportConfig();
+  if (!config.enabled) return;
+
+  // 检查重复
+  const local = await chrome.storage.local.get([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY, NOTIFICATION_HISTORY_KEY]);
+  const today = getShanghaiToday();
+  if (local[TECH_REPORT_DATE_KEY] === today) return;
+
+  // 加载持仓股票
+  const syncResult = await chrome.storage.sync.get(['stockHoldings']);
+  const holdings = (syncResult.stockHoldings || []) as StockHoldingConfig[];
+  const heldStocks = holdings.filter((h) => Number(h.shares) > 0);
+  if (heldStocks.length === 0) return;
+
+  // 获取每只持仓股票的 K 线数据
+  const klineResults = await pMap(
+    heldStocks,
+    async (holding) => {
+      try {
+        const kline = await fetchDayFqKline(holding.code, 60);
+        return { code: holding.code, name: holding.name || holding.code, kline };
+      } catch {
+        return { code: holding.code, name: holding.name || holding.code, kline: [] };
+      }
+    },
+    4,
+  );
+
+  // 检测所有信号，按配置过滤，与上次状态比较去重
+  const lastSignals = (local[TECH_REPORT_SIGNAL_KEY] as Record<string, string>) || {};
+  const newSignalsByStock: Record<string, Array<{ code: string; name: string; signal: import('../shared/technical-analysis').TechnicalSignal }>> = {};
+  const currentSignals: Record<string, string> = {};
+  let totalNewSignals = 0;
+
+  for (const result of klineResults) {
+    if (result.kline.length < 30) {
+      currentSignals[result.code] = 'insufficient_data';
+      continue;
+    }
+
+    // 检测全部信号
+    const allSignals = detectAllSignals(result.kline);
+
+    // 按配置过滤
+    const trackedSignals = allSignals.filter((s) => filterSignalByConfig(s, config));
+
+    // 与上次状态比较去重
+    const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
+    const prevSet = new Set(prevList);
+    const newForStock = trackedSignals.filter((s) => !prevSet.has(s.type));
+
+    if (newForStock.length > 0) {
+      newSignalsByStock[result.code] = newForStock.map((s) => ({
+        code: result.code,
+        name: result.name,
+        signal: s,
+      }));
+      totalNewSignals += newForStock.length;
+    }
+
+    // 更新当前状态（所有的 type 列表）
+    const allTypes = trackedSignals.map((s) => s.type);
+    currentSignals[result.code] = allTypes.join(';');
+  }
+
+  // 生成通知
+  if (totalNewSignals > 0) {
+    const stockCodes = Object.keys(newSignalsByStock);
+    const stockCount = stockCodes.length;
+
+    // 构建详细消息（按股票分组，带指导意义）
+    const detailLines: string[] = [`📊 技术信号 (${today})`, ''];
+    for (const code of stockCodes) {
+      const entries = newSignalsByStock[code];
+      if (entries.length === 0) continue;
+      const first = entries[0];
+      detailLines.push(`${first.name}(${code}):`);
+      for (const entry of entries) {
+        detailLines.push(`  • ${entry.signal.label} — ${entry.signal.guidance}`);
+      }
+      detailLines.push('');
+    }
+    const detailMessage = detailLines.join('\n').trim();
+
+    // 系统通知（简短）
+    const summaryLine = stockCount === 1
+      ? `${stockCodes[0]} 出现 ${totalNewSignals} 个技术信号`
+      : `${stockCount} 只股票出现 ${totalNewSignals} 个技术信号`;
+
+    // 写入通知历史
+    const existingNotifHistory = (local[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
+    const record: NotificationRecord = {
+      id: `tech_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      code: '',
+      name: '盘后技术报告',
+      message: detailMessage,
+      ruleType: 'change_pct',
+      price: 0,
+      changePct: 0,
+      firedAt: Date.now(),
+      read: false,
+    };
+    const updatedHistory = pruneNotificationHistory([...existingNotifHistory, record], NOTIFICATION_KEEP_HOURS);
+    await chrome.storage.local.set({ [NOTIFICATION_HISTORY_KEY]: updatedHistory });
+
+    // 弹系统通知
+    chrome.notifications.create(`tech_report_${Date.now()}`, {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('public/icon48.png'),
+      title: '📊 盘后技术信号',
+      message: summaryLine,
+      priority: 2,
+    });
+  }
+
+  // 保存报告日期和信号状态
+  await chrome.storage.local.set({
+    [TECH_REPORT_DATE_KEY]: today,
+    [TECH_REPORT_SIGNAL_KEY]: currentSignals,
+  });
+}
+
 async function refreshFunds() {
   if (!isTradingHours()) return;
   try {
@@ -679,7 +1059,18 @@ async function refreshFunds() {
 }
 
 
+/** 判断上海时区今天是否是周末（非交易日） */
+function isWeekendInShanghai(): boolean {
+  const dayOfWeek = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    weekday: 'short',
+  }).format(new Date());
+  return dayOfWeek === 'Sat' || dayOfWeek === 'Sun';
+}
+
 async function recordDailyProfitDetail() {
+  // 非交易日不生成收益明细
+  if (isWeekendInShanghai()) return;
   try {
     const [localResult, syncResult] = await Promise.all([
       chrome.storage.local.get([
@@ -688,10 +1079,11 @@ async function recordDailyProfitDetail() {
         DAILY_PROFIT_DETAILS_KEY,
         DAILY_PROFIT_PENDING_SNAPSHOT_KEY,
       ]),
-      chrome.storage.sync.get(['stockHoldings', 'fundHoldings']),
+      chrome.storage.sync.get(['stockHoldings', 'fundHoldings', TRADE_HISTORY_KEY]),
     ]);
 
     const today = getShanghaiToday();
+    const stockTradeHistory = (syncResult[TRADE_HISTORY_KEY] as Record<string, import('../shared/trade-history').StockTradeRecord[]> | undefined) || {};
     const stockPositions = (Array.isArray(localResult.stockPositions) ? localResult.stockPositions : []) as StockPosition[];
     const fundPositions = (Array.isArray(localResult.fundPositions) ? localResult.fundPositions : []) as FundPosition[];
     const stockHoldings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
@@ -719,6 +1111,7 @@ async function recordDailyProfitDetail() {
         stockHoldings,
         fundHoldings,
         new Date().toISOString(),
+        stockTradeHistory,
       )
       : null;
 
@@ -1094,7 +1487,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (request.type === 'test-notification') {
     void (async () => {
       try {
-        const d = (message as { data?: { code: string; name: string; message: string; ruleType: string; price: number; changePct: number } }).data;
+        const d = (message as { data?: { code: string; name: string; message: string; ruleType: string; price: number; changePct: number; _ruleId?: string } }).data;
         if (!d) {
           sendResponse({ ok: false, error: 'missing notification payload' });
           return;
@@ -1103,6 +1496,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const workModeResult = await chrome.storage.sync.get([WORK_MODE_KEY]);
         const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
         const inWorkMode = isWorkModeHours(workModeConfig);
+
+        // Parse spike direction from _ruleId (e.g. "spike_demo_up::up::L1")
+        let spikeDirection: 'up' | 'down' | null = null;
+        const isSpike = d.ruleType === 'spike';
+        if (isSpike && d._ruleId) {
+          const parts = d._ruleId.split('::');
+          if (parts.length >= 2) {
+            if (parts[1] === 'up') spikeDirection = 'up';
+            else if (parts[1] === 'down') spikeDirection = 'down';
+          }
+        }
+
+        const spikeLabel = spikeDirection === 'up' ? '🔥 急速拉升' : spikeDirection === 'down' ? '🆘 急速打压' : '';
+        const titleSuffix = spikeLabel ? ` ${spikeLabel}` : '';
+        const notifTitle = `🔔 ${d.name}(${d.code})${titleSuffix}`;
 
         const record: NotificationRecord = {
           id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -1124,10 +1532,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         // If not in work mode, also show system notification
         if (!inWorkMode) {
-          chrome.notifications.create(`test_${Date.now()}`, {
+          chrome.notifications.create(`test_${d.code}_${Date.now()}`, {
             type: 'basic',
             iconUrl: chrome.runtime.getURL('public/icon48.png'),
-            title: `🔔 告警测试通知 — ${d.name}`,
+            title: notifTitle,
             message: d.message,
             priority: 2,
           });

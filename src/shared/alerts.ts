@@ -5,7 +5,7 @@
 export type AlertScope = 'all' | 'special' | 'holding';
 export type AlertDirection = 'up' | 'down' | 'both';
 
-export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility' | 'spike';
+export type AlertRuleType = 'price_up' | 'price_down' | 'change_pct' | 'volatility' | 'spike' | 'drawdown';
 
 export type AlertRule = {
   id: string;
@@ -25,6 +25,8 @@ export type AlertRule = {
   // spike — rapid price movement detection
   spikePctThreshold?: number;   // percentage threshold, default 2
   spikeWindowMinutes?: number; // lookback window in minutes, default 5
+  // drawdown — max drawdown threshold
+  drawdownThreshold?: number;   // percentage threshold, default 20
   // cooldown in seconds (default 300 = 5 min)
   cooldownSeconds?: number;
 };
@@ -195,7 +197,7 @@ export type StockSnapshot = {
   changePct: number;
 };
 
-function isInCooldown(firedHistory: AlertFiredRecord[], code: string, ruleId: string, cooldownSec: number): boolean {
+export function isInCooldown(firedHistory: AlertFiredRecord[], code: string, ruleId: string, cooldownSec: number): boolean {
   const cutoff = Date.now() - cooldownSec * 1000;
   return firedHistory.some(
     (r) => r.code === code && r.ruleId === ruleId && r.firedAt >= cutoff
@@ -259,6 +261,11 @@ function evaluateRule(
       const threshold = rule.volatilityThreshold ?? 10;
       // Volatility is evaluated externally with historical data
       // This rule type requires a separate evaluation path
+      return null;
+    }
+
+    case 'drawdown': {
+      // Drawdown is evaluated externally with K-line data (once per day)
       return null;
     }
   }
@@ -474,6 +481,16 @@ export function createAlertRule(type: AlertRuleType): AlertRule {
       volatilityDays: 5,
       volatilityThreshold: 10,
       cooldownSeconds: 600,
+    };
+  }
+
+  if (type === 'drawdown') {
+    return {
+      id: genRuleId(),
+      type,
+      enabled: true,
+      drawdownThreshold: 20,
+      cooldownSeconds: 86400, // 24 hours — evaluated once per day
     };
   }
 

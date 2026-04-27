@@ -70,7 +70,7 @@ declare namespace chrome {
       scheduledTime?: number;
     }
 
-    function create(name: string, alarmInfo: { periodInMinutes: number }): Promise<void>;
+    function create(name: string, alarmInfo: { when?: number; delayInMinutes?: number; periodInMinutes?: number }): Promise<void>;
     function clear(name: string): Promise<void>;
 
     const onAlarm: {

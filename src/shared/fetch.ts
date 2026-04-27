@@ -9,6 +9,7 @@ export type StockHoldingConfig = {
   cost: number;
   pinned?: boolean;
   special?: boolean;
+  tags?: string[];
   // hidden metadata for watchlist performance since added
   addedAt?: string;
   addedPrice?: number;
@@ -21,6 +22,7 @@ export type FundHoldingConfig = {
   name?: string;
   pinned?: boolean;
   special?: boolean;
+  tags?: string[];
   // hidden metadata for watchlist performance since added
   addedAt?: string;
   addedNav?: number;
@@ -541,7 +543,7 @@ export type MarketStats = {
 
 const MARKET_STATS_HOST = 'https://40.push2.eastmoney.com';
 const SINA_MARKET_HOST = 'https://vip.stock.finance.sina.com.cn';
-const MARKET_SNAPSHOT_INDEXES = ['sh000001', 'sz399001'] as const;
+const MARKET_SNAPSHOT_INDEXES = ['sh000001', 'sz399001', 'bj899050'] as const;
 
 type MarketBreadthSnapshot = {
   upCount: number;
@@ -676,7 +678,7 @@ async function fetchTencentTurnoverSnapshot(): Promise<MarketTurnoverSnapshot> {
 }
 
 async function fetchEastmoneyTurnoverSnapshot(): Promise<number> {
-  const secids = ['1.000001', '0.399001'];
+  const secids = ['1.000001', '0.399001', '0.899050'];
   const values = await Promise.all(
     secids.map(async (secid) => {
       const text = await fetchTextViaExtension(
@@ -702,7 +704,7 @@ async function fetchEastmoneyBreadthFallback(): Promise<MarketBreadthSnapshot | 
 
     for (let page = 1; page <= MAX_PAGES; page++) {
       const text = await fetchTextViaExtension(
-        `${MARKET_STATS_HOST}/api/qt/clist/get?pn=${page}&pz=${PAGE_SIZE}&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f3,f6`
+        `${MARKET_STATS_HOST}/api/qt/clist/get?pn=${page}&pz=${PAGE_SIZE}&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:0+t:30,m:1+t:2,m:1+t:23&fields=f3,f6`
       );
       const json = JSON.parse(text) as {
         data?: {
