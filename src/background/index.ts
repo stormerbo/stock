@@ -988,15 +988,24 @@ async function generateDailyTechnicalReport() {
       return;
     }
 
+    // 从实时行情数据补全股票名称（持仓配置可能没存 name）
+    const localData = await chrome.storage.local.get(['stockPositions']);
+    const stockPositions = (localData.stockPositions || []) as Array<{ code: string; name: string }>;
+    const nameByCode: Record<string, string> = {};
+    for (const sp of stockPositions) {
+      if (sp.name) nameByCode[sp.code] = sp.name;
+    }
+
     // 获取每只持仓股票的 K 线数据
     const klineResults = await pMap(
       heldStocks,
       async (holding) => {
+        const stockName = holding.name || nameByCode[holding.code] || holding.code;
         try {
           const kline = await fetchDayFqKline(holding.code, 60);
-          return { code: holding.code, name: holding.name || holding.code, kline };
+          return { code: holding.code, name: stockName, kline };
         } catch {
-          return { code: holding.code, name: holding.name || holding.code, kline: [] };
+          return { code: holding.code, name: stockName, kline: [] };
         }
       },
       4,
