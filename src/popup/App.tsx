@@ -9,6 +9,7 @@ import TagFilterBar from './TagFilterBar';
 import TagEditor from './TagEditor';
 import TradeHistoryView from './TradeHistoryView';
 import TradeHistoryList from './TradeHistoryList';
+import DemoGuide, { loadDemoFlag } from './DemoGuide';
 import {
   loadTradeHistory,
   computePositionFromTrades,
@@ -841,6 +842,7 @@ export default function App() {
   const [stockHoldings, setStockHoldings] = useState<StockHoldingConfig[]>([]);
   const [fundHoldings, setFundHoldings] = useState<FundHoldingConfig[]>([]);
   const [portfolioReady, setPortfolioReady] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
   const [fundPositions, setFundPositions] = useState<FundPosition[]>([]);
@@ -1272,6 +1274,16 @@ export default function App() {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    loadDemoFlag().then((completed) => {
+      if (mounted && !completed) {
+        setShowDemo(true);
+      }
+    });
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -3499,6 +3511,10 @@ function clearIntradayIfStale(
             onCreateTag={handleCreateTag}
             onDeleteTag={() => {}}
           />
+        ) : null}
+
+        {showDemo ? (
+          <DemoGuide onComplete={() => setShowDemo(false)} />
         ) : null}
       </div>
     </div>

@@ -3793,3 +3793,332 @@ body.theme-light .notification-item.clickable:hover {
   color: var(--text-0);
   font-family: "SF Mono", "Fira Code", monospace;
 }
+
+/* ================================
+   Demo Guide / Onboarding Tour
+   ================================ */
+
+.demo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.demo-modal {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* Header */
+.demo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+}
+
+.demo-step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.demo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  transition: all 0.3s ease;
+}
+
+.demo-dot.active {
+  background: var(--brand);
+  width: 24px;
+  border-radius: 4px;
+}
+
+.demo-dot.done {
+  background: var(--brand-soft);
+}
+
+.demo-skip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--glass-bg);
+  color: var(--text-1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.demo-skip-btn:hover {
+  background: var(--glass-bg-strong);
+  color: var(--text-0);
+}
+
+/* Body */
+.demo-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px 12px;
+}
+
+.demo-step-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin: 0 0 4px;
+  line-height: 1.3;
+}
+
+.demo-step-desc {
+  font-size: 12px;
+  color: var(--text-1);
+  margin: 0 0 20px;
+  line-height: 1.4;
+}
+
+.demo-step-content {
+  min-height: 200px;
+}
+
+/* Welcome step */
+.demo-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.demo-logo {
+  margin-bottom: 12px;
+}
+
+.demo-logo-icon {
+  font-size: 52px;
+  display: block;
+  line-height: 1;
+}
+
+.demo-welcome-subtitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand);
+  margin: 0 0 8px;
+}
+
+.demo-welcome-desc {
+  font-size: 12px;
+  color: var(--text-1);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+/* Features grid */
+.demo-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.demo-feature-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.demo-feature-card:hover {
+  background: var(--glass-bg-strong);
+}
+
+.demo-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.demo-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.demo-feature-text strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-0);
+  line-height: 1.3;
+}
+
+.demo-feature-text span {
+  font-size: 10px;
+  color: var(--text-1);
+  line-height: 1.3;
+}
+
+/* Tips step */
+.demo-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.demo-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.demo-tip-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.demo-tip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.demo-tip-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.demo-tip-text span {
+  font-size: 11px;
+  color: var(--text-1);
+  line-height: 1.4;
+}
+
+.demo-tip-text span svg {
+  display: inline;
+  vertical-align: middle;
+}
+
+.demo-tip-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.demo-tip-notice svg {
+  color: var(--brand);
+  min-width: 14px;
+}
+
+.demo-tip-notice span {
+  font-size: 11px;
+  color: var(--text-0);
+  line-height: 1.3;
+}
+
+/* Footer */
+.demo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 16px;
+}
+
+.demo-footer-left {
+  display: flex;
+  gap: 8px;
+}
+
+.demo-footer-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.demo-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.demo-btn-secondary:hover {
+  background: var(--glass-bg);
+  color: var(--text-0);
+  border-color: var(--text-1);
+}
+
+.demo-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.demo-btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
