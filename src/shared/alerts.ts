@@ -51,7 +51,13 @@ export type AlertFiredRecord = {
   code: string;
   ruleId: string;
   firedAt: number; // timestamp ms
+  firedPrice?: number; // stock price when fired, for dedup
+  firedChangePct?: number; // changePct when fired, for dedup
 };
+
+// 内存级迟滞跟踪器：记录哪些 code+ruleId 在当前"阈值持续满足"周期内已触发告警。
+// 一旦涨跌幅回到阈值以内，自动清除，下次再超出时可重新触发。
+const hysteresisTriggered = new Map<string, boolean>();
 
 export type SpikePriceEntry = {
   price: number;
@@ -101,6 +107,7 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
 };
 
 const ALERT_STORAGE_KEY = 'alertConfig';
+export const FIRED_HISTORY_LOCAL_KEY = 'alertFiredHistory';
 
 const VALID_RULE_TYPES: AlertRuleType[] = ['price_up', 'price_down', 'change_pct', 'volatility', 'spike', 'trailing_stop', 'batch_buy', 'grid_trading'];
 
@@ -202,11 +209,17 @@ function normalizeAlertConfig(raw: Partial<AlertConfig> | undefined): AlertConfi
 
   const firedHistory = Array.isArray(raw?.firedHistory)
     ? raw.firedHistory
-      .map((item) => ({
-        code: String(item?.code ?? '').trim(),
-        ruleId: String(item?.ruleId ?? '').trim(),
-        firedAt: normalizeNumber(item?.firedAt, 0, 0),
-      }))
+      .map((item) => {
+        const rawPrice = (item as any)?.firedPrice;
+        const rawChangePct = (item as any)?.firedChangePct;
+        return {
+          code: String(item?.code ?? '').trim(),
+          ruleId: String(item?.ruleId ?? '').trim(),
+          firedAt: normalizeNumber(item?.firedAt, 0, 0),
+          firedPrice: Number.isFinite(rawPrice) && (rawPrice as number) >= 0 ? Number(rawPrice) : undefined,
+          firedChangePct: Number.isFinite(rawChangePct) ? Number(rawChangePct) : undefined,
+        };
+      })
       .filter((item) => Boolean(item.code && item.ruleId && item.firedAt > 0))
     : [];
 
@@ -234,7 +247,49 @@ export async function loadAlertConfig(): Promise<AlertConfig> {
 }
 
 export async function saveAlertConfig(config: AlertConfig): Promise<void> {
-  await chrome.storage.sync.set({ [ALERT_STORAGE_KEY]: normalizeAlertConfig(config) });
+  // Strip firedHistory before saving to sync to avoid quota issues
+  const normalized = normalizeAlertConfig(config);
+  await chrome.storage.sync.set({ [ALERT_STORAGE_KEY]: { ...normalized, firedHistory: [] } });
+}
+
+// loadedHistory 存储在 local storage 而非 sync storage 以免超出配额
+export async function loadFiredHistory(): Promise<AlertFiredRecord[]> {
+  try {
+    const result = await chrome.storage.local.get(FIRED_HISTORY_LOCAL_KEY);
+    const raw = result[FIRED_HISTORY_LOCAL_KEY];
+    if (!Array.isArray(raw)) return [];
+    const now = Date.now();
+    return raw
+      .map((item: unknown) => {
+        const i = item as any;
+        const rawPrice = i?.firedPrice;
+        const rawChangePct = i?.firedChangePct;
+        return {
+          code: String(i?.code ?? '').trim(),
+          ruleId: String(i?.ruleId ?? '').trim(),
+          firedAt: normalizeNumber(i?.firedAt, 0, 0),
+          firedPrice: Number.isFinite(rawPrice) && (rawPrice as number) >= 0 ? Number(rawPrice) : undefined,
+          firedChangePct: Number.isFinite(rawChangePct) ? Number(rawChangePct) : undefined,
+        };
+      })
+      .filter((item) => Boolean(item.code && item.ruleId && item.firedAt > 0 && item.firedAt <= now));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveFiredHistory(history: AlertFiredRecord[]): Promise<void> {
+  await chrome.storage.local.set({ [FIRED_HISTORY_LOCAL_KEY]: history });
+}
+
+// Migration: move firedHistory from sync to local storage (one-time)
+export async function migrateFiredHistory(config: AlertConfig): Promise<AlertConfig> {
+  const localHistory = await loadFiredHistory();
+  // If there's firedHistory in sync but not in local, merge and save to local
+  if (config.firedHistory.length > 0 && localHistory.length === 0) {
+    await saveFiredHistory(config.firedHistory);
+  }
+  return { ...config, firedHistory: [] };
 }
 
 // -----------------------------------------------------------
@@ -256,6 +311,17 @@ export function isInCooldown(firedHistory: AlertFiredRecord[], code: string, rul
   );
 }
 
+/** 查找同一 code+ruleId 最近一次触发时的股价，用于判断股价是否有变化 */
+function getLastFiredPrice(firedHistory: AlertFiredRecord[], code: string, ruleId: string): number | undefined {
+  let last: AlertFiredRecord | undefined;
+  for (const r of firedHistory) {
+    if (r.code === code && r.ruleId === ruleId && (!last || r.firedAt > last.firedAt)) {
+      last = r;
+    }
+  }
+  return last?.firedPrice;
+}
+
 function evaluateRule(
   rule: AlertRule,
   snapshot: StockSnapshot,
@@ -265,6 +331,14 @@ function evaluateRule(
 
   const cooldown = rule.cooldownSeconds ?? 300;
   if (isInCooldown(firedHistory, snapshot.code, rule.id, cooldown)) return null;
+
+  // 对于 price_up / price_down：如果股价跟上一次触发时一样，跳过
+  if (rule.type === 'price_up' || rule.type === 'price_down') {
+    const lastPrice = getLastFiredPrice(firedHistory, snapshot.code, rule.id);
+    if (lastPrice !== undefined && snapshot.price === lastPrice) {
+      return null;
+    }
+  }
 
   switch (rule.type) {
     case 'price_up':
@@ -295,15 +369,44 @@ function evaluateRule(
           ? snapshot.changePct <= -threshold
           : Math.abs(snapshot.changePct) >= threshold;
 
-      if (Number.isFinite(snapshot.changePct) && triggered) {
-        const direction = snapshot.changePct >= 0 ? '上涨' : '下跌';
-        const ruleHint = (rule.direction ?? 'both') === 'both'
-          ? `波动超过阈值 ${threshold}%`
-          : `${(rule.direction ?? 'both') === 'up' ? '涨幅' : '跌幅'}超过阈值 ${threshold}%`;
-        return {
-          triggered: true,
-          message: `${snapshot.name}(${snapshot.code}) 今日${direction} ${snapshot.changePct.toFixed(2)}%，${ruleHint}`,
-        };
+      const hystKey = `change_pct::${snapshot.code}::${rule.id}`;
+      const alreadyTriggered = hysteresisTriggered.get(hystKey);
+
+      if (Number.isFinite(snapshot.changePct)) {
+        if (triggered) {
+          // 阈值被满足
+          if (alreadyTriggered) {
+            // 本周期内已触发过 → 不再重复告警（迟滞）
+            return null;
+          }
+          // 内存中无记录，再检查持久化的 firedHistory：
+          // 如果上次触发的 changePct 与当前一样，说明是 Service Worker 重启后的重复 → 跳过
+          let lastRecord: AlertFiredRecord | undefined;
+          for (const r of firedHistory) {
+            if (r.code === snapshot.code && r.ruleId === rule.id && (!lastRecord || r.firedAt > lastRecord.firedAt)) {
+              lastRecord = r;
+            }
+          }
+          if (lastRecord?.firedChangePct !== undefined && Math.abs(lastRecord.firedChangePct - snapshot.changePct) < 0.001) {
+            hysteresisTriggered.set(hystKey, true); // 同步到内存，避免次次查存储
+            return null;
+          }
+          // 首次触发 → 记录迟滞状态
+          hysteresisTriggered.set(hystKey, true);
+          const dirLabel = snapshot.changePct >= 0 ? '上涨' : '下跌';
+          const ruleHint = (rule.direction ?? 'both') === 'both'
+            ? `波动超过阈值 ${threshold}%`
+            : `${(rule.direction ?? 'both') === 'up' ? '涨幅' : '跌幅'}超过阈值 ${threshold}%`;
+          return {
+            triggered: true,
+            message: `${snapshot.name}(${snapshot.code}) 今日${dirLabel} ${snapshot.changePct.toFixed(2)}%，${ruleHint}`,
+          };
+        } else {
+          // 阈值不再满足 → 清除迟滞状态，下次可重新触发
+          if (alreadyTriggered) {
+            hysteresisTriggered.delete(hystKey);
+          }
+        }
       }
       break;
     }
@@ -400,6 +503,8 @@ export function checkAlerts(
           code: snapshot.code,
           ruleId: rule.id,
           firedAt: Date.now(),
+          firedPrice: snapshot.price,
+          firedChangePct: snapshot.changePct,
         });
       }
     }

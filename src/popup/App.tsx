@@ -7,7 +7,8 @@ import DiagnosticPanel from './DiagnosticPanel';
 import TagBadge from './TagBadge';
 import TagFilterBar from './TagFilterBar';
 import TagEditor from './TagEditor';
-import TradeHistoryModal from './TradeHistoryModal';
+import TradeHistoryView from './TradeHistoryView';
+import TradeHistoryList from './TradeHistoryList';
 import {
   loadTradeHistory,
   computePositionFromTrades,
@@ -46,7 +47,7 @@ import {
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 
-type PageTab = 'stocks' | 'funds' | 'account' | 'profit' | 'notifications';
+type PageTab = 'stocks' | 'funds' | 'account' | 'profit' | 'notifications' | 'trades';
 type ThemeMode = 'dark' | 'light';
 
 type IndexDetailTarget = {
@@ -1147,6 +1148,19 @@ export default function App() {
     return rows;
   }, [fundHoldings, fundPositions]);
 
+  // 统一的股票名称映射：优先用 stockPositions（API 返回的数据，name 字段必填），
+  // 再用 stockHoldings 中的 name 作为补充，确保所有地方都能正确显示股票名称
+  const stockNameMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const pos of stockPositions) {
+      if (pos.name) map[pos.code] = pos.name;
+    }
+    for (const h of stockHoldings) {
+      if (h.name) map[h.code] = h.name;
+    }
+    return map;
+  }, [stockPositions, stockHoldings]);
+
   const stockDisplayRows = useMemo(() => {
     let rows = sortingMode === 'stocks' && stockSortDraft
       ? sortRowsByCodes(stockRows, stockSortDraft)
@@ -1927,11 +1941,13 @@ function clearIntradayIfStale(
     if (!code) return;
 
     let addedNav = fundPositions.find((item) => item.code === code && Number.isFinite(item.estimatedNav))?.estimatedNav ?? Number.NaN;
+    let fetchedRow: FundPosition | null = null;
     if (!Number.isFinite(addedNav)) {
       try {
         const row = await fetchTiantianFundPosition({ code, units: 0, cost: 0, name: fund.name });
         const candidate = row.navDisclosedToday && Number.isFinite(row.latestNav) ? row.latestNav : row.estimatedNav;
         addedNav = Number.isFinite(candidate) ? candidate : row.latestNav;
+        fetchedRow = row;
       } catch {
         addedNav = Number.NaN;
       }
@@ -1954,6 +1970,13 @@ function clearIntradayIfStale(
         }
       );
     });
+    // 将已获取的行情数据同步写入 fundPositions，使列表即时刷新显示
+    if (fetchedRow) {
+      setFundPositions((prev) => {
+        if (prev.some((p) => p.code === code)) return prev;
+        return [...prev, fetchedRow!];
+      });
+    }
   }, [fundPositions]);
 
   const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string) => {
@@ -2296,8 +2319,16 @@ function clearIntradayIfStale(
           </button>
           <button
             type="button"
+            className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('trades'); setTradeHistoryTarget(null); }}
+          >
+            <FileText size={12} />
+            <span>交易</span>
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
-            onClick={() => setActiveTab('notifications')}
+            onClick={() => { setActiveTab('notifications'); setTradeHistoryTarget(null); setStockDetailTarget(null); setFundDetailTarget(null); }}
             style={{ position: 'relative' }}
           >
             <Bell size={12} />
@@ -2365,8 +2396,8 @@ function clearIntradayIfStale(
           </div>
         </aside>
 
-        <main className={`main-area ${stockDetailTarget || fundDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget || tradeHistoryTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -2389,7 +2420,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
+          {!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
             <header className={`page-header ${(activeTab === 'account' || activeTab === 'profit') ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${(activeTab === 'account' || activeTab === 'profit') ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -2472,7 +2503,7 @@ function clearIntradayIfStale(
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${tradeHistoryTarget ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -2488,6 +2519,26 @@ function clearIntradayIfStale(
                 fundHolding={fundHoldings.find((h) => h.code === fundDetailTarget.code)}
                 onBack={closeFundDetail}
               />
+            ) : null}
+
+            {tradeHistoryTarget ? (
+              <TradeHistoryView
+                code={tradeHistoryTarget.code}
+                name={tradeHistoryTarget.name}
+                onBack={() => setTradeHistoryTarget(null)}
+                onUpdate={() => loadTradeHistory().then(setStockTradeHistory)}
+              />
+            ) : null}
+
+            {activeTab === 'trades' && !tradeHistoryTarget ? (
+              <div className="tag-editor-section" style={{ border: 'none', paddingTop: 8 }}>
+                <span className="tag-editor-label">交易记录</span>
+                <TradeHistoryList
+                  tradeHistory={stockTradeHistory}
+                  stockNameMap={stockNameMap}
+                  onSelectStock={(code, name) => setTradeHistoryTarget({ code, name })}
+                />
+              </div>
             ) : null}
 
             {activeTab === 'account' && !stockDetailTarget ? (
@@ -2681,7 +2732,7 @@ function clearIntradayIfStale(
             ) : null}
 
             {/* ---- Notification Panel ---- */}
-            {activeTab === 'notifications' ? (
+            {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget ? (
               <div className="notification-panel" style={{ opacity: panelOpacity }}>
                 <div className="notification-header">
                   <span className="notification-title">消息通知</span>
@@ -2846,10 +2897,18 @@ function clearIntradayIfStale(
                           {alertNotifs.map((item) => {
                             const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
                             const priceValid = Number.isFinite(item.price) && item.price > 0;
+                            const handleAlertNotifClick = () => {
+                              markNotificationRead(item.id);
+                              if (item.code) {
+                                setActiveTab('trades');
+                                setTradeHistoryTarget({ code: item.code, name: item.name || stockNameMap[item.code] || item.code });
+                              }
+                            };
                             return (
                               <div
                                 key={item.id}
-                                className={`notification-item ${item.read ? '' : 'unread'}`}
+                                className={`notification-item ${item.read ? '' : 'unread'} ${item.code ? 'clickable' : ''}`}
+                                onClick={item.code ? handleAlertNotifClick : undefined}
                               >
                                 <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
                                 <div className="notification-text">
@@ -3393,7 +3452,7 @@ function clearIntradayIfStale(
                   管理标签
                 </button>
                 <button type="button" onClick={() => {
-                  setTradeHistoryTarget({ code: rowContextMenu.code, name: stockHoldings.find((item) => item.code === rowContextMenu.code)?.name || rowContextMenu.code });
+                  setTradeHistoryTarget({ code: rowContextMenu.code, name: stockNameMap[rowContextMenu.code] || rowContextMenu.code });
                   setRowContextMenu(null);
                 }}>
                   交易记录
@@ -3439,14 +3498,6 @@ function clearIntradayIfStale(
             onClose={() => setTagEditorTarget(null)}
             onCreateTag={handleCreateTag}
             onDeleteTag={() => {}}
-          />
-        ) : null}
-        {tradeHistoryTarget ? (
-          <TradeHistoryModal
-            code={tradeHistoryTarget.code}
-            name={tradeHistoryTarget.name}
-            onClose={() => setTradeHistoryTarget(null)}
-            onUpdate={() => loadTradeHistory().then(setStockTradeHistory)}
           />
         ) : null}
       </div>

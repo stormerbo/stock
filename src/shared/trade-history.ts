@@ -14,10 +14,22 @@ export type StockTradeRecord = {
   shares: number;          // positive; for 'sell', the number of shares sold
   price: number;           // per-share price
   total?: number;          // total amount (if omitted, computed as shares * price)
+  /** @deprecated 改用 commission/stampTax/transferFee */
   fees?: number;           // transaction fees (commission + stamp tax, etc.)
+  commission?: number;     // 手续费（佣金）
+  stampTax?: number;       // 印花税（仅卖出时产生）
+  transferFee?: number;    // 过户费
   note?: string;
   createdAt: string;       // ISO timestamp
 };
+
+/** 计算单笔交易的总费用（兼容新旧字段） */
+export function totalFees(t: StockTradeRecord): number {
+  if (t.commission != null || t.stampTax != null || t.transferFee != null) {
+    return (t.commission ?? 0) + (t.stampTax ?? 0) + (t.transferFee ?? 0);
+  }
+  return t.fees ?? 0;
+}
 
 export type TradeComputedPosition = {
   shares: number;          // current position size
@@ -54,30 +66,31 @@ export function computePositionFromTrades(
     tradeCount++;
 
     if (t.type === 'buy') {
-      const cost = t.shares * t.price + (t.fees ?? 0);
+      const cost = t.shares * t.price + totalFees(t);
       shares += t.shares;
       totalCost += cost;
     } else if (t.type === 'sell') {
       if (shares <= 0) continue; // no position to sell from
       const sellShares = Math.min(t.shares, shares);
       const avgCost = totalCost / shares;
-      const sellRevenue = sellShares * t.price - (t.fees ?? 0);
+      const sellRevenue = sellShares * t.price - totalFees(t);
       realizedPnl += sellRevenue - sellShares * avgCost;
       // Reduce totalCost proportionally
       totalCost *= (shares - sellShares) / shares;
       shares -= sellShares;
     } else if (t.type === 'dividend') {
-      realizedPnl += (t.total ?? 0) - (t.fees ?? 0);
+      realizedPnl += (t.total ?? 0) - totalFees(t);
     }
   }
 
   // Round to avoid floating point noise
+  const round3 = (v: number) => Number.isFinite(v) ? Math.round(v * 1000) / 1000 : 0;
   const round2 = (v: number) => Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
 
   return {
     shares: Math.max(0, Math.round(shares)),
-    avgCost: shares > 0 ? round2(totalCost / shares) : 0,
-    totalCost: round2(totalCost),
+    avgCost: shares > 0 ? round3(totalCost / shares) : 0,
+    totalCost: round3(totalCost),
     realizedPnl: round2(realizedPnl),
     tradeCount,
   };

@@ -23,6 +23,9 @@ import {
 import {
   loadAlertConfig,
   saveAlertConfig,
+  loadFiredHistory,
+  saveFiredHistory,
+  migrateFiredHistory,
   checkAlerts,
   pruneFiredHistory,
   evaluateSpikeRule,
@@ -35,6 +38,7 @@ import {
   TRAILING_STOP_STATE_KEY,
   BATCH_BUY_STATE_KEY,
   GRID_STATE_KEY,
+  FIRED_HISTORY_LOCAL_KEY,
   migrateSpikeConfig,
   DEFAULT_SPIKE_CONFIG,
   type AlertConfig,
@@ -482,10 +486,13 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   const trailingStopState: TrailingStopState = (trailingResult[TRAILING_STOP_STATE_KEY] || {}) as TrailingStopState;
   const batchBuyState: BatchBuyState = (batchResult[BATCH_BUY_STATE_KEY] || {}) as BatchBuyState;
   const gridState: GridState = (gridResult[GRID_STATE_KEY] || {}) as GridState;
-  const effectiveConfig = migrateSpikeConfig(config);
+  let effectiveConfig = migrateSpikeConfig(config);
   if (!effectiveConfig.globalEnabled) {
     return;
   }
+
+  // 将 firedHistory 从 sync 迁移到 local storage（首次运行时）
+  effectiveConfig = await migrateFiredHistory(effectiveConfig);
 
   const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
   const inWorkMode = isWorkModeHours(workModeConfig);
@@ -504,7 +511,8 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
     return;
   }
 
-  const firedHistory = pruneFiredHistory(effectiveConfig.firedHistory);
+  // firedHistory 存储在 local storage 而非 sync storage，避免配额问题导致冷却记录丢失
+  const firedHistory = pruneFiredHistory(await loadFiredHistory());
   const spikeHistory = (spikeResult[SPIKE_HISTORY_KEY] as SpikePriceHistory) || {};
   const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
 
@@ -526,7 +534,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   // Evaluate spike rules (global config)
   const spikeTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
   const finalSpikeHistory: SpikePriceHistory = { ...updatedSpikeHistory };
-  const spikeFiredInRun: Array<{ code: string; ruleId: string; firedAt: number }> = [];
+  const spikeFiredInRun: Array<{ code: string; ruleId: string; firedAt: number; firedPrice?: number; firedChangePct?: number }> = [];
   const spikeConfig: SpikeGlobalConfig = effectiveConfig.spikeConfig || DEFAULT_SPIKE_CONFIG;
   const now = Date.now();
 
@@ -566,6 +574,8 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           code: snapshot.code,
           ruleId: result.ruleId || spikeRule.id,
           firedAt: now,
+          firedPrice: snapshot.price,
+          firedChangePct: snapshot.changePct,
         });
       }
 
@@ -575,7 +585,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
 
   // Evaluate stateful rules (trailing_stop, batch_buy, grid_trading)
   const statefulTriggered: Array<{ code: string; name: string; message: string; ruleId: string }> = [];
-  const statefulFired: Array<{ code: string; ruleId: string; firedAt: number }> = [];
+  const statefulFired: Array<{ code: string; ruleId: string; firedAt: number; firedPrice?: number; firedChangePct?: number }> = [];
   let finalTrailingStopState = { ...trailingStopState };
   let finalBatchBuyState = { ...batchBuyState };
   let finalGridState = { ...gridState };
@@ -596,7 +606,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           finalTrailingStopState = result.newState;
           if (result.triggered) {
             statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
-            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now(), firedPrice: snapshot.price, firedChangePct: snapshot.changePct });
           }
         }
       }
@@ -610,7 +620,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           finalBatchBuyState = result.newState;
           if (result.triggered) {
             statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
-            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now(), firedPrice: snapshot.price, firedChangePct: snapshot.changePct });
           }
         }
       }
@@ -624,7 +634,7 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
           finalGridState = result.newState;
           if (result.triggered) {
             statefulTriggered.push({ code: stockConfig.code, name: snapshot.name, message: result.message, ruleId: rule.id });
-            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now() });
+            statefulFired.push({ code: stockConfig.code, ruleId: rule.id, firedAt: Date.now(), firedPrice: snapshot.price, firedChangePct: snapshot.changePct });
           }
         }
       }
@@ -673,14 +683,19 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
 
   // 工作模式内：不弹系统通知，只写入通知历史
   if (inWorkMode) {
-    const newFired = allTriggered.map((a) => ({
-      code: a.code,
-      ruleId: a.ruleId,
-      firedAt: Date.now(),
-    }));
-    effectiveConfig.firedHistory = [...firedHistory, ...newFired];
+    const newFired = allTriggered.map((a) => {
+      const snap = snapshots.find((s) => s.code === a.code);
+      return {
+        code: a.code,
+        ruleId: a.ruleId,
+        firedAt: Date.now(),
+        firedPrice: snap?.price,
+        firedChangePct: snap?.changePct,
+      };
+    });
     await Promise.all([
       saveAlertConfig(effectiveConfig),
+      saveFiredHistory(pruneFiredHistory([...firedHistory, ...newFired])),
       chrome.storage.local.set({
         [SPIKE_HISTORY_KEY]: finalSpikeHistory,
         [NOTIFICATION_HISTORY_KEY]: updatedHistory,
@@ -761,15 +776,20 @@ async function checkAndNotifyAlerts(positions: StockPosition[]) {
   }
 
   // 更新 fired history 和通知历史
-  const newFired = allTriggered.map((a) => ({
-    code: a.code,
-    ruleId: a.ruleId,
-    firedAt: Date.now(),
-  }));
+  const newFired = allTriggered.map((a) => {
+    const snap = snapshots.find((s) => s.code === a.code);
+    return {
+      code: a.code,
+      ruleId: a.ruleId,
+      firedAt: Date.now(),
+      firedPrice: snap?.price,
+      firedChangePct: snap?.changePct,
+    };
+  });
 
-  effectiveConfig.firedHistory = [...firedHistory, ...newFired];
   await Promise.all([
     saveAlertConfig(effectiveConfig),
+    saveFiredHistory(pruneFiredHistory([...firedHistory, ...newFired])),
     chrome.storage.local.set({
       [SPIKE_HISTORY_KEY]: finalSpikeHistory,
       [NOTIFICATION_HISTORY_KEY]: updatedHistory,
@@ -857,7 +877,7 @@ async function evaluateDrawdownRules(positions: StockPosition[]) {
 
   if (stocksToEval.length === 0) return;
 
-  const firedHistory = pruneFiredHistory(alertConfig.firedHistory);
+  const firedHistory = pruneFiredHistory(await loadFiredHistory());
   const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
   const newRecords: NotificationRecord[] = [];
   const newFired: AlertFiredRecord[] = [];
@@ -898,6 +918,8 @@ async function evaluateDrawdownRules(positions: StockPosition[]) {
           code: item.code,
           ruleId: rule.id,
           firedAt: Date.now(),
+          firedPrice: pos?.price,
+          firedChangePct: pos?.dailyChangePct,
         });
 
         // 非工作模式弹系统通知
@@ -930,10 +952,8 @@ async function evaluateDrawdownRules(positions: StockPosition[]) {
     NOTIFICATION_KEEP_HOURS
   );
 
-  alertConfig.firedHistory = [...firedHistory, ...newFired];
-
   await Promise.all([
-    saveAlertConfig(alertConfig),
+    saveFiredHistory(pruneFiredHistory([...firedHistory, ...newFired])),
     chrome.storage.local.set({
       [NOTIFICATION_HISTORY_KEY]: updatedHistory,
       [DRAWDOWN_EVAL_DATE_KEY]: nextEvalDates,
