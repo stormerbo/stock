@@ -1,32 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
   <defs>
-    <linearGradient id="bg128" x1="16" y1="8" x2="118" y2="121" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#171B24"/>
-      <stop offset="0.5" stop-color="#0C1017"/>
-      <stop offset="1" stop-color="#04070A"/>
+    <linearGradient id="bg" x1="16" y1="8" x2="118" y2="121">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset=".5" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#4C1D95"/>
     </linearGradient>
-    <linearGradient id="line128" x1="24" y1="84" x2="98" y2="42" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#57E7FF"/>
-      <stop offset="1" stop-color="#7DFFAB"/>
+    <linearGradient id="walletGrad" x1="14" y1="54" x2="114" y2="114">
+      <stop offset="0" stop-color="#A08868"/>
+      <stop offset=".4" stop-color="#7A5C3C"/>
+      <stop offset="1" stop-color="#3D2B1A"/>
     </linearGradient>
-    <radialGradient id="glow128" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(99.5 40.5) rotate(90) scale(28)">
-      <stop offset="0" stop-color="#85FFB9" stop-opacity="0.78"/>
-      <stop offset="1" stop-color="#85FFB9" stop-opacity="0"/>
+    <radialGradient id="coinFace" cx="40%" cy="32%" r="65%">
+      <stop offset="0" stop-color="#FFFDE7"/>
+      <stop offset=".2" stop-color="#FFE082"/>
+      <stop offset=".45" stop-color="#FFB300"/>
+      <stop offset=".75" stop-color="#FF8F00"/>
+      <stop offset="1" stop-color="#BF360C"/>
     </radialGradient>
-    <linearGradient id="sheen128" x1="24" y1="18" x2="70" y2="54" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
+    <radialGradient id="coinSmall" cx="40%" cy="32%" r="65%">
+      <stop offset="0" stop-color="#FFE082"/>
+      <stop offset=".4" stop-color="#FFB300"/>
+      <stop offset=".75" stop-color="#FF8F00"/>
+      <stop offset="1" stop-color="#E65100"/>
+    </radialGradient>
+    <filter id="lipShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+    <filter id="coinShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
   </defs>
-  <rect x="6" y="6" width="116" height="116" rx="31" fill="url(#bg128)"/>
-  <rect x="8.2" y="8.2" width="111.6" height="111.6" rx="28.6" stroke="rgba(255,255,255,0.11)"/>
-  <path d="M22 23C31.5 17.5 41.8 15.1 53.2 15.6C62.2 16 70.2 18.5 77.4 23.2C80 24.9 78.8 29 75.8 29H26.8C21.4 29 17.3 25.8 22 23Z" fill="url(#sheen128)"/>
-  <path d="M24 87.5H104" stroke="#A0AFCA" stroke-opacity="0.18" stroke-width="5.4" stroke-linecap="round"/>
-  <path d="M32 86V73.5" stroke="#D4DDED" stroke-opacity="0.34" stroke-width="7" stroke-linecap="round"/>
-  <path d="M47.5 86V59.5" stroke="#D4DDED" stroke-opacity="0.34" stroke-width="7" stroke-linecap="round"/>
-  <path d="M63 86V67.5" stroke="#D4DDED" stroke-opacity="0.34" stroke-width="7" stroke-linecap="round"/>
-  <circle cx="99.5" cy="40.5" r="21.5" fill="url(#glow128)"/>
-  <path d="M25.5 82.2L42 71L54 74.6L66.6 59.8L77.6 62.8L99.5 40.5" stroke="url(#line128)" stroke-width="10.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="99.5" cy="40.5" r="7.8" fill="#F2FFF8"/>
-  <path d="M99.5 40.5H107V48" stroke="#F2FFF8" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="0" y="0" width="128" height="128" fill="url(#bg)"/>
+  <!-- Wallet back -->
+  <rect x="12" y="54" width="104" height="60" rx="16" fill="url(#walletGrad)"/>
+  <!-- Interior gap (opening) -->
+  <rect x="12" y="54" width="104" height="14" rx="6" fill="#2A1A0E" opacity=".7"/>
+  <rect x="12" y="62" width="104" height="5" fill="#1A0E06" opacity=".5"/>
+  <!-- Coin 2 (dropping in from above) -->
+  <g filter="url(#coinShadow)" transform="rotate(-20 46 34)">
+    <circle cx="46" cy="34" r="17" fill="url(#coinFace)" stroke="#FFE082" stroke-width="1.5"/>
+    <text x="46" y="42" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#4E2E00" text-anchor="middle">¥</text>
+    <ellipse cx="38" cy="26" rx="7" ry="3.5" fill="white" opacity=".2" transform="rotate(-20 38 26)"/>
+  </g>
+  <!-- Coin 1 (main, going into wallet) -->
+  <g filter="url(#coinShadow)">
+    <circle cx="68" cy="50" r="24" fill="url(#coinFace)" stroke="#FFE082" stroke-width="2"/>
+    <circle cx="68" cy="50" r="20" fill="none" stroke="#FFF8E1" stroke-width=".6" opacity=".3"/>
+    <text x="68" y="61" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#4E2E00" text-anchor="middle">¥</text>
+    <ellipse cx="57" cy="38" rx="10" ry="5" fill="white" opacity=".2" transform="rotate(-20 57 38)"/>
+  </g>
+  <!-- Wallet front lip (covers bottom of main coin) -->
+  <g filter="url(#lipShadow)">
+    <path d="M12 68 L116 68 L116 106 Q116 114 108 114 L20 114 Q12 114 12 106 Z" fill="url(#walletGrad)"/>
+  </g>
+  <!-- Coin 3 (already inside wallet) -->
+  <circle cx="90" cy="95" r="12" fill="url(#coinSmall)" stroke="#FFE082" stroke-width="1" opacity=".35"/>
+  <text x="90" y="100" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="700" fill="#4E2E00" text-anchor="middle" opacity=".35">¥</text>
+  <!-- Stitching detail -->
+  <path d="M20 78 L108 78" stroke="#2A1A0E" stroke-width=".7" stroke-dasharray="3 3" opacity=".2"/>
+  <path d="M20 90 L108 90" stroke="#2A1A0E" stroke-width=".7" stroke-dasharray="3 3" opacity=".2"/>
+  <path d="M24 102 L104 102" stroke="#2A1A0E" stroke-width=".7" stroke-dasharray="3 3" opacity=".18"/>
 </svg>
