@@ -57,6 +57,12 @@ function getTimestamp() {
 function resolveKeyPath() {
   const envKey = process.env.EXTENSION_KEY_PEM?.trim();
   if (envKey) {
+    // 如果 env 值本身就是 PEM 内容（不以路径分隔符开头），写入临时文件
+    if (envKey.startsWith('-----BEGIN')) {
+      const tmpPath = path.join(rootDir, '.tmp-key.pem');
+      fs.writeFileSync(tmpPath, envKey, 'utf8');
+      return tmpPath;
+    }
     const absolute = path.isAbsolute(envKey) ? envKey : path.join(rootDir, envKey);
     if (fs.existsSync(absolute)) return absolute;
   }
