@@ -430,7 +430,7 @@ async function refreshStocks() {
             return { code, data: { data: [], prevClose: Number.NaN } };
           }
         },
-        4,
+        8,
       );
       const intradayMap = new Map(intradayResults.map((r) => [r.code, r.data]));
       const final = merged.map((p) =>

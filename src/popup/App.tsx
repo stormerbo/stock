@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
@@ -543,152 +543,163 @@ async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
   }
 }
 
-function IntradayChart({
+class DetailErrorBoundary extends Component<{ children: React.ReactNode; onBack: () => void }, { hasError: boolean; errorMessage: string }> {
+  constructor(props: { children: React.ReactNode; onBack: () => void }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error?.message || String(error) };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[DetailErrorBoundary]', error?.message, error?.stack, info?.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>
+          <p style={{ marginBottom: 8, fontSize: 14 }}>详情加载异常，请重试</p>
+          <p style={{ marginBottom: 12, fontSize: 11, wordBreak: 'break-all', maxWidth: 320, margin: '0 auto 12px' }}>{this.state.errorMessage}</p>
+          <button type="button" onClick={this.props.onBack} style={{ padding: '6px 16px', cursor: 'pointer' }}>
+            返回列表
+          </button>
+          <button type="button" onClick={() => this.setState({ hasError: false, errorMessage: '' })} style={{ padding: '6px 16px', cursor: 'pointer', marginLeft: 8 }}>
+            重试
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const CHART_WIDTH = 280;
+const CHART_HEIGHT = 50;
+const CHART_PAD_TOP = 4;
+const CHART_PAD_RIGHT = 4;
+const CHART_PAD_BOTTOM = 4;
+const CHART_PAD_LEFT = 4;
+const CHART_INNER_W = CHART_WIDTH - CHART_PAD_LEFT - CHART_PAD_RIGHT;
+const CHART_INNER_H = CHART_HEIGHT - CHART_PAD_TOP - CHART_PAD_BOTTOM;
+
+const IntradayChart = memo(function IntradayChart({
   data,
   prevClose,
-  intradayPrevClose
+  intradayPrevClose,
 }: {
   data: Array<{ time: string; price: number }>;
   prevClose?: number;
   intradayPrevClose?: number;
 }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="intraday-chart-empty">
-        暂无分时数据
-      </div>
-    );
-  }
+  const pathInfo = useMemo(() => {
+    if (!data || data.length === 0) return null;
 
-  const width = 280;
-  const height = 50;
-  const padding = { top: 4, right: 4, bottom: 4, left: 4 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-
-  const dataPoints: IntradayDataPoint[] = [];
-  data.forEach((item) => {
-    const index = getMinuteIndex(item.time);
-    if (index !== null && Number.isFinite(item.price)) {
-      dataPoints.push({
-        time: item.time,
-        price: item.price,
-        minuteIndex: index,
-      });
-    }
-  });
-
-  if (dataPoints.length === 0) {
-    return (
-      <div className="intraday-chart-empty">
-        暂无有效分时数据
-      </div>
-    );
-  }
-
-  const maybeIntradayPrevClose: number = intradayPrevClose ?? Number.NaN;
-  const effectivePrevClose: number = Number.isFinite(maybeIntradayPrevClose)
-    ? maybeIntradayPrevClose
-    : (prevClose !== undefined && Number.isFinite(prevClose) ? prevClose : Number.NaN);
-  const hasPrevClose = Number.isFinite(effectivePrevClose);
-
-  const prices = dataPoints.map(d => d.price);
-  let minPrice = Math.min(...prices);
-  let maxPrice = Math.max(...prices);
-
-  // 如果提供了昨收价，将其纳入显示范围，确保横线始终可见
-  if (hasPrevClose) {
-    minPrice = Math.min(minPrice, effectivePrevClose);
-    maxPrice = Math.max(maxPrice, effectivePrevClose);
-  }
-
-  const rawRange = Math.max(maxPrice - minPrice, Math.max(maxPrice * 0.0002, 0.01));
-  const step = rawRange / 10;
-  const edgePadding = step;
-  const displayMin = minPrice - edgePadding;
-  const displayMax = maxPrice + edgePadding;
-  const displayRange = Math.max(displayMax - displayMin, rawRange);
-  const sortedPoints = [...dataPoints].sort((a, b) => a.minuteIndex - b.minuteIndex);
-
-  const toX = (minuteIndex: number) => {
-    return padding.left + (minuteIndex / TRADING_MINUTES) * chartWidth;
-  };
-
-  const toY = (price: number) => {
-    const normalized = (price - displayMin) / displayRange;
-    return padding.top + (1 - normalized) * chartHeight;
-  };
-
-  const buildPathSegments = () => {
-    if (dataPoints.length === 0) return [];
-
-    const sorted = sortedPoints;
-
-    const segments: IntradayDataPoint[][] = [];
-    let currentSegment: IntradayDataPoint[] = [sorted[0]];
-    
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-      
-      if (curr.minuteIndex - prev.minuteIndex > 1) {
-        segments.push(currentSegment);
-        currentSegment = [curr];
-      } else {
-        currentSegment.push(curr);
+    const dataPoints: IntradayDataPoint[] = [];
+    for (const item of data) {
+      const index = getMinuteIndex(item.time);
+      if (index !== null && Number.isFinite(item.price)) {
+        dataPoints.push({ time: item.time, price: item.price, minuteIndex: index });
       }
     }
-    segments.push(currentSegment);
-    
-    return segments;
-  };
+    if (dataPoints.length === 0) return null;
 
-  const pathSegments = buildPathSegments();
+    const maybeIntradayPrevClose: number = intradayPrevClose ?? Number.NaN;
+    const effectivePrevClose: number = Number.isFinite(maybeIntradayPrevClose)
+      ? maybeIntradayPrevClose
+      : (prevClose !== undefined && Number.isFinite(prevClose) ? prevClose : Number.NaN);
+    const hasPrevClose = Number.isFinite(effectivePrevClose);
 
-  const baselinePrice: number = hasPrevClose ? effectivePrevClose : (dataPoints[0]?.price ?? 0);
-  const baselineY = toY(baselinePrice);
+    const prices = dataPoints.map((d) => d.price);
+    let minPrice = Math.min(...prices);
+    let maxPrice = Math.max(...prices);
+    if (hasPrevClose) {
+      minPrice = Math.min(minPrice, effectivePrevClose);
+      maxPrice = Math.max(maxPrice, effectivePrevClose);
+    }
+
+    const rawRange = Math.max(maxPrice - minPrice, Math.max(maxPrice * 0.0002, 0.01));
+    const step = rawRange / 10;
+    const edgePadding = step;
+    const displayMin = minPrice - edgePadding;
+    const displayMax = maxPrice + edgePadding;
+    const displayRange = Math.max(displayMax - displayMin, rawRange);
+
+    const sorted = [...dataPoints].sort((a, b) => a.minuteIndex - b.minuteIndex);
+
+    const toX = (mi: number) => CHART_PAD_LEFT + (mi / TRADING_MINUTES) * CHART_INNER_W;
+    const toY = (price: number) => {
+      const normalized = (price - displayMin) / displayRange;
+      return CHART_PAD_TOP + (1 - normalized) * CHART_INNER_H;
+    };
+
+    // Build continuous segments (split at lunch break gaps)
+    const segments: IntradayDataPoint[][] = [];
+    let cur: IntradayDataPoint[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].minuteIndex - sorted[i - 1].minuteIndex > 1) {
+        segments.push(cur);
+        cur = [sorted[i]];
+      } else {
+        cur.push(sorted[i]);
+      }
+    }
+    segments.push(cur);
+
+    const baselinePrice = hasPrevClose ? effectivePrevClose : (dataPoints[0]?.price ?? 0);
+    const baselineY = toY(baselinePrice);
+
+    // Pre-compute all SVG sub-segments
+    const subSegments: { path: string; color: string; key: string }[] = [];
+    for (let si = 0; si < segments.length; si++) {
+      const seg = segments[si];
+      for (let i = 0; i < seg.length - 1; i++) {
+        const p = `${toX(seg[i].minuteIndex).toFixed(2)} ${toY(seg[i].price).toFixed(2)} ${toX(seg[i + 1].minuteIndex).toFixed(2)} ${toY(seg[i + 1].price).toFixed(2)}`;
+        const mid = (seg[i].price + seg[i + 1].price) / 2;
+        subSegments.push({
+          path: p,
+          color: mid >= baselinePrice ? '#ff5e57' : '#1fc66d',
+          key: `s${si}-${i}`,
+        });
+      }
+    }
+
+    return { baselineY, subSegments };
+  }, [data, prevClose, intradayPrevClose]);
+
+  if (!pathInfo) {
+    return <div className="intraday-chart-empty">暂无分时数据</div>;
+  }
 
   return (
     <svg
       className="intraday-chart"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
       preserveAspectRatio="none"
     >
       <line
-        x1={padding.left}
-        x2={width - padding.right}
-        y1={baselineY.toFixed(2)}
-        y2={baselineY.toFixed(2)}
+        x1={CHART_PAD_LEFT}
+        x2={CHART_WIDTH - CHART_PAD_RIGHT}
+        y1={pathInfo.baselineY.toFixed(2)}
+        y2={pathInfo.baselineY.toFixed(2)}
         className="intraday-open-line"
       />
-      {pathSegments.flatMap((segment, idx) => {
-        // Generate individual colored sub-segments within each continuous segment
-        const subSegments: { path: string; color: string; key: string }[] = [];
-        for (let i = 0; i < segment.length - 1; i++) {
-          const subPath = `${toX(segment[i].minuteIndex).toFixed(2)} ${toY(segment[i].price).toFixed(2)} ${toX(segment[i + 1].minuteIndex).toFixed(2)} ${toY(segment[i + 1].price).toFixed(2)}`;
-          const midPrice = (segment[i].price + segment[i + 1].price) / 2;
-          subSegments.push({
-            path: subPath,
-            color: midPrice >= baselinePrice ? '#ff5e57' : '#1fc66d',
-            key: `seg-${idx}-${i}`,
-          });
-        }
-        if (subSegments.length === 0) return null;
-        return subSegments.map(({ path, color, key }) => (
-          <path
-            key={key}
-            d={`M ${path}`}
-            fill="none"
-            stroke={color}
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ));
-      })}
+      {pathInfo.subSegments.map(({ path, color, key }) => (
+        <path
+          key={key}
+          d={`M ${path}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
     </svg>
   );
-}
+});
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
@@ -891,6 +902,7 @@ export default function App() {
   const popupRootRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const scrollPosRef = useRef(0);
 
   const stockMetrics = useMemo(() => {
     const totalMarketValue = stockPositions.reduce((sum, item) => {
@@ -1579,7 +1591,7 @@ function clearIntradayIfStale(
     }
   }, []);
 
-  // 首次加载时如果后台没有缓存，手动请求一次
+  // 首次加载：先读 storage 缓存，缺失的才手动请求
   useEffect(() => {
     if (!portfolioReady) return;
     if (stockHoldings.length === 0) {
@@ -1589,32 +1601,53 @@ function clearIntradayIfStale(
       return;
     }
 
-    const normalizedHoldings = stockHoldings
-      .map((holding) => normalizeStockCode(holding.code))
-      .filter(Boolean);
-
-    // 检查是否所有持仓股都已有缓存行情
-    const positionCodes = new Set(stockPositions.map((p) => p.code));
-    const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(h.code));
-    const intradayMissingCodes = normalizedHoldings.filter((code) => {
-      const position = stockPositions.find((row) => row.code === code);
-      if (!position) return true;
-      const intradayData = position.intraday?.data;
-      return !Array.isArray(intradayData) || intradayData.length === 0;
-    });
-
-    if (missingHoldings.length === 0 && intradayMissingCodes.length === 0) {
-      setStocksLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    const loadStocks = async () => {
+    const init = async () => {
       setStocksLoading(true);
       try {
+        // 先读 storage 缓存，避免重复请求后台已有的数据
+        let cached: StockPosition[] = [];
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          const stored = await new Promise<Record<string, unknown>>((resolve) =>
+            chrome.storage.local.get(['stockPositions', STOCK_INTRADAY_DATE_KEY], resolve),
+          );
+          if (!cancelled && Array.isArray(stored.stockPositions)) {
+            const intradayDate = typeof stored[STOCK_INTRADAY_DATE_KEY] === 'string'
+              ? (stored[STOCK_INTRADAY_DATE_KEY] as string)
+              : null;
+            const normalized = (stored.stockPositions as StockPosition[]).map((p) => ({
+              ...p,
+              intraday: normalizeIntraday((p as unknown as { intraday: unknown }).intraday),
+            }));
+            cached = clearIntradayIfStale(normalized, intradayDate);
+            setStockPositions(cached);
+          }
+        }
+
+        if (cancelled) return;
+
+        const normalizedHoldings = stockHoldings
+          .map((holding) => normalizeStockCode(holding.code))
+          .filter(Boolean);
+
+        // 基于 storage 数据检查缺口
+        const positionCodes = new Set(cached.map((p) => p.code));
+        const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(h.code));
+        const intradayMissingCodes = normalizedHoldings.filter((code) => {
+          const position = cached.find((row) => row.code === code);
+          if (!position) return true;
+          const intradayData = position.intraday?.data;
+          return !Array.isArray(intradayData) || intradayData.length === 0;
+        });
+
+        if (missingHoldings.length === 0 && intradayMissingCodes.length === 0) {
+          setStocksLoading(false);
+          return;
+        }
+
         const { fetchBatchStockQuotes, fetchStockIntradayWithRetry, pMap } = await import('../shared/fetch');
-        // 只拉取缺失的股票行情
-        if (missingHoldings.length > 0) {
+
+        if (!cancelled && missingHoldings.length > 0) {
           const newRows = await fetchBatchStockQuotes(missingHoldings);
           if (!cancelled) {
             setStockPositions((prev) => {
@@ -1631,7 +1664,6 @@ function clearIntradayIfStale(
         }
 
         if (!cancelled && intradayMissingCodes.length > 0) {
-          // 并发受限拉取分时数据（最多 4 个同时请求），带自动重试
           const intradayResults = await pMap(
             intradayMissingCodes,
             async (code) => {
@@ -1643,14 +1675,10 @@ function clearIntradayIfStale(
                 return { code, data: [] as Array<{ time: string; price: number }>, prevClose: Number.NaN };
               }
             },
-            4,
+            8,
           );
 
           if (!cancelled) {
-            const failedCodes = intradayResults.filter((r) => r.data.length === 0).map((r) => r.code);
-            if (failedCodes.length > 0) {
-              console.warn('[StockIntraday] still empty after fetch:', failedCodes.join(','));
-            }
             const validResults = intradayResults.filter((r) => r.data.length > 0);
             if (validResults.length > 0) {
               setStockPositions((prev) =>
@@ -1660,11 +1688,10 @@ function clearIntradayIfStale(
                 }),
               );
 
-              // 批量写回 storage
               if (typeof chrome !== 'undefined' && chrome.storage?.local) {
                 try {
-                  const result = await chrome.storage.local.get('stockPositions');
-                  const existing = (Array.isArray(result.stockPositions) ? result.stockPositions : []) as StockPosition[];
+                  const stored = await chrome.storage.local.get('stockPositions');
+                  const existing = (Array.isArray(stored.stockPositions) ? stored.stockPositions : []) as StockPosition[];
                   const updated = existing.map((p) => {
                     const found = validResults.find((r) => r.code === p.code);
                     return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
@@ -1678,9 +1705,7 @@ function clearIntradayIfStale(
           }
         }
 
-        if (!cancelled) {
-          setStocksError('');
-        }
+        if (!cancelled) setStocksError('');
       } catch {
         if (!cancelled) setStocksError('股票行情获取失败');
       } finally {
@@ -1688,9 +1713,8 @@ function clearIntradayIfStale(
       }
     };
 
-    void loadStocks();
+    void init();
     return () => { cancelled = true; };
-  // 不依赖 stockPositions — 避免 storage 监听器更新时反复取消分时拉取
   }, [portfolioReady, stockHoldings]);
 
   // 交易时段内定时刷新缺分时数据的股票
@@ -1715,7 +1739,7 @@ function clearIntradayIfStale(
             return null;
           }
         },
-        4,
+        8,
       );
 
       if (!results) return;
@@ -1871,6 +1895,17 @@ function clearIntradayIfStale(
       setFundDetailTarget(null);
     }
   }, [activeTab, stockDetailTarget]);
+
+  useEffect(() => {
+    if (!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget) {
+      const el = document.querySelector('.content-scroll');
+      if (el && scrollPosRef.current > 0) {
+        requestAnimationFrame(() => {
+          el.scrollTop = scrollPosRef.current;
+        });
+      }
+    }
+  }, [stockDetailTarget, fundDetailTarget, tradeHistoryTarget]);
 
   useEffect(() => {
     if (
@@ -2112,6 +2147,8 @@ function clearIntradayIfStale(
   const openStockDetail = (item: StockPosition) => {
     const code = normalizeStockCode(item.code);
     if (!code) return;
+    const el = document.querySelector('.content-scroll');
+    if (el) scrollPosRef.current = el.scrollTop;
     setStockDetailTarget({
       code,
       name: item.name || code,
@@ -2123,10 +2160,14 @@ function clearIntradayIfStale(
   };
 
   const openFundDetail = (item: FundPosition) => {
+    console.log('[openFundDetail] clicked:', item.code, item.name);
+    const el = document.querySelector('.content-scroll');
+    if (el) scrollPosRef.current = el.scrollTop;
     setFundDetailTarget({
       code: item.code,
       name: item.name || item.code,
     });
+    console.log('[openFundDetail] fundDetailTarget set');
   };
 
   const closeFundDetail = () => {
@@ -2525,12 +2566,14 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'funds' && fundDetailTarget ? (
-              <FundDetailView
-                code={fundDetailTarget.code}
-                fundPosition={fundPositions.find((p) => p.code === fundDetailTarget.code)}
-                fundHolding={fundHoldings.find((h) => h.code === fundDetailTarget.code)}
-                onBack={closeFundDetail}
-              />
+              <DetailErrorBoundary onBack={closeFundDetail}>
+                <FundDetailView
+                  code={fundDetailTarget.code}
+                  fundPosition={fundPositions.find((p) => p.code === fundDetailTarget.code)}
+                  fundHolding={fundHoldings.find((h) => h.code === fundDetailTarget.code)}
+                  onBack={closeFundDetail}
+                />
+              </DetailErrorBoundary>
             ) : null}
 
             {tradeHistoryTarget ? (
@@ -2548,7 +2591,11 @@ function clearIntradayIfStale(
                 <TradeHistoryList
                   tradeHistory={stockTradeHistory}
                   stockNameMap={stockNameMap}
-                  onSelectStock={(code, name) => setTradeHistoryTarget({ code, name })}
+                  onSelectStock={(code, name) => {
+                    const el = document.querySelector('.content-scroll');
+                    if (el) scrollPosRef.current = el.scrollTop;
+                    setTradeHistoryTarget({ code, name });
+                  }}
                 />
               </div>
             ) : null}
@@ -2912,6 +2959,8 @@ function clearIntradayIfStale(
                             const handleAlertNotifClick = () => {
                               markNotificationRead(item.id);
                               if (item.code) {
+                                const el = document.querySelector('.content-scroll');
+                                if (el) scrollPosRef.current = el.scrollTop;
                                 setActiveTab('trades');
                                 setTradeHistoryTarget({ code: item.code, name: item.name || stockNameMap[item.code] || item.code });
                               }
@@ -3189,7 +3238,7 @@ function clearIntradayIfStale(
               </div>
             ) : null}
 
-            {activeTab === 'funds' ? (
+            {activeTab === 'funds' && !fundDetailTarget ? (
               <div className="table-panel">
                 <table className="data-table fund-table">
                   <thead>
@@ -3231,23 +3280,25 @@ function clearIntradayIfStale(
                         }}
                         onDrop={() => handleFundDrop(item.code)}
                       >
-                        <td className={`name-col fund-detail-trigger ${item.special ? 'special-row' : ''}`}>
+                        <td
+                          className={`name-col fund-detail-trigger ${item.special ? 'special-row' : ''}`}
+                          onClick={() => {
+                            if (sortingMode === 'funds') return;
+                            openFundDetail(item);
+                          }}
+                          role="button"
+                          tabIndex={sortingMode === 'funds' ? -1 : 0}
+                          onKeyDown={(e) => {
+                            if (sortingMode === 'funds') return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              openFundDetail(item);
+                            }
+                          }}
+                        >
                           <span
                             className="primary"
                             title={item.name}
-                            onClick={() => {
-                              if (sortingMode === 'funds') return;
-                              openFundDetail(item);
-                            }}
-                            role="button"
-                            tabIndex={sortingMode === 'funds' ? -1 : 0}
-                            onKeyDown={(e) => {
-                              if (sortingMode === 'funds') return;
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openFundDetail(item);
-                              }
-                            }}
                           >
                             <span className="name-inline">
                               {sortingMode === 'funds' ? (
@@ -3464,6 +3515,8 @@ function clearIntradayIfStale(
                   管理标签
                 </button>
                 <button type="button" onClick={() => {
+                  const el = document.querySelector('.content-scroll');
+                  if (el) scrollPosRef.current = el.scrollTop;
                   setTradeHistoryTarget({ code: rowContextMenu.code, name: stockNameMap[rowContextMenu.code] || rowContextMenu.code });
                   setRowContextMenu(null);
                 }}>

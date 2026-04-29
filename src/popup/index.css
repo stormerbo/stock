@@ -2200,14 +2200,16 @@ body.theme-light .row-context-menu {
 /* ---- Fund Detail View ---- */
 
 .fund-detail-panel {
+  position: absolute;
+  inset: 0;
   border: 1px solid color-mix(in srgb, var(--glass-border) 22%, transparent);
   border-radius: 12px;
   padding: 8px;
-  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
-  height: 100%;
+  background: var(--bg-0);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  z-index: 2;
 }
 
 /* Title row at top of fund detail */

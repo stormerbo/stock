@@ -319,11 +319,13 @@ async function fetchIntradayValuation(code: string): Promise<IntradayValPoint[]>
     const data = JSON.parse(text) as { data?: string | null };
     if (data.data) {
       // data.data 是嵌套的 JSON 字符串，需要二次解析
-      const inner = JSON.parse(data.data) as {
-        Datas?: string[];
-        ErrCode?: number;
-        Expansion?: { GZTIME?: string; DWJZ?: string; GSZZL?: string };
-      };
+      let inner: { Datas?: string[]; ErrCode?: number; Expansion?: { GZTIME?: string; DWJZ?: string; GSZZL?: string } };
+      try {
+        inner = JSON.parse(data.data);
+      } catch {
+        // 不是有效 JSON 字符串（部分基金返回格式不同），回退到 fundgz
+        inner = {};
+      }
       const items = inner.Datas ?? [];
       if (items.length > 0) {
         const points: IntradayValPoint[] = [];
@@ -452,6 +454,7 @@ async function fetchTopHoldings(code: string): Promise<{ holdings: FundHoldingSt
 
 async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promise<FundDetailData> {
   // Parallel fetch: estimate, base info, nav diagrams (1m + 3m + 5y), yield diagram, intraday valuation, holdings
+  console.log('[fetchFundDetail] start:', code);
   const [
     gzResult,
     baseResult,
@@ -471,6 +474,7 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     fetchIntradayValuation(code),
     fetchTopHoldings(code),
   ]);
+  console.log('[fetchFundDetail] allSettled done:', code);
 
   // Estimate
   const estimate = gzResult.status === 'fulfilled' ? gzResult.value : {
@@ -1130,12 +1134,14 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
 
   useEffect(() => {
     let cancelled = false;
+    console.log('[FundDetailView] mounted, fetching detail for:', code);
 
     const load = async () => {
       setLoading(true);
       try {
         const result = await fetchFundDetail(code, fundHolding);
         if (cancelled) return;
+        console.log('[FundDetailView] fetch success, detail:', { name: result.info.name, navLen: result.navHistory.length, intradayLen: result.intradayValuation.length, yieldLen: result.yieldHistory.length, holdingsLen: result.topHoldings.length, estNav: result.estimatedNav });
         setDetail(result);
         setError('');
       } catch (err) {
