@@ -18,3 +18,7 @@ release/*.zip
 # debug / test artifacts
 .playwright-mcp/
 fund-detail-page*.txt
+
+# extension signing key (NEVER commit)
+key.pem
+.tmp-key.pem
