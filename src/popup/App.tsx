@@ -910,10 +910,21 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    const floating = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.floatingPnl)) return sum;
-      return sum + item.floatingPnl;
-    }, 0);
+    // 合并浮动盈亏和已实现盈亏：有交易记录的用交易推导，否则用原始浮动盈亏
+    let totalPnl = 0;
+    for (const pos of stockPositions) {
+      if (!Number.isFinite(pos.price)) continue;
+      const trades = stockTradeHistory[pos.code];
+      if (trades && trades.length > 0) {
+        const computed = computePositionFromTrades(trades);
+        if (computed.shares > 0) {
+          totalPnl += (pos.price - computed.avgCost) * computed.shares;
+        }
+        totalPnl += computed.realizedPnl;
+      } else if (Number.isFinite(pos.floatingPnl)) {
+        totalPnl += pos.floatingPnl;
+      }
+    }
 
     const daily = stockPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.dailyPnl)) return sum;
@@ -922,10 +933,10 @@ export default function App() {
 
     return [
       { label: '总市值', value: formatNumber(totalMarketValue, 2), tone: 'neutral' },
-      { label: '浮动盈亏', value: formatNumber(floating, 1), tone: toneClass(floating) },
+      { label: '总盈亏', value: formatNumber(totalPnl, 1), tone: toneClass(totalPnl) },
       { label: '当日盈亏', value: formatNumber(daily, 1), tone: toneClass(daily) },
     ] as const;
-  }, [stockPositions]);
+  }, [stockPositions, stockTradeHistory]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -956,10 +967,21 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    const stockFloating = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.floatingPnl)) return sum;
-      return sum + item.floatingPnl;
-    }, 0);
+    // 股票总盈亏（含已实现）
+    let stockTotalPnl = 0;
+    for (const pos of stockPositions) {
+      if (!Number.isFinite(pos.price)) continue;
+      const trades = stockTradeHistory[pos.code];
+      if (trades && trades.length > 0) {
+        const computed = computePositionFromTrades(trades);
+        if (computed.shares > 0) {
+          stockTotalPnl += (pos.price - computed.avgCost) * computed.shares;
+        }
+        stockTotalPnl += computed.realizedPnl;
+      } else if (Number.isFinite(pos.floatingPnl)) {
+        stockTotalPnl += pos.floatingPnl;
+      }
+    }
 
     const stockDaily = stockPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.dailyPnl)) return sum;
@@ -982,7 +1004,7 @@ export default function App() {
     }, 0);
 
     const totalAssets = stockMarketValue + fundHoldingAmount;
-    const totalHoldingProfit = stockFloating + fundHoldingProfit;
+    const totalHoldingProfit = stockTotalPnl + fundHoldingProfit;
     const previewProfit = stockDaily + fundEstimated;
 
     return [
@@ -990,7 +1012,7 @@ export default function App() {
       { label: '综合预估收益', value: formatNumber(previewProfit, 2), tone: toneClass(previewProfit) },
       { label: '股票当日盈亏', value: formatNumber(stockDaily, 2), tone: toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions]);
+  }, [fundPositions, stockPositions, stockTradeHistory]);
 
   const profitMetrics = useMemo(() => {
     const latest = dailyProfitDetails[0];
@@ -1128,8 +1150,13 @@ export default function App() {
       const trades = stockTradeHistory[holding.code];
       if (trades && trades.length > 0) {
         const computed = computePositionFromTrades(trades);
-        next.shares = computed.shares;
-        next.cost = computed.avgCost;
+        const avgCost = computed.avgCost;
+        const totalShares = computed.shares;
+        next.shares = totalShares;
+        next.cost = avgCost;
+        next.floatingPnl = Number.isFinite(next.price) && totalShares > 0
+          ? (next.price - avgCost) * totalShares
+          : Number.NaN;
         next.realizedPnl = computed.realizedPnl;
         next.tradeDerived = true;
       }
@@ -2449,8 +2476,8 @@ function clearIntradayIfStale(
           </div>
         </aside>
 
-        <main className={`main-area ${stockDetailTarget || fundDetailTarget || tradeHistoryTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget || (activeTab === 'trades' && tradeHistoryTarget) ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -2473,7 +2500,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
             <header className={`page-header ${(activeTab === 'account' || activeTab === 'profit') ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${(activeTab === 'account' || activeTab === 'profit') ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -2556,7 +2583,7 @@ function clearIntradayIfStale(
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${tradeHistoryTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${activeTab === 'trades' && tradeHistoryTarget ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -2576,7 +2603,7 @@ function clearIntradayIfStale(
               </DetailErrorBoundary>
             ) : null}
 
-            {tradeHistoryTarget ? (
+            {activeTab === 'trades' && tradeHistoryTarget ? (
               <TradeHistoryView
                 code={tradeHistoryTarget.code}
                 name={tradeHistoryTarget.name}

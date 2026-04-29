@@ -772,9 +772,11 @@ body.theme-light .index-tooltip {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  padding-bottom: 12px;
 }
 
 .content-scroll.detail-mode {
+  padding-bottom: 0;
   overflow: hidden;
 }
 

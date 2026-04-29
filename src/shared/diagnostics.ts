@@ -143,18 +143,22 @@ export function calcPnlAttribution(
   fundPositions: FundPosition[]
 ): PnlAttribution {
   const allPositions: Array<{ code: string; name: string; pnl: number; dailyPnl: number }> = [
-    ...stockPositions.map(sp => ({
-      code: sp.code,
-      name: sp.name,
-      pnl: sp.floatingPnl,
-      dailyPnl: sp.dailyPnl,
-    })),
-    ...fundPositions.map(fp => ({
-      code: fp.code,
-      name: fp.name,
-      pnl: fp.holdingProfit,
-      dailyPnl: fp.estimatedProfit,
-    })),
+    ...stockPositions
+      .filter(sp => sp.shares > 0)
+      .map(sp => ({
+        code: sp.code,
+        name: sp.name,
+        pnl: sp.floatingPnl,
+        dailyPnl: sp.dailyPnl,
+      })),
+    ...fundPositions
+      .filter(fp => fp.units > 0)
+      .map(fp => ({
+        code: fp.code,
+        name: fp.name,
+        pnl: fp.holdingProfit,
+        dailyPnl: fp.estimatedProfit,
+      })),
   ];
 
   const sorted = [...allPositions].sort((a, b) => b.pnl - a.pnl);

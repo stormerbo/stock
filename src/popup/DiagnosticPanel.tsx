@@ -204,7 +204,7 @@ function PnlView({ diagnostic }: { diagnostic: DiagnosticResult }) {
               <li key={d.code}>
                 <span className="name">{d.name}</span>
                 <span className="value" style={{ color: d.dailyPnl >= 0 ? '#10b981' : '#ef4444' }}>
-                  {formatPct(d.dailyPnl)}
+                  {formatNum(d.dailyPnl, 1)}
                 </span>
               </li>
             ))}
