@@ -85,3 +85,34 @@ npm run build
 ## License
 
 MIT
+
+## 发布流程
+
+通过 GitHub Actions 自动构建打包，发布新版本只需：
+
+### 首次设置
+
+1. 将 `key.pem` 添加到 GitHub Secrets：
+   ```bash
+   pbcopy < key.pem
+   ```
+   打开仓库 **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `EXTENSION_KEY_PEM`
+   - Value: 粘贴 `key.pem` 的全部内容
+
+### 发布新版本
+
+```bash
+# 1. 更新 manifest.json 中的 version 字段
+# 2. 打 tag 并推送
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions 会自动：
+1. 安装依赖 → 构建 → 打包为 zip
+2. 注入 `key.pem` 确保持续稳定的扩展 ID
+3. 创建 Release 并上传 zip 附件
+4. 自动生成 Release Notes
+
+用户侧的扩展会通过后台 6 小时间隔的版本检查检测到新版本，弹出通知引导下载。
