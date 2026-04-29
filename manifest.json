@@ -9,6 +9,7 @@
     "notifications"
   ],
   "host_permissions": [
+    "https://api.github.com/*",
     "https://qt.gtimg.cn/*",
     "https://web.ifzq.gtimg.cn/*",
     "https://smartbox.gtimg.cn/*",

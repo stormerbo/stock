@@ -59,8 +59,14 @@ declare namespace chrome {
         title: string;
         message: string;
         priority?: number;
+        buttons?: Array<{ title: string }>;
+        requireInteraction?: boolean;
       }
     ): Promise<string>;
+
+    const onClicked: {
+      addListener(callback: (notificationId: string) => void): void;
+    };
   }
 
   namespace alarms {
@@ -89,6 +95,12 @@ declare namespace chrome {
         addListener(callback: (port: Port) => void): void;
       };
     }
+
+    interface Manifest {
+      version: string;
+    }
+
+    function getManifest(): Manifest;
 
     const onInstalled: {
       addListener(callback: (details: { reason: string }) => void): void;
@@ -122,5 +134,9 @@ declare namespace chrome {
     function openOptionsPage(): void;
 
     function getURL(path: string): string;
+  }
+
+  namespace tabs {
+    function create(createProperties: { url: string }): void;
   }
 }

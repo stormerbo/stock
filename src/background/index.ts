@@ -97,6 +97,9 @@ const ALARM_STOCK = 'refresh-stocks';
 const ALARM_FUND = 'refresh-funds';
 const ALARM_INDEX = 'refresh-indexes';
 const ALARM_TECH_REPORT = 'daily-technical-report';
+const ALARM_UPDATE_CHECK = 'check-update';
+const UPDATE_INFO_KEY = 'extensionUpdateInfo';
+const UPDATE_COOLDOWN_KEY = 'updateCooldown';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
 let refreshStocksInFlight = false;
 
@@ -337,6 +340,7 @@ function clearAlarms() {
   chrome.alarms.clear(ALARM_FUND);
   chrome.alarms.clear(ALARM_INDEX);
   chrome.alarms.clear(ALARM_TECH_REPORT);
+  chrome.alarms.clear(ALARM_UPDATE_CHECK);
 }
 
 async function handleAlarm(name: string) {
@@ -344,7 +348,74 @@ async function handleAlarm(name: string) {
   else if (name === ALARM_FUND) await refreshFunds();
   else if (name === ALARM_INDEX) await refreshIndexes();
   else if (name === ALARM_TECH_REPORT) await generateDailyTechnicalReport();
+  else if (name === ALARM_UPDATE_CHECK) await checkForUpdate();
 }
+
+// -----------------------------------------------------------
+// GitHub Release 版本检查 — 热更新提醒
+// -----------------------------------------------------------
+
+const GITHUB_REPO = 'stormerbo/stock';
+
+function parseVersion(v: string): number[] {
+  return v.replace(/^v/i, '').split('.').map(Number);
+}
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const l = parseVersion(latest);
+  const c = parseVersion(current);
+  for (let i = 0; i < Math.max(l.length, c.length); i++) {
+    const a = l[i] ?? 0;
+    const b = c[i] ?? 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return false;
+}
+
+type UpdateInfo = {
+  version: string;
+  url: string;
+  notified: boolean;
+};
+
+async function checkForUpdate(): Promise<void> {
+  try {
+    // 检查冷却期（24小时内不重复通知）
+    const cooled = await chrome.storage.local.get(UPDATE_COOLDOWN_KEY);
+    const lastNotify = cooled[UPDATE_COOLDOWN_KEY] as number | undefined;
+    if (lastNotify && Date.now() - lastNotify < 24 * 60 * 60 * 1000) return;
+
+    const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest');
+    if (!resp.ok) return;
+    const data = await resp.json() as { tag_name: string; html_url: string };
+    const latestVer = data.tag_name.replace(/^v/i, '');
+    const currentVer = chrome.runtime.getManifest().version;
+
+    if (isNewerVersion(latestVer, currentVer)) {
+      const info: UpdateInfo = { version: latestVer, url: data.html_url, notified: true };
+      await chrome.storage.local.set({ [UPDATE_INFO_KEY]: info });
+      await chrome.storage.local.set({ [UPDATE_COOLDOWN_KEY]: Date.now() });
+
+      await chrome.notifications.create('update_available', {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('public/icon128.png'),
+        title: '有新版本可用',
+        message: `赚钱助手 v${latestVer} 已发布，点击查看详情`,
+        requireInteraction: true,
+      });
+    }
+  } catch {
+    // 静默失败，不影响正常功能
+  }
+}
+
+// 通知点击 → 打开 Releases 页
+chrome.notifications.onClicked.addListener((notifId) => {
+  if (notifId === 'update_available') {
+    chrome.tabs.create({ url: 'https://github.com/' + GITHUB_REPO + '/releases/latest' });
+  }
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   void handleAlarm(alarm.name);
@@ -359,6 +430,9 @@ function startRefreshLoop() {
     void refreshFunds();
     void refreshIndexes();
   });
+  // 版本检查：每 6 小时检查一次 GitHub Release
+  chrome.alarms.create(ALARM_UPDATE_CHECK, { periodInMinutes: 360 });
+  void checkForUpdate();
   void loadTechReportConfig().then((config) => {
     if (config.enabled) {
       setupTechnicalReportAlarm();
