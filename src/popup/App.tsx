@@ -3204,6 +3204,11 @@ function clearIntradayIfStale(
                               </span>
                             )}
                             <span className="price-line">{formatNumber(item.price, 2)}</span>
+                            {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
+                              <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2 }}>
+                                关注 {formatNumber(item.addedPrice!, 3)}
+                              </span>
+                            ) : null}
                           </td>
                           <td>
                             {editingCell?.kind === 'stock' && editingCell.code === item.code && editingCell.field === 'shares' ? (
