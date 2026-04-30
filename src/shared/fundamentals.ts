@@ -1,5 +1,5 @@
 // -----------------------------------------------------------
-// Fundamental data from multiple sources
+// Fundamental data from East Money API (correct field mapping)
 // -----------------------------------------------------------
 
 import { fetchTextViaExtension, normalizeStockCode, toNumber, toTencentStockCode } from './fetch';
@@ -15,62 +15,8 @@ export type FundamentalData = {
   bvps: number;                 // 每股净资产
   grossMargin: number;          // 毛利率 (%)
   revenueGrowth: number;        // 营收增长率 (%)
-  profitGrowth: number;         // 净利润增长率 (%)
+  profitGrowth: number;         // 净利润同比增长 (%)
 };
-
-export async function fetchFundamentals(code: string): Promise<FundamentalData> {
-  // 先从腾讯行情接口获取 PE、总市值等基础数据
-  const tencentData = await fetchTencentFundamentals(code);
-  if (tencentData) return tencentData;
-
-  // 腾讯失败时走东财 ulist.np
-  const emData = await fetchEastmoneyFundamentals(code);
-  return emData ?? createEmptyFundamentalData();
-}
-
-// -----------------------------------------------------------
-// Tencent finance quote — 已验证 PE(39)、总市值(45) 等字段可用
-// -----------------------------------------------------------
-
-async function fetchTencentFundamentals(code: string): Promise<FundamentalData | null> {
-  try {
-    const plain = normalizeStockCode(code);
-    const tencentCode = toTencentStockCode(plain);
-    if (!tencentCode) return null;
-
-    const text = await fetchTextViaExtension(`https://qt.gtimg.cn/q=${tencentCode}`);
-    const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
-    const parts = matched?.[1]?.split('~') ?? [];
-    if (parts.length < 46) return null;
-
-    // Tencent quote field mapping:
-    // 39 = PE(动态), 45 = 总市值(亿), 44 = 流通市值(亿)?, 38 = 换手率
-    const peTtm = toNumber(parts[39]);
-    const totalMarketCapYi = toNumber(parts[45]);
-    // 腾讯没有 PB/ROE/EPS 等字段，这些走东财补充
-    const em = await fetchEastmoneyFundamentals(code);
-
-    return {
-      peTtm,
-      pb: em?.pb ?? Number.NaN,
-      totalMarketCapYi,
-      circulatingMarketCapYi: em?.circulatingMarketCapYi ?? Number.NaN,
-      dividendYield: em?.dividendYield ?? Number.NaN,
-      roe: em?.roe ?? Number.NaN,
-      eps: em?.eps ?? Number.NaN,
-      bvps: em?.bvps ?? Number.NaN,
-      grossMargin: em?.grossMargin ?? Number.NaN,
-      revenueGrowth: em?.revenueGrowth ?? Number.NaN,
-      profitGrowth: em?.profitGrowth ?? Number.NaN,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// -----------------------------------------------------------
-// East Money — 补充腾讯没有的字段
-// -----------------------------------------------------------
 
 function toEastmoneySecid(code: string): string {
   const plain = code.trim().toLowerCase().replace(/^(sh|sz)/, '');
@@ -79,58 +25,57 @@ function toEastmoneySecid(code: string): string {
   return `${market}.${plain}`;
 }
 
-type EastmoneyUlistRow = {
-  f9?: number;    // 总市值
-  f20?: number;   // 流通市值
-  f23?: number;   // PB
-  f37?: number;   // 股息率
-  f45?: number;   // ROE
-  f46?: number;   // 每股净资产
-  f49?: number;   // EPS
-  f50?: number;   // 毛利率
-  f52?: number;   // 营收增长率
-  f57?: number;   // 净利润增长率
-};
+/**
+ * 从东方财富 stock/get 接口获取基本面数据。
+ *
+ * 字段编号来源：东方财富页面逆向整理 (CSDN)
+ *   f9   = 市盈率(动态)    f20  = 总市值
+ *   f21  = 流通市值         f23  = 市净率
+ *   f37  = 净资产收益率     f41  = 营收同比
+ *   f46  = 净利润同比       f49  = 毛利率
+ *   f112 = 每股收益         f113 = 每股净资产
+ *   f133 = 股息率
+ */
+export async function fetchFundamentals(code: string): Promise<FundamentalData> {
+  const secid = toEastmoneySecid(code);
+  if (!secid) return createEmpty();
 
-async function fetchEastmoneyFundamentals(code: string): Promise<FundamentalData | null> {
   try {
-    const secid = toEastmoneySecid(code);
-    if (!secid) return null;
-
-    // 使用和行情报价相同的 ulist.np 接口（已验证可用）
     const text = await fetchTextViaExtension(
-      `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f9,f20,f23,f37,f45,f46,f49,f50,f52,f57&secids=${secid}`,
+      `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f9,f20,f21,f23,f37,f41,f46,f49,f112,f113,f133`,
     );
-    if (!text) return null;
+    if (!text) return createEmpty();
 
-    const raw = text.trim();
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    const json = JSON.parse(raw.slice(start, end + 1)) as {
-      data?: { diff?: EastmoneyUlistRow[] };
+    const json = JSON.parse(text) as {
+      data?: Record<string, number | undefined>;
     };
-    const row = json.data?.diff?.[0];
-    if (!row) return null;
+    const d = json.data;
+    if (!d) return createEmpty();
 
+    const peTtm = toNumber(d.f9);
+    const totalMarketCapYi = toNumber(d.f20);
+    const bvps = toNumber(d.f113);
+
+    // 总市值除以10^8转为亿
     return {
-      peTtm: Number.NaN, // 用腾讯的
-      pb: toNumber(row.f23),
-      totalMarketCapYi: toNumber(row.f9),
-      circulatingMarketCapYi: toNumber(row.f20),
-      dividendYield: toNumber(row.f37),
-      roe: toNumber(row.f45),
-      eps: toNumber(row.f49),
-      bvps: toNumber(row.f46),
-      grossMargin: toNumber(row.f50),
-      revenueGrowth: toNumber(row.f52),
-      profitGrowth: toNumber(row.f57),
+      peTtm,
+      pb: toNumber(d.f23),
+      totalMarketCapYi: Number.isFinite(totalMarketCapYi) ? totalMarketCapYi / 1e8 : Number.NaN,
+      circulatingMarketCapYi: Number.isFinite(d.f21) ? (d.f21 as number) / 1e8 : Number.NaN,
+      dividendYield: toNumber(d.f133),
+      roe: toNumber(d.f37),
+      eps: toNumber(d.f112),
+      bvps,
+      grossMargin: toNumber(d.f49),
+      revenueGrowth: toNumber(d.f41),
+      profitGrowth: toNumber(d.f46),
     };
   } catch {
-    return null;
+    return createEmpty();
   }
 }
 
-function createEmptyFundamentalData(): FundamentalData {
+function createEmpty(): FundamentalData {
   return {
     peTtm: Number.NaN,
     pb: Number.NaN,
@@ -147,5 +92,6 @@ function createEmptyFundamentalData(): FundamentalData {
 }
 
 export function isFundamentalDataValid(data: FundamentalData): boolean {
-  return Number.isFinite(data.peTtm) || Number.isFinite(data.pb) || Number.isFinite(data.totalMarketCapYi);
+  return Number.isFinite(data.peTtm) || Number.isFinite(data.pb)
+    || Number.isFinite(data.totalMarketCapYi) || Number.isFinite(data.roe);
 }
