@@ -9,7 +9,7 @@ import {
   type StockPeriod,
 } from "./stockDetail";
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../shared/risk-metrics";
-import { fetchFundamentals, type FundamentalData } from "../shared/fundamentals";
+import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../shared/fundamentals";
 
 const UP_COLOR = "#e45555";
 const DN_COLOR = "#2aa568";
@@ -1100,8 +1100,7 @@ function FundamentalPanel({ data, loading, code, fallbackName }: { data: Fundame
     return <div className="detail-empty">暂无基本面数据</div>;
   }
 
-  const isValid = Number.isFinite(data.peTtm) || Number.isFinite(data.totalMarketCapYi);
-  if (!isValid) {
+  if (!isFundamentalDataValid(data)) {
     return <div className="detail-empty">暂无基本面数据</div>;
   }
 

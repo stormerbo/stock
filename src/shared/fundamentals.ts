@@ -1,8 +1,8 @@
 // -----------------------------------------------------------
-// Fundamental data from East Money API
+// Fundamental data from multiple sources
 // -----------------------------------------------------------
 
-import { fetchTextViaExtension } from './fetch';
+import { fetchTextViaExtension, normalizeStockCode, toNumber, toTencentStockCode } from './fetch';
 
 export type FundamentalData = {
   peTtm: number;                // 市盈率 (动态)
@@ -18,10 +18,59 @@ export type FundamentalData = {
   profitGrowth: number;         // 净利润增长率 (%)
 };
 
-function toNumber(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : Number.NaN;
+export async function fetchFundamentals(code: string): Promise<FundamentalData> {
+  // 先从腾讯行情接口获取 PE、总市值等基础数据
+  const tencentData = await fetchTencentFundamentals(code);
+  if (tencentData) return tencentData;
+
+  // 腾讯失败时走东财 ulist.np
+  const emData = await fetchEastmoneyFundamentals(code);
+  return emData ?? createEmptyFundamentalData();
 }
+
+// -----------------------------------------------------------
+// Tencent finance quote — 已验证 PE(39)、总市值(45) 等字段可用
+// -----------------------------------------------------------
+
+async function fetchTencentFundamentals(code: string): Promise<FundamentalData | null> {
+  try {
+    const plain = normalizeStockCode(code);
+    const tencentCode = toTencentStockCode(plain);
+    if (!tencentCode) return null;
+
+    const text = await fetchTextViaExtension(`https://qt.gtimg.cn/q=${tencentCode}`);
+    const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
+    const parts = matched?.[1]?.split('~') ?? [];
+    if (parts.length < 46) return null;
+
+    // Tencent quote field mapping:
+    // 39 = PE(动态), 45 = 总市值(亿), 44 = 流通市值(亿)?, 38 = 换手率
+    const peTtm = toNumber(parts[39]);
+    const totalMarketCapYi = toNumber(parts[45]);
+    // 腾讯没有 PB/ROE/EPS 等字段，这些走东财补充
+    const em = await fetchEastmoneyFundamentals(code);
+
+    return {
+      peTtm,
+      pb: em?.pb ?? Number.NaN,
+      totalMarketCapYi,
+      circulatingMarketCapYi: em?.circulatingMarketCapYi ?? Number.NaN,
+      dividendYield: em?.dividendYield ?? Number.NaN,
+      roe: em?.roe ?? Number.NaN,
+      eps: em?.eps ?? Number.NaN,
+      bvps: em?.bvps ?? Number.NaN,
+      grossMargin: em?.grossMargin ?? Number.NaN,
+      revenueGrowth: em?.revenueGrowth ?? Number.NaN,
+      profitGrowth: em?.profitGrowth ?? Number.NaN,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// -----------------------------------------------------------
+// East Money — 补充腾讯没有的字段
+// -----------------------------------------------------------
 
 function toEastmoneySecid(code: string): string {
   const plain = code.trim().toLowerCase().replace(/^(sh|sz)/, '');
@@ -30,56 +79,54 @@ function toEastmoneySecid(code: string): string {
   return `${market}.${plain}`;
 }
 
-type EastmoneyFundamentalResponse = {
-  data?: {
-    f9?: number;   // PE
-    f20?: number;  // 总市值
-    f21?: number;  // 流通市值
-    f23?: number;  // PB
-    f37?: number;  // 股息率
-    f49?: number;  // ROE
-    f50?: number;  // 每股净资产
-    f52?: number;  // EPS
-    f59?: number;  // 毛利率
-    f61?: number;  // 营收增长率
-    f62?: number;  // 净利润增长率
-  };
+type EastmoneyUlistRow = {
+  f9?: number;    // 总市值
+  f20?: number;   // 流通市值
+  f23?: number;   // PB
+  f37?: number;   // 股息率
+  f45?: number;   // ROE
+  f46?: number;   // 每股净资产
+  f49?: number;   // EPS
+  f50?: number;   // 毛利率
+  f52?: number;   // 营收增长率
+  f57?: number;   // 净利润增长率
 };
 
-export async function fetchFundamentals(code: string): Promise<FundamentalData> {
-  const secid = toEastmoneySecid(code);
-  if (!secid) {
-    return createEmptyFundamentalData();
-  }
-
+async function fetchEastmoneyFundamentals(code: string): Promise<FundamentalData | null> {
   try {
+    const secid = toEastmoneySecid(code);
+    if (!secid) return null;
+
+    // 使用和行情报价相同的 ulist.np 接口（已验证可用）
     const text = await fetchTextViaExtension(
-      `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f9,f20,f21,f23,f37,f49,f50,f52,f59,f61,f62`,
+      `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f9,f20,f23,f37,f45,f46,f49,f50,f52,f57&secids=${secid}`,
     );
-    if (!text) {
-      return createEmptyFundamentalData();
-    }
-    const json = JSON.parse(text) as EastmoneyFundamentalResponse;
-    const d = json.data;
-    if (!d) {
-      return createEmptyFundamentalData();
-    }
+    if (!text) return null;
+
+    const raw = text.trim();
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    const json = JSON.parse(raw.slice(start, end + 1)) as {
+      data?: { diff?: EastmoneyUlistRow[] };
+    };
+    const row = json.data?.diff?.[0];
+    if (!row) return null;
 
     return {
-      peTtm: toNumber(d.f9),
-      pb: toNumber(d.f23),
-      totalMarketCapYi: toNumber(d.f20),
-      circulatingMarketCapYi: toNumber(d.f21),
-      dividendYield: toNumber(d.f37),
-      roe: toNumber(d.f49),
-      eps: toNumber(d.f52),
-      bvps: toNumber(d.f50),
-      grossMargin: toNumber(d.f59),
-      revenueGrowth: toNumber(d.f61),
-      profitGrowth: toNumber(d.f62),
+      peTtm: Number.NaN, // 用腾讯的
+      pb: toNumber(row.f23),
+      totalMarketCapYi: toNumber(row.f9),
+      circulatingMarketCapYi: toNumber(row.f20),
+      dividendYield: toNumber(row.f37),
+      roe: toNumber(row.f45),
+      eps: toNumber(row.f49),
+      bvps: toNumber(row.f46),
+      grossMargin: toNumber(row.f50),
+      revenueGrowth: toNumber(row.f52),
+      profitGrowth: toNumber(row.f57),
     };
   } catch {
-    return createEmptyFundamentalData();
+    return null;
   }
 }
 
@@ -100,5 +147,5 @@ function createEmptyFundamentalData(): FundamentalData {
 }
 
 export function isFundamentalDataValid(data: FundamentalData): boolean {
-  return Number.isFinite(data.peTtm) || Number.isFinite(data.totalMarketCapYi);
+  return Number.isFinite(data.peTtm) || Number.isFinite(data.pb) || Number.isFinite(data.totalMarketCapYi);
 }
