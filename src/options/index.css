@@ -264,6 +264,12 @@ body.theme-light {
   line-height: 1.45;
 }
 
+.update-status-text {
+  font-size: 12px;
+  color: var(--text-1);
+  margin-right: 8px;
+}
+
 .backup-status {
   border-radius: 8px;
   padding: 8px 10px;

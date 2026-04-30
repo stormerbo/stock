@@ -379,10 +379,10 @@ type UpdateInfo = {
   notified: boolean;
 };
 
-async function checkForUpdate(): Promise<void> {
+async function checkForUpdate(): Promise<{ found: boolean }> {
   try {
     const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest');
-    if (!resp.ok) return;
+    if (!resp.ok) return { found: false };
     const data = await resp.json() as { tag_name: string; html_url: string };
     const latestVer = data.tag_name.replace(/^v/i, '');
     const currentVer = chrome.runtime.getManifest().version;
@@ -399,9 +399,11 @@ async function checkForUpdate(): Promise<void> {
         message: `赚钱助手 v${latestVer} 已发布，点击查看详情`,
         requireInteraction: true,
       });
+      return { found: true };
     }
+    return { found: false };
   } catch {
-    // 静默失败，不影响正常功能
+    return { found: false };
   }
 }
 
@@ -1709,9 +1711,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (request.type === 'check-update') {
-    void checkForUpdate();
-    sendResponse({ ok: true });
-    return;
+    void (async () => {
+      try {
+        const result = await checkForUpdate();
+        sendResponse({ ok: true, found: result.found });
+      } catch {
+        sendResponse({ ok: false, found: false });
+      }
+    })();
+    return true;
   }
 
   if (request.type === 'test-notification') {

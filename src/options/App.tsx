@@ -787,6 +787,7 @@ export default function App() {
   const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty || techReportDirty;
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState('');
   const [backupMessage, setBackupMessage] = useState('');
   const [backupError, setBackupError] = useState('');
 
@@ -1439,15 +1440,29 @@ export default function App() {
                 <span className="config-label">当前版本</span>
                 <span className="config-hint">v{chrome.runtime?.getManifest?.().version ?? '-'}</span>
               </div>
+              <span className="update-status-text">{updateStatus}</span>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => {
+                disabled={updateStatus === '检查中...'}
+                onClick={async () => {
                   if (typeof chrome?.runtime?.sendMessage !== 'function') return;
-                  chrome.runtime.sendMessage({ type: 'check-update' });
+                  setUpdateStatus('检查中...');
+                  try {
+                    const res = await chrome.runtime.sendMessage({ type: 'check-update' }) as { ok: boolean; found?: boolean } | undefined;
+                    if (res?.found) {
+                      setUpdateStatus('发现新版本，请在系统通知中查看');
+                    } else {
+                      setUpdateStatus('已是最新版本');
+                    }
+                    setTimeout(() => setUpdateStatus(''), 3000);
+                  } catch {
+                    setUpdateStatus('检查失败');
+                    setTimeout(() => setUpdateStatus(''), 3000);
+                  }
                 }}
               >
-                检查更新
+                {updateStatus || '检查更新'}
               </button>
             </div>
           </div>
