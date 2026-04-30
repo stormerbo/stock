@@ -342,7 +342,6 @@ function clearAlarms() {
   chrome.alarms.clear(ALARM_FUND);
   chrome.alarms.clear(ALARM_INDEX);
   chrome.alarms.clear(ALARM_TECH_REPORT);
-  chrome.alarms.clear(ALARM_UPDATE_CHECK);
 }
 
 async function handleAlarm(name: string) {
@@ -350,7 +349,6 @@ async function handleAlarm(name: string) {
   else if (name === ALARM_FUND) await refreshFunds();
   else if (name === ALARM_INDEX) await refreshIndexes();
   else if (name === ALARM_TECH_REPORT) await generateDailyTechnicalReport();
-  else if (name === ALARM_UPDATE_CHECK) await checkForUpdate();
 }
 
 // -----------------------------------------------------------
@@ -427,9 +425,6 @@ function startRefreshLoop() {
     void refreshFunds();
     void refreshIndexes();
   });
-  // 版本检查：每 6 小时检查一次 GitHub Release
-  chrome.alarms.create(ALARM_UPDATE_CHECK, { periodInMinutes: 360 });
-  void checkForUpdate();
   void loadTechReportConfig().then((config) => {
     if (config.enabled) {
       setupTechnicalReportAlarm();
@@ -1711,6 +1706,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ config, isWorkMode: isWorkModeHours(config) });
     })();
     return true;
+  }
+
+  if (request.type === 'check-update') {
+    void checkForUpdate();
+    sendResponse({ ok: true });
+    return;
   }
 
   if (request.type === 'test-notification') {

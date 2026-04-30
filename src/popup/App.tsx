@@ -1676,10 +1676,13 @@ function clearIntradayIfStale(
     }
   }, []);
 
-  // ---- Keepalive port 防止 service worker 被回收 ----
+  // ---- Keepalive port + 打开时检查版本更新 ----
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.connect) {
       const port = chrome.runtime.connect({ name: 'keepalive' });
+      if (chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'check-update' }).catch(() => undefined);
+      }
       return () => port.disconnect();
     }
   }, []);

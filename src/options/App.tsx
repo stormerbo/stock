@@ -1431,6 +1431,26 @@ export default function App() {
             {backupMessage ? <div className="backup-status success">{backupMessage}</div> : null}
             {backupError ? <div className="backup-status error">{backupError}</div> : null}
           </div>
+
+          <h2 style={{ marginTop: 24 }}>版本</h2>
+          <div className="config-card">
+            <div className="config-row">
+              <div>
+                <span className="config-label">当前版本</span>
+                <span className="config-hint">v{chrome.runtime?.getManifest?.().version ?? '-'}</span>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  if (typeof chrome?.runtime?.sendMessage !== 'function') return;
+                  chrome.runtime.sendMessage({ type: 'check-update' });
+                }}
+              >
+                检查更新
+              </button>
+            </div>
+          </div>
         </section>)}
 
         {/* ---- Actions ---- */}
