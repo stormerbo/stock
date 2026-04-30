@@ -14,13 +14,6 @@ import {
   type StockPosition,
 } from '../shared/fetch';
 import {
-  DAILY_PROFIT_DETAILS_KEY,
-  DAILY_PROFIT_PENDING_SNAPSHOT_KEY,
-  buildDailyProfitDetailRecord,
-  normalizeDailyProfitDetailHistory,
-  upsertDailyProfitDetailHistory,
-} from '../shared/profit-details';
-import {
   loadAlertConfig,
   saveAlertConfig,
   loadFiredHistory,
@@ -563,7 +556,6 @@ async function refreshStocks() {
         stockUpdatedAt: new Date().toISOString(),
         [STOCK_INTRADAY_DATE_KEY]: today,
       });
-      void recordDailyProfitDetail();
       // 检查告警
       void checkAndNotifyAlerts(final);
       // 回撤告警（每日首次）
@@ -576,7 +568,6 @@ async function refreshStocks() {
         stockUpdatedAt: new Date().toISOString(),
         [STOCK_INTRADAY_DATE_KEY]: intradayDate || today,
       });
-      void recordDailyProfitDetail();
       // 检查告警
       void checkAndNotifyAlerts(merged);
       // 回撤告警（每日首次）
@@ -1285,7 +1276,6 @@ async function refreshFunds() {
       }
     }
     await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
-    void recordDailyProfitDetail();
     void updateHoverTitleFromStorage();
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
@@ -1301,75 +1291,6 @@ function isWeekendInShanghai(): boolean {
     weekday: 'short',
   }).format(new Date());
   return dayOfWeek === 'Sat' || dayOfWeek === 'Sun';
-}
-
-async function recordDailyProfitDetail() {
-  // 非交易日不生成收益明细
-  if (isWeekendInShanghai()) return;
-  try {
-    const [localResult, syncResult] = await Promise.all([
-      chrome.storage.local.get([
-        'stockPositions',
-        'fundPositions',
-        DAILY_PROFIT_DETAILS_KEY,
-        DAILY_PROFIT_PENDING_SNAPSHOT_KEY,
-      ]),
-      chrome.storage.sync.get(['stockHoldings', 'fundHoldings', TRADE_HISTORY_KEY]),
-    ]);
-
-    const today = getShanghaiToday();
-    const stockTradeHistory = (syncResult[TRADE_HISTORY_KEY] as Record<string, import('../shared/trade-history').StockTradeRecord[]> | undefined) || {};
-    const stockPositions = (Array.isArray(localResult.stockPositions) ? localResult.stockPositions : []) as StockPosition[];
-    const fundPositions = (Array.isArray(localResult.fundPositions) ? localResult.fundPositions : []) as FundPosition[];
-    const stockHoldings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
-    const fundHoldings = (Array.isArray(syncResult.fundHoldings) ? syncResult.fundHoldings : []) as FundHoldingConfig[];
-    const history = normalizeDailyProfitDetailHistory(localResult[DAILY_PROFIT_DETAILS_KEY]);
-    const pending = normalizeDailyProfitDetailHistory([localResult[DAILY_PROFIT_PENDING_SNAPSHOT_KEY]])[0];
-
-    let nextHistory = history;
-    let historyChanged = false;
-
-    // 只在跨日后把“前一日快照”结转进历史，避免当天记录写入
-    if (pending && pending.date < today) {
-      nextHistory = upsertDailyProfitDetailHistory(history, pending);
-      historyChanged = JSON.stringify(nextHistory) !== JSON.stringify(history);
-    }
-
-    const hasHeldStock = stockHoldings.some((item) => Number(item.shares) > 0);
-    const hasHeldFund = fundHoldings.some((item) => Number(item.units) > 0);
-
-    const todaySnapshot = (hasHeldStock || hasHeldFund)
-      ? buildDailyProfitDetailRecord(
-        today,
-        stockPositions,
-        fundPositions,
-        stockHoldings,
-        fundHoldings,
-        new Date().toISOString(),
-        stockTradeHistory,
-      )
-      : null;
-
-    let nextPending: unknown = null;
-    if (todaySnapshot) {
-      nextPending = todaySnapshot;
-    } else if (pending?.date === today) {
-      // 当天已生成过快照但当前无持仓时，保留快照，避免次日丢失昨日数据
-      nextPending = pending;
-    }
-
-    const pendingChanged = JSON.stringify(nextPending ?? null) !== JSON.stringify(pending ?? null);
-    if (!historyChanged && !pendingChanged) {
-      return;
-    }
-
-    await chrome.storage.local.set({
-      [DAILY_PROFIT_DETAILS_KEY]: nextHistory,
-      [DAILY_PROFIT_PENDING_SNAPSHOT_KEY]: nextPending,
-    });
-  } catch (error) {
-    console.warn('[Portfolio Pulse] record daily profit detail failed:', error);
-  }
 }
 
 async function refreshIndexes() {

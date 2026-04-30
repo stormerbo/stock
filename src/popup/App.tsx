@@ -7,8 +7,6 @@ import DiagnosticPanel from './DiagnosticPanel';
 import TagBadge from './TagBadge';
 import TagFilterBar from './TagFilterBar';
 import TagEditor from './TagEditor';
-import TradeHistoryView from './TradeHistoryView';
-import TradeHistoryList from './TradeHistoryList';
 import DemoGuide, { loadDemoFlag } from './DemoGuide';
 import {
   loadTradeHistory,
@@ -40,15 +38,9 @@ import {
   type MarketStats,
   MARKET_INDEXES,
 } from '../shared/fetch';
-import {
-  DAILY_PROFIT_DETAILS_KEY,
-  normalizeDailyProfitDetailHistory,
-  type DailyProfitDetailRecord,
-} from '../shared/profit-details';
-
 const BADGE_STORAGE_KEY = 'badgeConfig';
 
-type PageTab = 'stocks' | 'funds' | 'account' | 'profit' | 'notifications' | 'trades';
+type PageTab = 'stocks' | 'funds' | 'account' | 'notifications';
 type ThemeMode = 'dark' | 'light';
 
 type IndexDetailTarget = {
@@ -177,13 +169,6 @@ function renderNotificationMessage(message: string): React.ReactNode {
     parts.push(message.slice(lastIndex));
   }
   return parts.length > 0 ? parts : message;
-}
-
-function formatDetailUpdatedTime(raw: string): string {
-  if (!raw) return '--:--';
-  const date = new Date(raw);
-  if (!Number.isFinite(date.getTime())) return '--:--';
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 }
 
 function getShanghaiDateKey(timestampMs: number): string {
@@ -787,7 +772,6 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [panelOpacity, setPanelOpacity] = useState(1.0);
   const [notifSubTab, setNotifSubTab] = useState<'tech-report' | 'alerts'>('alerts');
-  const [dailyProfitDetails, setDailyProfitDetails] = useState<DailyProfitDetailRecord[]>([]);
   const [techReportStatus, setTechReportStatus] = useState<{
     enabled: boolean; lastRunDate: string; lastRunTime: number; nextRunTime: number;
     status: string; stockCount: number; signalCount: number; details: string; errorMessage: string;
@@ -826,24 +810,6 @@ export default function App() {
         chrome.storage.onChanged.removeListener(listener);
       }
     };
-  }, []);
-
-  useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get([DAILY_PROFIT_DETAILS_KEY], (result: Record<string, unknown>) => {
-        setDailyProfitDetails(normalizeDailyProfitDetailHistory(result[DAILY_PROFIT_DETAILS_KEY]));
-      });
-    }
-
-    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== 'local' || !changes[DAILY_PROFIT_DETAILS_KEY]) return;
-      setDailyProfitDetails(normalizeDailyProfitDetailHistory(changes[DAILY_PROFIT_DETAILS_KEY].newValue));
-    };
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-      chrome.storage.onChanged.addListener(listener);
-      return () => chrome.storage.onChanged.removeListener(listener);
-    }
   }, []);
 
   // ---- Tech Report Status ----
@@ -963,7 +929,6 @@ export default function App() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagEditorTarget, setTagEditorTarget] = useState<{ kind: 'stock' | 'fund'; code: string } | null>(null);
   const [stockTradeHistory, setStockTradeHistory] = useState<Record<string, StockTradeRecord[]>>({});
-  const [tradeHistoryTarget, setTradeHistoryTarget] = useState<{ code: string; name: string } | null>(null);
 
   const popupRootRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1080,29 +1045,11 @@ export default function App() {
     ] as const;
   }, [fundPositions, stockPositions, stockTradeHistory]);
 
-  const profitMetrics = useMemo(() => {
-    const latest = dailyProfitDetails[0];
-    if (!latest) {
-      return [
-        { label: '昨日股票盈亏', value: '-', tone: 'neutral' },
-        { label: '昨日基金收益', value: '-', tone: 'neutral' },
-        { label: '昨日合计收益', value: '-', tone: 'neutral' },
-      ] as const;
-    }
-    return [
-      { label: '昨日股票盈亏', value: formatNumber(latest.stockDailyPnl, 2), tone: toneClass(latest.stockDailyPnl) },
-      { label: '昨日基金收益', value: formatNumber(latest.fundDailyProfit, 2), tone: toneClass(latest.fundDailyProfit) },
-      { label: '昨日合计收益', value: formatNumber(latest.totalDailyProfit, 2), tone: toneClass(latest.totalDailyProfit) },
-    ] as const;
-  }, [dailyProfitDetails]);
-
   const metrics = activeTab === 'stocks'
     ? stockMetrics
     : activeTab === 'funds'
       ? fundMetrics
-      : activeTab === 'profit'
-        ? profitMetrics
-        : accountMetrics;
+      : accountMetrics;
 
   const accountSnapshot = useMemo(() => {
     const average = (values: number[]): number => {
@@ -1295,11 +1242,6 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0)
   ), [stockDisplayRows]);
-
-  const recentDailyProfitDetails = useMemo(
-    () => dailyProfitDetails.slice(0, 40),
-    [dailyProfitDetails]
-  );
 
   // Backfill entry snapshot for existing watchlist items that were added before this feature.
   useEffect(() => {
@@ -1997,7 +1939,7 @@ function clearIntradayIfStale(
   }, [activeTab, stockDetailTarget]);
 
   useEffect(() => {
-    if (!stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget) {
+    if (!stockDetailTarget && !fundDetailTarget) {
       const el = document.querySelector('.content-scroll');
       if (el && scrollPosRef.current > 0) {
         requestAnimationFrame(() => {
@@ -2005,7 +1947,7 @@ function clearIntradayIfStale(
         });
       }
     }
-  }, [stockDetailTarget, fundDetailTarget, tradeHistoryTarget]);
+  }, [stockDetailTarget, fundDetailTarget]);
 
   useEffect(() => {
     if (
@@ -2464,24 +2406,8 @@ function clearIntradayIfStale(
           </button>
           <button
             type="button"
-            className={`nav-btn ${activeTab === 'profit' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profit')}
-          >
-            <FileText size={12} />
-            <span>收益</span>
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('trades'); setTradeHistoryTarget(null); }}
-          >
-            <FileText size={12} />
-            <span>交易</span>
-          </button>
-          <button
-            type="button"
             className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('notifications'); setTradeHistoryTarget(null); setStockDetailTarget(null); setFundDetailTarget(null); }}
+            onClick={() => { setActiveTab('notifications'); setStockDetailTarget(null); setFundDetailTarget(null); }}
             style={{ position: 'relative' }}
           >
             <Bell size={12} />
@@ -2549,8 +2475,8 @@ function clearIntradayIfStale(
           </div>
         </aside>
 
-        <main className={`main-area ${stockDetailTarget || fundDetailTarget || (activeTab === 'trades' && tradeHistoryTarget) ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -2573,9 +2499,9 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
-            <header className={`page-header ${(activeTab === 'account' || activeTab === 'profit') ? 'account-page-header' : ''}`}>
-              <section className={`metrics inline ${(activeTab === 'account' || activeTab === 'profit') ? 'account' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
+            <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
+              <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
                   <article className="metric-card compact" key={item.label}>
                     <p>{item.label}</p>
@@ -2593,15 +2519,6 @@ function clearIntradayIfStale(
                       <span>{`基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
                       <span>{`仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
                       <span>{`已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
-                    </div>
-                  </div>
-                ) : activeTab === 'profit' ? (
-                  <div className="account-header-copy">
-                    <span className="account-header-eyebrow">收益明细</span>
-                    <div className="account-header-pills">
-                      <span>{`已记录 ${recentDailyProfitDetails.length} 日`}</span>
-                      <span>{`最近交易日 ${recentDailyProfitDetails[0]?.date ?? '--'}`}</span>
-                      <span>{`总条目 ${recentDailyProfitDetails.reduce((sum, item) => sum + item.stockCount + item.fundCount, 0)}`}</span>
                     </div>
                   </div>
                 ) : (
@@ -2656,7 +2573,7 @@ function clearIntradayIfStale(
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${activeTab === 'trades' && tradeHistoryTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -2674,30 +2591,6 @@ function clearIntradayIfStale(
                   onBack={closeFundDetail}
                 />
               </DetailErrorBoundary>
-            ) : null}
-
-            {activeTab === 'trades' && tradeHistoryTarget ? (
-              <TradeHistoryView
-                code={tradeHistoryTarget.code}
-                name={tradeHistoryTarget.name}
-                onBack={() => setTradeHistoryTarget(null)}
-                onUpdate={() => loadTradeHistory().then(setStockTradeHistory)}
-              />
-            ) : null}
-
-            {activeTab === 'trades' && !tradeHistoryTarget ? (
-              <div className="tag-editor-section" style={{ border: 'none', paddingTop: 8 }}>
-                <span className="tag-editor-label">交易记录</span>
-                <TradeHistoryList
-                  tradeHistory={stockTradeHistory}
-                  stockNameMap={stockNameMap}
-                  onSelectStock={(code, name) => {
-                    const el = document.querySelector('.content-scroll');
-                    if (el) scrollPosRef.current = el.scrollTop;
-                    setTradeHistoryTarget({ code, name });
-                  }}
-                />
-              </div>
             ) : null}
 
             {activeTab === 'account' && !stockDetailTarget ? (
@@ -2836,50 +2729,6 @@ function clearIntradayIfStale(
               </div>
             ) : null}
 
-            {activeTab === 'profit' && !stockDetailTarget && !fundDetailTarget ? (
-              <div className="account-dashboard">
-                <article className="account-card account-daily-card">
-                  <div className="account-daily-header">
-                    <span className="account-section-label">收益明细（按交易日）</span>
-                    <span className="account-daily-count">
-                      {recentDailyProfitDetails.length > 0 ? `最近 ${recentDailyProfitDetails.length} 日` : '暂无记录'}
-                    </span>
-                  </div>
-
-                  {recentDailyProfitDetails.length > 0 ? (
-                    <div className="account-daily-table-wrap">
-                      <table className="account-daily-table">
-                        <thead>
-                          <tr>
-                            <th className="text-left">交易日</th>
-                            <th className="text-right">股票日盈亏</th>
-                            <th className="text-right">基金日收益</th>
-                            <th className="text-right">当日合计</th>
-                            <th className="text-right">持仓只数</th>
-                            <th className="text-right">记录时间</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recentDailyProfitDetails.map((record) => (
-                            <tr key={record.date}>
-                              <td className="text-left">{record.date}</td>
-                              <td className={`text-right ${toneClass(record.stockDailyPnl)}`}>{formatNumber(record.stockDailyPnl, 2)}</td>
-                              <td className={`text-right ${toneClass(record.fundDailyProfit)}`}>{formatNumber(record.fundDailyProfit, 2)}</td>
-                              <td className={`text-right ${toneClass(record.totalDailyProfit)}`}>{formatNumber(record.totalDailyProfit, 2)}</td>
-                              <td className="text-right">{`${record.stockCount + record.fundCount}`}</td>
-                              <td className="text-right">{formatDetailUpdatedTime(record.updatedAt)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="account-daily-empty">当前还没有交易日收益记录，第二天打开应用后会自动生成。</div>
-                  )}
-                </article>
-              </div>
-            ) : null}
-
             {sortingMode ? (
               <div className="sort-mode-bar">
                 <span>正在排序，拖拽条目调整顺序</span>
@@ -2891,7 +2740,7 @@ function clearIntradayIfStale(
             ) : null}
 
             {/* ---- Notification Panel ---- */}
-            {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget && !tradeHistoryTarget ? (
+            {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget ? (
               <div className="notification-panel" style={{ opacity: panelOpacity }}>
                 <div className="notification-header">
                   <span className="notification-title">消息通知</span>
@@ -3061,8 +2910,7 @@ function clearIntradayIfStale(
                               if (item.code) {
                                 const el = document.querySelector('.content-scroll');
                                 if (el) scrollPosRef.current = el.scrollTop;
-                                setActiveTab('trades');
-                                setTradeHistoryTarget({ code: item.code, name: item.name || stockNameMap[item.code] || item.code });
+                                setActiveTab('stocks');
                               }
                             };
                             return (
@@ -3632,14 +3480,6 @@ function clearIntradayIfStale(
                 </button>
                 <button type="button" onClick={() => handleOpenTagEditor('stock', rowContextMenu.code)}>
                   管理标签
-                </button>
-                <button type="button" onClick={() => {
-                  const el = document.querySelector('.content-scroll');
-                  if (el) scrollPosRef.current = el.scrollTop;
-                  setTradeHistoryTarget({ code: rowContextMenu.code, name: stockNameMap[rowContextMenu.code] || rowContextMenu.code });
-                  setRowContextMenu(null);
-                }}>
-                  交易记录
                 </button>
                 <button type="button" onClick={() => beginSorting('stocks')}>
                   指定排序
