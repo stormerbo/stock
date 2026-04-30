@@ -26,7 +26,7 @@ function toEastmoneySecid(code: string): string {
 }
 
 /**
- * 从东方财富 stock/get 接口获取基本面数据。
+ * 从东方财富 ulist.np 接口获取基本面数据（和行情报价同接口，已验证可用）。
  *
  * 字段编号来源：东方财富页面逆向整理 (CSDN)
  *   f9   = 市盈率(动态)    f20  = 总市值
@@ -42,30 +42,29 @@ export async function fetchFundamentals(code: string): Promise<FundamentalData> 
 
   try {
     const text = await fetchTextViaExtension(
-      `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f9,f20,f21,f23,f37,f41,f46,f49,f112,f113,f133`,
+      `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f9,f20,f21,f23,f37,f41,f46,f49,f112,f113,f133&secids=${secid}`,
     );
     if (!text) return createEmpty();
 
-    const json = JSON.parse(text) as {
-      data?: Record<string, number | undefined>;
+    // ulist.np 返回 { data: { diff: [{...}] } }
+    const raw = text.trim();
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    const json = JSON.parse(raw.slice(start, end + 1)) as {
+      data?: { diff?: Record<string, number | undefined>[] };
     };
-    const d = json.data;
+    const d = json.data?.diff?.[0];
     if (!d) return createEmpty();
 
-    const peTtm = toNumber(d.f9);
-    const totalMarketCapYi = toNumber(d.f20);
-    const bvps = toNumber(d.f113);
-
-    // 总市值除以10^8转为亿
     return {
-      peTtm,
+      peTtm: toNumber(d.f9),
       pb: toNumber(d.f23),
-      totalMarketCapYi: Number.isFinite(totalMarketCapYi) ? totalMarketCapYi / 1e8 : Number.NaN,
-      circulatingMarketCapYi: Number.isFinite(d.f21) ? (d.f21 as number) / 1e8 : Number.NaN,
+      totalMarketCapYi: toNumber(d.f20),
+      circulatingMarketCapYi: toNumber(d.f21),
       dividendYield: toNumber(d.f133),
       roe: toNumber(d.f37),
       eps: toNumber(d.f112),
-      bvps,
+      bvps: toNumber(d.f113),
       grossMargin: toNumber(d.f49),
       revenueGrowth: toNumber(d.f41),
       profitGrowth: toNumber(d.f46),
