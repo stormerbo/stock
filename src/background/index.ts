@@ -1682,7 +1682,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     keepAlive();
     void (async () => {
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          headers: { 'Referer': 'https://quote.eastmoney.com/' },
+        });
         // Tencent finance uses GB18030 encoding
         const isGb18030 = url.includes('qt.gtimg.cn');
         let text: string;
