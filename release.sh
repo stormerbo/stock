@@ -17,13 +17,13 @@ CURRENT=$(jq -r '.version' manifest.json)
 echo "当前版本: v$CURRENT"
 
 # 计算新版本
-if [ $# -eq 0 ]; then
+if [ $# -eq 0 ] || [ "$1" = "patch" ]; then
   # 默认 bump patch
   NEW=$(echo "$CURRENT" | awk -F. '{print $1"."$2"."$3+1}')
-elif [ "$1" = "major" ]; then
-  NEW=$(echo "$CURRENT" | awk -F. '{print $1+1".0.0"}')
 elif [ "$1" = "minor" ]; then
   NEW=$(echo "$CURRENT" | awk -F. '{print $1"."$2+1".0"}')
+elif [ "$1" = "major" ]; then
+  NEW=$(echo "$CURRENT" | awk -F. '{print $1+1".0.0"}')
 else
   NEW="$1"
 fi
