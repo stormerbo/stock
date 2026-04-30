@@ -56,11 +56,15 @@ export async function fetchFundamentals(code: string): Promise<FundamentalData> 
     const d = json.data?.diff?.[0];
     if (!d) return createEmpty();
 
+    // ulist.np 返回的市值单位是元，转为亿
+    const marketCap = toNumber(d.f20);
+    const circMarketCap = toNumber(d.f21);
+
     return {
       peTtm: toNumber(d.f9),
       pb: toNumber(d.f23),
-      totalMarketCapYi: toNumber(d.f20),
-      circulatingMarketCapYi: toNumber(d.f21),
+      totalMarketCapYi: Number.isFinite(marketCap) ? marketCap / 1e8 : Number.NaN,
+      circulatingMarketCapYi: Number.isFinite(circMarketCap) ? circMarketCap / 1e8 : Number.NaN,
       dividendYield: toNumber(d.f133),
       roe: toNumber(d.f37),
       eps: toNumber(d.f112),
