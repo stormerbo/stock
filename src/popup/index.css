@@ -1479,14 +1479,26 @@ body.theme-light .data-table thead th {
 }
 
 .stock-table th:nth-child(3),
-.stock-table th:nth-child(4),
-.stock-table th:nth-child(5) {
+.stock-table th:nth-child(4) {
   width: 14%;
 }
 
-.stock-table th:nth-child(6),
+.stock-table th:nth-child(5) {
+  width: 18%;
+}
+
+.stock-table th:nth-child(6) {
+  width: 12%;
+}
 .stock-table th:nth-child(7) {
   width: 10%;
+}
+
+.stock-table td:nth-child(6),
+.stock-table td:nth-child(7) {
+  font-size: 10px;
+  padding: 2px 3px;
+  text-align: center;
 }
 
 .fund-table th:nth-child(1) {
@@ -1622,6 +1634,34 @@ body.theme-light .row-context-menu {
 .detail-refresh-btn:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+/* 可拖拽悬浮刷新按钮（相对视口固定） */
+.floating-refresh-btn {
+  position: fixed;
+  z-index: 100;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+  background: color-mix(in srgb, var(--glass-bg) 80%, var(--text-0));
+  color: var(--text-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  transition: box-shadow 0.15s, background 0.15s;
+  padding: 0;
+  outline: none;
+}
+.floating-refresh-btn:hover {
+  background: var(--glass-bg-strong);
+}
+.floating-refresh-btn:active {
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  background: var(--glass-bg-strong);
 }
 
 .spinning {

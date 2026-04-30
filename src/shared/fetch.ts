@@ -229,7 +229,6 @@ export async function fetchTextViaExtension(url: string): Promise<string> {
 
   return directFetch();
 }
-
 export async function fetchTextWithEncoding(url: string, encoding: string): Promise<string> {
   const response = await fetch(url);
   const buffer = await response.arrayBuffer();
@@ -257,12 +256,12 @@ export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ 
   const tencentCode = toTencentStockCode(plain);
   if (!tencentCode) return { data: [], prevClose: Number.NaN };
 
-  // 先走腾讯分时，失败或空数据再兜底东财分时
+  // 和详情页分时图使用相同的腾讯 API（直接 fetch，走 extension 无 CORS 问题）
   try {
     const response = await fetch(
-      `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`
+      `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`,
     );
-    if (!response.ok) throw new Error(`Tencent minute fetch failed: ${response.status}`);
+    if (!response.ok) return { data: [], prevClose: Number.NaN };
     const json = await response.json() as {
       data?: Record<string, {
         qt?: Record<string, string[]>;
@@ -287,41 +286,6 @@ export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ 
           : time;
         if (!/^\d{2}:\d{2}$/.test(formattedTime) || formattedTime > '15:00') return null;
         return { time: formattedTime, price };
-      })
-      .filter((item): item is { time: string; price: number } => item !== null);
-
-    if (data.length > 0) {
-      return { data, prevClose };
-    }
-  } catch {
-    // ignore and fallback
-  }
-
-  try {
-    const secid = toEastmoneyStockSecid(plain);
-    if (!secid) return { data: [], prevClose: Number.NaN };
-    const text = await fetchTextViaExtension(
-      `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f53,f56,f58&ut=fa5fd1943c7b386f172d6893dbfba10b&iscr=0&iscca=0&ndays=1`
-    );
-    const json = JSON.parse(text) as {
-      data?: {
-        preClose?: number | string;
-        trends?: string[];
-      };
-    };
-
-    const prevClose = toNumber(json.data?.preClose);
-    const trends = Array.isArray(json.data?.trends) ? json.data?.trends : [];
-    const data = trends
-      .map((line) => {
-        // format: YYYY-MM-DD HH:MM,price,volume,avg
-        const parts = String(line).split(',');
-        if (parts.length < 2) return null;
-        const dateTime = parts[0].trim();
-        const time = dateTime.slice(-5);
-        const price = toNumber(parts[1]);
-        if (!/^\d{2}:\d{2}$/.test(time) || !Number.isFinite(price)) return null;
-        return { time, price };
       })
       .filter((item): item is { time: string; price: number } => item !== null);
 
@@ -1010,11 +974,3 @@ export async function retry<T>(
   throw lastError;
 }
 
-/**
- * 带重试的并发受限分时数据拉取。
- */
-export async function fetchStockIntradayWithRetry(
-  code: string,
-): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
-  return retry(() => fetchStockIntraday(code), { maxRetries: 2, baseDelay: 500 });
-}

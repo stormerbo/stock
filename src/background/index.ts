@@ -1,6 +1,6 @@
 import {
   fetchBatchStockQuotes,
-  fetchStockIntradayWithRetry,
+  fetchStockIntraday,
   fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
@@ -101,6 +101,8 @@ const ALARM_UPDATE_CHECK = 'check-update';
 const UPDATE_INFO_KEY = 'extensionUpdateInfo';
 const UPDATE_COOLDOWN_KEY = 'updateCooldown';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
+const API_ERROR_KEY = '_apiErrorState';
+const API_ERROR_COOLDOWN_MS = 30 * 60 * 1000; // 30 分钟
 let refreshStocksInFlight = false;
 
 const DEFAULT_BADGE_CONFIG: BadgeConfig = {
@@ -459,6 +461,41 @@ function startRefreshLoop() {
 // 数据刷新
 // -----------------------------------------------------------
 
+type ApiErrorState = {
+  stockQuoteErrorAt: number;   // 0 = 无错误
+  stockIntradayErrorAt: number;
+  fundErrorAt: number;
+};
+
+async function getApiErrorState(): Promise<ApiErrorState> {
+  const r = await chrome.storage.local.get([API_ERROR_KEY]);
+  return (r[API_ERROR_KEY] as ApiErrorState) || { stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: 0 };
+}
+
+async function saveApiErrorState(s: ApiErrorState): Promise<void> {
+  await chrome.storage.local.set({ [API_ERROR_KEY]: s });
+}
+
+/**
+ * 当 API 接口连续失败时弹出系统通知，30 分钟内不重复。
+ */
+async function notifyApiError(label: string, errorAtKey: 'stockQuoteErrorAt' | 'stockIntradayErrorAt' | 'fundErrorAt') {
+  const state = await getApiErrorState();
+  const now = Date.now();
+  const lastError = state[errorAtKey];
+  if (now - lastError < API_ERROR_COOLDOWN_MS) return; // 冷却中
+  state[errorAtKey] = now;
+  await saveApiErrorState(state);
+
+  chrome.notifications.create(`api_error_${errorAtKey}_${now}`, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('public/icon48.png'),
+    title: '⚠️ 行情接口异常',
+    message: `${label} 获取失败，请检查网络或稍后重试。`,
+    priority: 1,
+  });
+}
+
 async function refreshStocks() {
   if (!isTradingHours()) return;
   if (refreshStocksInFlight) return;
@@ -469,6 +506,13 @@ async function refreshStocks() {
     if (stocks.length === 0) return;
 
     const positions = await fetchBatchStockQuotes(stocks);
+    const quoteOk = positions.length > 0 && positions.some((p) => Number.isFinite(p.price));
+
+    // 行情报价大面积失败时告警
+    if (!quoteOk) {
+      void notifyApiError('股票实时行情', 'stockQuoteErrorAt');
+    }
+
     const existing = await chrome.storage.local.get([
       'stockPositions',
       STOCK_INTRADAY_DATE_KEY,
@@ -479,7 +523,9 @@ async function refreshStocks() {
       ? (existing[STOCK_INTRADAY_DATE_KEY] as string)
       : '';
     const today = getShanghaiToday();
-    const shouldRefreshAllIntraday = intradayDate !== today;
+    // 交易时段内每次刷新都重新拉取分时数据，确保分时图实时更新
+    const isOpen = isTradingHours();
+    const shouldRefreshAllIntraday = isOpen || intradayDate !== today;
 
     const merged = positions.map((p) => ({
       ...p,
@@ -494,18 +540,28 @@ async function refreshStocks() {
         return pos && pos.intraday.data.length === 0;
       });
 
+    let intradayFailedCount = 0;
     if (codesToRefresh.length > 0) {
       const intradayResults = await pMap(
         codesToRefresh,
         async (code) => {
           try {
-            return { code, data: await fetchStockIntradayWithRetry(code) };
+            const d = await fetchStockIntraday(code);
+            if (d.data.length === 0) intradayFailedCount++;
+            return { code, data: d };
           } catch {
+            intradayFailedCount++;
             return { code, data: { data: [], prevClose: Number.NaN } };
           }
         },
-        8,
+        3,
       );
+
+      // 分时数据大量失败时告警
+      if (intradayFailedCount >= codesToRefresh.length) {
+        void notifyApiError('股票分时数据', 'stockIntradayErrorAt');
+      }
+
       const intradayMap = new Map(intradayResults.map((r) => [r.code, r.data]));
       const final = merged.map((p) =>
         intradayMap.has(p.code) ? { ...p, intraday: intradayMap.get(p.code)! } : p
@@ -536,8 +592,17 @@ async function refreshStocks() {
       // 更新悬浮提示
       void updateHoverTitleFromStorage();
     }
+
+    // 全部成功则清除错误时间戳
+    if (quoteOk && intradayFailedCount === 0) {
+      const state = await getApiErrorState();
+      if (state.stockQuoteErrorAt !== 0 || state.stockIntradayErrorAt !== 0) {
+        await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });
+      }
+    }
   } catch (e) {
     console.warn('[Portfolio Pulse] stock refresh failed:', e);
+    void notifyApiError('股票行情', 'stockQuoteErrorAt');
   } finally {
     refreshStocksInFlight = false;
   }
@@ -1218,11 +1283,21 @@ async function refreshFunds() {
     const positions = await Promise.all(
       funds.map((h) => fetchTiantianFundPosition(h))
     );
+    const fundOk = positions.length > 0 && positions.some((p) => Number.isFinite(p.estimatedNav));
+    if (!fundOk) {
+      void notifyApiError('基金净值', 'fundErrorAt');
+    } else {
+      const state = await getApiErrorState();
+      if (state.fundErrorAt !== 0) {
+        await saveApiErrorState({ ...state, fundErrorAt: 0 });
+      }
+    }
     await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
     void recordDailyProfitDetail();
     void updateHoverTitleFromStorage();
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
+    void notifyApiError('基金净值', 'fundErrorAt');
   }
 }
 

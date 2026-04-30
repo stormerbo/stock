@@ -1,5 +1,5 @@
 import { Component, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
@@ -23,7 +23,7 @@ import {
 } from '../shared/tags';
 import {
   fetchBatchStockQuotes,
-  fetchStockIntradayWithRetry,
+  fetchStockIntraday,
   fetchTiantianFundPosition,
   normalizeStockCode,
   normalizeFundCode,
@@ -279,6 +279,58 @@ function formatMarketAmount(value: number): string {
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '-';
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+// 可拖拽悬浮刷新按钮（相对父容器 .table-panel 定位）
+function FloatingRefreshBtn({ onRefresh, spinning }: { onRefresh: () => void; spinning: boolean }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dragging = useRef(false);
+  const dragOrigin = useRef({ x: 0, y: 0 });
+  const posOrigin = useRef({ right: 12, bottom: 12 });
+  const [pos, setPos] = useState<{ right: number; bottom: number }>({ right: 12, bottom: 12 });
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    dragOrigin.current = { x: e.clientX, y: e.clientY };
+    posOrigin.current = pos;
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const dx = ev.clientX - dragOrigin.current.x;
+      const dy = ev.clientY - dragOrigin.current.y;
+      setPos({
+        right: Math.max(0, posOrigin.current.right - dx),
+        bottom: Math.max(0, posOrigin.current.bottom - dy),
+      });
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (dragging.current) return;
+    e.stopPropagation();
+    onRefresh();
+  };
+
+  return (
+    <button
+      ref={btnRef}
+      type="button"
+      className="floating-refresh-btn"
+      style={{ right: pos.right, bottom: pos.bottom }}
+      onMouseDown={onMouseDown}
+      onClick={handleClick}
+      title="刷新数据"
+    >
+      <RefreshCw size={14} className={spinning ? 'spinning' : ''} />
+    </button>
+  );
 }
 
 function formatRatioPercent(value: number): string {
@@ -589,10 +641,12 @@ const IntradayChart = memo(function IntradayChart({
   data,
   prevClose,
   intradayPrevClose,
+  changePct,
 }: {
   data: Array<{ time: string; price: number }>;
   prevClose?: number;
   intradayPrevClose?: number;
+  changePct?: number;
 }) {
   const pathInfo = useMemo(() => {
     if (!data || data.length === 0) return null;
@@ -670,7 +724,17 @@ const IntradayChart = memo(function IntradayChart({
   }, [data, prevClose, intradayPrevClose]);
 
   if (!pathInfo) {
-    return <div className="intraday-chart-empty">暂无分时数据</div>;
+    // 无分时数据时，用涨跌幅画一个简易涨跌条
+    if (Number.isFinite(changePct)) {
+      const w = Math.min(Math.abs(changePct!) / 10, 1) * 36;
+      const fill = changePct! >= 0 ? '#ff5e57' : '#1fc66d';
+      return (
+        <svg className="intraday-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none">
+          <rect x={CHART_WIDTH / 2 - w / 2} y={CHART_HEIGHT / 2 - 4} width={Math.max(w, 4)} height={8} rx={2} fill={fill} opacity={0.6} />
+        </svg>
+      );
+    }
+    return <div className="intraday-chart-empty" style={{ fontSize: 9, color: 'var(--text-2)', opacity: 0.5 }}>-</div>;
   }
 
   return (
@@ -854,6 +918,8 @@ export default function App() {
   const [fundHoldings, setFundHoldings] = useState<FundHoldingConfig[]>([]);
   const [portfolioReady, setPortfolioReady] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [refreshSig, setRefreshSig] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
   const [fundPositions, setFundPositions] = useState<FundPosition[]>([]);
@@ -1672,7 +1738,7 @@ function clearIntradayIfStale(
           return;
         }
 
-        const { fetchBatchStockQuotes, fetchStockIntradayWithRetry, pMap } = await import('../shared/fetch');
+        const { fetchBatchStockQuotes, fetchStockIntraday, pMap } = await import('../shared/fetch');
 
         if (!cancelled && missingHoldings.length > 0) {
           const newRows = await fetchBatchStockQuotes(missingHoldings);
@@ -1695,14 +1761,14 @@ function clearIntradayIfStale(
             intradayMissingCodes,
             async (code) => {
               try {
-                const result = await fetchStockIntradayWithRetry(code);
+                const result = await fetchStockIntraday(code);
                 return { code, data: result.data, prevClose: result.prevClose };
               } catch {
                 console.warn('[StockIntraday] fetch failed after retry:', code);
                 return { code, data: [] as Array<{ time: string; price: number }>, prevClose: Number.NaN };
               }
             },
-            8,
+            3,
           );
 
           if (!cancelled) {
@@ -1742,31 +1808,29 @@ function clearIntradayIfStale(
 
     void init();
     return () => { cancelled = true; };
-  }, [portfolioReady, stockHoldings]);
+  }, [portfolioReady, stockHoldings, refreshSig]);
 
-  // 交易时段内定时刷新缺分时数据的股票
+  // 交易时段内定时刷新分时数据，确保分时图实时更新
   useEffect(() => {
     if (!portfolioReady || stockPositions.length === 0) return;
 
-    const refreshMissingIntraday = async () => {
+    const refreshIntraday = async () => {
       if (!isTradingHours()) return;
-      const missingCodes = stockPositions
-        .filter((p) => !Array.isArray(p.intraday?.data) || p.intraday.data.length === 0)
-        .map((p) => p.code);
-      if (missingCodes.length === 0) return;
+      const codes = stockPositions.map((p) => p.code);
+      if (codes.length === 0) return;
 
-      const { fetchStockIntradayWithRetry, pMap } = await import('../shared/fetch');
+      const { fetchStockIntraday, pMap } = await import('../shared/fetch');
       const results = await pMap(
-        missingCodes,
+        codes,
         async (code) => {
           try {
-            const result = await fetchStockIntradayWithRetry(code);
+            const result = await fetchStockIntraday(code);
             return { code, data: result.data, prevClose: result.prevClose };
           } catch {
             return null;
           }
         },
-        8,
+        3,
       );
 
       if (!results) return;
@@ -1781,7 +1845,7 @@ function clearIntradayIfStale(
       );
     };
 
-    const timer = setInterval(refreshMissingIntraday, 60_000);
+    const timer = setInterval(refreshIntraday, 60_000);
     return () => clearInterval(timer);
   }, [portfolioReady, stockPositions]);
 
@@ -1817,7 +1881,7 @@ function clearIntradayIfStale(
 
     void loadFunds();
     return () => { cancelled = true; };
-  }, [portfolioReady, fundHoldings]);
+  }, [portfolioReady, fundHoldings, refreshSig]);
 
   useEffect(() => {
     if (isSearchOpen) {
@@ -1913,6 +1977,12 @@ function clearIntradayIfStale(
   };
 
   const toggleTheme = () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshSig((prev) => prev + 1);
+    setTimeout(() => setRefreshing(false), 2000);
+  }, []);
 
   useEffect(() => {
     if (activeTab !== 'stocks' && stockDetailTarget) {
@@ -3158,6 +3228,7 @@ function clearIntradayIfStale(
                               data={item.intraday?.data ?? []}
                               prevClose={item.prevClose}
                               intradayPrevClose={item.intraday?.prevClose}
+                              changePct={item.dailyChangePct}
                             />
                           </td>
                           <td className="dual-value">
@@ -3205,8 +3276,11 @@ function clearIntradayIfStale(
                             )}
                             <span className="price-line">{formatNumber(item.price, 2)}</span>
                             {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
-                              <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2 }}>
-                                关注 {formatNumber(item.addedPrice!, 3)}
+                              <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                                <span>关注 {formatNumber(item.addedPrice!, 3)}</span>
+                                <span className={toneClass(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}>
+                                  {formatPercent(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}
+                                </span>
                               </span>
                             ) : null}
                           </td>
@@ -3267,6 +3341,7 @@ function clearIntradayIfStale(
                     ) : null}
                   </tbody>
                 </table>
+                <FloatingRefreshBtn onRefresh={handleRefresh} spinning={refreshing} />
               </div>
             ) : null}
 
@@ -3395,6 +3470,14 @@ function clearIntradayIfStale(
                           <span className="price-line">
                             {Number.isFinite(item.estimatedNav) ? item.estimatedNav.toFixed(4) : '-'}
                           </span>
+                          {Number.isFinite(item.addedNav) && item.addedNav! > 0 ? (
+                            <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                              <span>关注 {item.addedNav!.toFixed(4)}</span>
+                              <span className={toneClass(((item.estimatedNav - item.addedNav!) / item.addedNav!) * 100)}>
+                                {formatPercent(((item.estimatedNav - item.addedNav!) / item.addedNav!) * 100)}
+                              </span>
+                            </span>
+                          ) : null}
                         </td>
                         <td>
                           {editingCell?.kind === 'fund' && editingCell.code === item.code && editingCell.field === 'units' ? (
@@ -3475,6 +3558,7 @@ function clearIntradayIfStale(
                     ) : null}
                   </tbody>
                 </table>
+                <FloatingRefreshBtn onRefresh={handleRefresh} spinning={refreshing} />
               </div>
             ) : null}
           </section>
