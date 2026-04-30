@@ -383,11 +383,6 @@ type UpdateInfo = {
 
 async function checkForUpdate(): Promise<void> {
   try {
-    // 检查冷却期（24小时内不重复通知）
-    const cooled = await chrome.storage.local.get(UPDATE_COOLDOWN_KEY);
-    const lastNotify = cooled[UPDATE_COOLDOWN_KEY] as number | undefined;
-    if (lastNotify && Date.now() - lastNotify < 24 * 60 * 60 * 1000) return;
-
     const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest');
     if (!resp.ok) return;
     const data = await resp.json() as { tag_name: string; html_url: string };
