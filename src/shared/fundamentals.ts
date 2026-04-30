@@ -2,6 +2,8 @@
 // Fundamental data from East Money API
 // -----------------------------------------------------------
 
+import { fetchTextViaExtension } from './fetch';
+
 export type FundamentalData = {
   peTtm: number;                // 市盈率 (动态)
   pb: number;                   // 市净率
@@ -51,13 +53,13 @@ export async function fetchFundamentals(code: string): Promise<FundamentalData> 
   }
 
   try {
-    const response = await fetch(
+    const text = await fetchTextViaExtension(
       `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f9,f20,f21,f23,f37,f49,f50,f52,f59,f61,f62`,
     );
-    if (!response.ok) {
+    if (!text) {
       return createEmptyFundamentalData();
     }
-    const json = (await response.json()) as EastmoneyFundamentalResponse;
+    const json = JSON.parse(text) as EastmoneyFundamentalResponse;
     const d = json.data;
     if (!d) {
       return createEmptyFundamentalData();
