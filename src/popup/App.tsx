@@ -1,18 +1,16 @@
 import { Component, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, FileText, GripVertical, LayoutGrid, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './StockDetailView';
 import IndexDetailModal from './IndexDetailModal';
 import FundDetailView from './FundDetailView';
 import DiagnosticPanel from './DiagnosticPanel';
+import LonghuBangModal from './LonghuBangModal';
+import SectorHeatMap from './SectorHeatMap';
+import SectorDetailView from './SectorDetailView';
 import TagBadge from './TagBadge';
 import TagFilterBar from './TagFilterBar';
 import TagEditor from './TagEditor';
 import DemoGuide, { loadDemoFlag } from './DemoGuide';
-import {
-  loadTradeHistory,
-  computePositionFromTrades,
-  type StockTradeRecord,
-} from '../shared/trade-history';
 import {
   loadTagConfig,
   saveTagConfig,
@@ -40,7 +38,7 @@ import {
 } from '../shared/fetch';
 const BADGE_STORAGE_KEY = 'badgeConfig';
 
-type PageTab = 'stocks' | 'funds' | 'account' | 'notifications';
+type PageTab = 'stocks' | 'funds' | 'sectors' | 'account' | 'notifications';
 type ThemeMode = 'dark' | 'light';
 
 type IndexDetailTarget = {
@@ -82,8 +80,6 @@ type StockRow = StockPosition & {
   tags: string[];
   addedPrice?: number;
   addedAt?: string;
-  realizedPnl?: number;
-  tradeDerived?: boolean;
 };
 
 type FundRow = FundPosition & {
@@ -904,6 +900,8 @@ export default function App() {
   const [fundsError, setFundsError] = useState('');
   const [indexesError, setIndexesError] = useState('');
   const [indexDetailTarget, setIndexDetailTarget] = useState<IndexDetailTarget | null>(null);
+  const [longhuBangOpen, setLonghuBangOpen] = useState(false);
+  const [sectorDetailTarget, setSectorDetailTarget] = useState<{ code: string; name: string } | null>(null);
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -928,7 +926,6 @@ export default function App() {
   const [tagConfig, setTagConfig] = useState<TagConfig>({ tags: [] });
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagEditorTarget, setTagEditorTarget] = useState<{ kind: 'stock' | 'fund'; code: string } | null>(null);
-  const [stockTradeHistory, setStockTradeHistory] = useState<Record<string, StockTradeRecord[]>>({});
 
   const popupRootRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
@@ -941,18 +938,9 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    // 合并浮动盈亏和已实现盈亏：有交易记录的用交易推导，否则用原始浮动盈亏
     let totalPnl = 0;
     for (const pos of stockPositions) {
-      if (!Number.isFinite(pos.price)) continue;
-      const trades = stockTradeHistory[pos.code];
-      if (trades && trades.length > 0) {
-        const computed = computePositionFromTrades(trades);
-        if (computed.shares > 0) {
-          totalPnl += (pos.price - computed.avgCost) * computed.shares;
-        }
-        totalPnl += computed.realizedPnl;
-      } else if (Number.isFinite(pos.floatingPnl)) {
+      if (Number.isFinite(pos.floatingPnl)) {
         totalPnl += pos.floatingPnl;
       }
     }
@@ -967,7 +955,7 @@ export default function App() {
       { label: '总盈亏', value: formatNumber(totalPnl, 1), tone: toneClass(totalPnl) },
       { label: '当日盈亏', value: formatNumber(daily, 1), tone: toneClass(daily) },
     ] as const;
-  }, [stockPositions, stockTradeHistory]);
+  }, [stockPositions]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -998,18 +986,9 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    // 股票总盈亏（含已实现）
     let stockTotalPnl = 0;
     for (const pos of stockPositions) {
-      if (!Number.isFinite(pos.price)) continue;
-      const trades = stockTradeHistory[pos.code];
-      if (trades && trades.length > 0) {
-        const computed = computePositionFromTrades(trades);
-        if (computed.shares > 0) {
-          stockTotalPnl += (pos.price - computed.avgCost) * computed.shares;
-        }
-        stockTotalPnl += computed.realizedPnl;
-      } else if (Number.isFinite(pos.floatingPnl)) {
+      if (Number.isFinite(pos.floatingPnl)) {
         stockTotalPnl += pos.floatingPnl;
       }
     }
@@ -1043,7 +1022,7 @@ export default function App() {
       { label: '综合预估收益', value: formatNumber(previewProfit, 2), tone: toneClass(previewProfit) },
       { label: '股票当日盈亏', value: formatNumber(stockDaily, 2), tone: toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions, stockTradeHistory]);
+  }, [fundPositions, stockPositions]);
 
   const metrics = activeTab === 'stocks'
     ? stockMetrics
@@ -1159,25 +1138,10 @@ export default function App() {
         next.addedAt = holding.addedAt;
       }
 
-      // If trade history exists, derive shares/cost from trades
-      const trades = stockTradeHistory[holding.code];
-      if (trades && trades.length > 0) {
-        const computed = computePositionFromTrades(trades);
-        const avgCost = computed.avgCost;
-        const totalShares = computed.shares;
-        next.shares = totalShares;
-        next.cost = avgCost;
-        next.floatingPnl = Number.isFinite(next.price) && totalShares > 0
-          ? (next.price - avgCost) * totalShares
-          : Number.NaN;
-        next.realizedPnl = computed.realizedPnl;
-        next.tradeDerived = true;
-      }
-
       rows.push(next);
     }
     return rows;
-  }, [stockHoldings, stockPositions, stockTradeHistory]);
+  }, [stockHoldings, stockPositions]);
 
   const fundRows = useMemo<FundRow[]>(() => {
     const positionMap = new Map(fundPositions.map((item) => [item.code, item]));
@@ -1311,11 +1275,6 @@ export default function App() {
     loadTagConfig().then((cfg) => {
       if (!mounted) return;
       setTagConfig(cfg);
-    });
-
-    loadTradeHistory().then((history) => {
-      if (!mounted) return;
-      setStockTradeHistory(history);
     });
 
     return () => {
@@ -1936,7 +1895,13 @@ function clearIntradayIfStale(
     if (activeTab !== 'funds' && fundDetailTarget) {
       setFundDetailTarget(null);
     }
-  }, [activeTab, stockDetailTarget]);
+    if (activeTab !== 'sectors' && longhuBangOpen) {
+      setLonghuBangOpen(false);
+    }
+    if (activeTab !== 'sectors' && sectorDetailTarget) {
+      setSectorDetailTarget(null);
+    }
+  }, [activeTab, stockDetailTarget, fundDetailTarget, longhuBangOpen, sectorDetailTarget]);
 
   useEffect(() => {
     if (!stockDetailTarget && !fundDetailTarget) {
@@ -2398,6 +2363,14 @@ function clearIntradayIfStale(
           </button>
           <button
             type="button"
+            className={`nav-btn ${activeTab === 'sectors' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sectors')}
+          >
+            <LayoutGrid size={12} />
+            <span>板块</span>
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
             onClick={() => setActiveTab('account')}
           >
@@ -2475,8 +2448,8 @@ function clearIntradayIfStale(
           </div>
         </aside>
 
-        <main className={`main-area ${stockDetailTarget || fundDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget || longhuBangOpen || sectorDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && !longhuBangOpen && !sectorDetailTarget && activeTab !== 'notifications' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -2484,6 +2457,7 @@ function clearIntradayIfStale(
                   type="button"
                   className="index-card"
                   key={item.code}
+                  style={{ borderLeftColor: item.change >= 0 ? 'var(--up)' : 'var(--down)' }}
                   onClick={() => setIndexDetailTarget({ code: item.code, label: item.label })}
                 >
                   <p>{item.label}</p>
@@ -2499,7 +2473,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' ? (
+          {!stockDetailTarget && !fundDetailTarget && !longhuBangOpen && !sectorDetailTarget && activeTab !== 'notifications' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -2522,58 +2496,60 @@ function clearIntradayIfStale(
                     </div>
                   </div>
                 ) : (
-                  <div className={`search-shell ${isSearchOpen ? 'open' : ''}`} ref={searchWrapRef}>
-                    {!isSearchOpen ? (
-                      <button className="search-icon-btn" type="button" onClick={openSearch} aria-label="搜索股票">
-                        <Search size={9} />
-                      </button>
-                    ) : (
-                      <div className="search-box">
-                        <Search size={13} className="search-leading-icon" />
-                        <input
-                          ref={searchInputRef}
-                          value={keyword}
-                          onChange={(e) => setKeyword(e.target.value)}
-                          placeholder={activeTab === 'funds' ? '搜索基金代码或名称' : '搜索股票代码或名称'}
-                          className="search-input"
-                          autoComplete="off"
-                          autoCorrect="off"
-                          autoCapitalize="off"
-                          spellCheck={false}
-                          name="portfolio-search"
-                        />
-                        <button className="search-close-btn" type="button" onClick={closeSearch} aria-label="关闭搜索">
-                          <X size={13} />
+                  <>
+                    <div className={`search-shell ${isSearchOpen ? 'open' : ''}`} ref={searchWrapRef}>
+                      {!isSearchOpen ? (
+                        <button className="search-icon-btn" type="button" onClick={openSearch} aria-label="搜索股票">
+                          <Search size={9} />
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="search-box">
+                          <Search size={13} className="search-leading-icon" />
+                          <input
+                            ref={searchInputRef}
+                            value={keyword}
+                            onChange={(e) => setKeyword(e.target.value)}
+                            placeholder={activeTab === 'funds' ? '搜索基金代码或名称' : '搜索股票代码或名称'}
+                            className="search-input"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            name="portfolio-search"
+                          />
+                          <button className="search-close-btn" type="button" onClick={closeSearch} aria-label="关闭搜索">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      )}
 
-                    {isSearchOpen && keyword.trim() ? (
-                      <div className="search-suggestions">
-                        {suggestions.length > 0 ? (
-                          suggestions.map((item) => (
-                            <button
-                              key={item.code}
-                              type="button"
-                              className="suggestion-item"
-                              onClick={() => onSelectSuggestion(item)}
-                            >
-                              <span>{item.name}</span>
-                              <span>{item.code}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="suggestion-empty">未找到匹配{activeTab === 'funds' ? '基金' : '股票'}</div>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
+                      {isSearchOpen && keyword.trim() ? (
+                        <div className="search-suggestions">
+                          {suggestions.length > 0 ? (
+                            suggestions.map((item) => (
+                              <button
+                                key={item.code}
+                                type="button"
+                                className="suggestion-item"
+                                onClick={() => onSelectSuggestion(item)}
+                              >
+                                <span>{item.name}</span>
+                                <span>{item.code}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="suggestion-empty">未找到匹配{activeTab === 'funds' ? '基金' : '股票'}</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
                 )}
               </div>
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${longhuBangOpen ? 'detail-mode' : ''} ${sectorDetailTarget ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -2727,6 +2703,26 @@ function clearIntradayIfStale(
                 />
 
               </div>
+            ) : null}
+
+            {sectorDetailTarget ? (
+              <SectorDetailView
+                sectorCode={sectorDetailTarget.code}
+                sectorName={sectorDetailTarget.name}
+                stockCodes={stockRows.map((s) => s.code)}
+                onAddStock={(stock) => void addStockToPortfolio(stock)}
+                onBack={() => setSectorDetailTarget(null)}
+              />
+            ) : longhuBangOpen ? (
+              <LonghuBangModal
+                stockCodes={stockRows.map((s) => s.code)}
+                onBack={() => setLonghuBangOpen(false)}
+              />
+            ) : activeTab === 'sectors' && !stockDetailTarget ? (
+              <SectorHeatMap
+                onOpenLonghuBang={() => setLonghuBangOpen(true)}
+                onSelectSector={(sector) => setSectorDetailTarget({ code: sector.code, name: sector.name })}
+              />
             ) : null}
 
             {sortingMode ? (
@@ -3085,11 +3081,6 @@ function clearIntradayIfStale(
                           <td className="dual-value">
                             <span className={toneClass(item.floatingPnl)}>{formatNumber(item.floatingPnl, 1)}</span>
                             <span className={toneClass(holdingRate)}>{formatPercent(holdingRate)}</span>
-                            {item.tradeDerived && Number.isFinite(item.realizedPnl) ? (
-                              <span className={toneClass(item.realizedPnl!)} style={{ fontSize: 9, opacity: 0.7 }}>
-                                已实现 {item.realizedPnl! >= 0 ? '+' : ''}{formatNumber(item.realizedPnl!, 1)}
-                              </span>
-                            ) : null}
                           </td>
                           <td className="dual-value">
                             <span className={toneClass(item.dailyPnl)}>{formatNumber(item.dailyPnl, 0)}</span>
@@ -3117,10 +3108,9 @@ function clearIntradayIfStale(
                                 className={hasCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (item.tradeDerived) return;
                                   startEditing('stock', item.code, 'cost');
                                 }}
-                                title={item.tradeDerived ? '由交易记录自动计算' : '点击编辑成本价'}
+                                title="点击编辑成本价"
                               >
                                 {hasCost ? formatNumber(item.cost, 3) : '输入成本价'}
                               </span>
@@ -3157,10 +3147,9 @@ function clearIntradayIfStale(
                                 className={hasShares ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (item.tradeDerived) return;
                                   startEditing('stock', item.code, 'shares');
                                 }}
-                                title={item.tradeDerived ? '由交易记录自动计算' : '点击编辑股数'}
+                                title="点击编辑股数"
                               >
                                 {hasShares ? formatNumber(item.shares, 0) : '输入股数'}
                               </span>
