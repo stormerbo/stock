@@ -753,6 +753,11 @@ export default function App() {
     return saved === 'light' || saved === 'dark' ? saved : 'dark';
   });
 
+  const [themeStyle, setThemeStyle] = useState<'classic' | 'modern'>(() => {
+    const saved = window.localStorage.getItem('popup-theme-style');
+    return saved === 'modern' ? 'modern' : 'classic';
+  });
+
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
     const saved = window.localStorage.getItem('popup-opacity');
     return saved !== null ? Math.min(100, Math.max(0, Number(saved) || 95)) : 95;
@@ -1301,6 +1306,11 @@ export default function App() {
     document.body.classList.toggle('theme-light', theme === 'light');
     window.localStorage.setItem('popup-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-modern', themeStyle === 'modern');
+    window.localStorage.setItem('popup-theme-style', themeStyle);
+  }, [themeStyle]);
 
   useEffect(() => {
     window.localStorage.setItem('popup-opacity', String(popupOpacity));
@@ -1881,6 +1891,7 @@ function clearIntradayIfStale(
   };
 
   const toggleTheme = () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+  const toggleThemeStyle = () => setThemeStyle((current) => (current === 'classic' ? 'modern' : 'classic'));
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -2434,6 +2445,17 @@ function clearIntradayIfStale(
             >
               <Settings size={12} />
               <span>设置</span>
+            </button>
+
+            <button
+              type="button"
+              className="nav-btn theme-toggle-btn"
+              onClick={toggleThemeStyle}
+              aria-label="切换风格"
+              title={themeStyle === 'classic' ? '当前：经典紫色 · 点击切换现代蓝色' : '当前：现代蓝色 · 点击切换经典紫色'}
+            >
+              <span style={{ fontSize: 12 }}>{themeStyle === 'classic' ? '🎨' : '💠'}</span>
+              <span>风格</span>
             </button>
 
             <button
