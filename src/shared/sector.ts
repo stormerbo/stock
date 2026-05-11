@@ -151,3 +151,66 @@ export async function fetchSectorStocks(sectorCode: string): Promise<SectorStock
 
   return allRows;
 }
+
+// -----------------------------------------------------------
+// Stock-to-sector mapping — fetch sectors for a single stock
+// -----------------------------------------------------------
+
+import { guessSector } from './sector-map';
+
+export type StockSector = {
+  code: string;
+  name: string;
+  changePct: number;
+};
+
+/** Sector name → Eastmoney BK code (static mapping, no API required) */
+const SECTOR_TO_BK: Record<string, string> = {
+  '白酒': 'BK0477',
+  '银行': 'BK0475',
+  '保险': 'BK0474',
+  '证券': 'BK0473',
+  '新能源': 'BK0493',
+  '汽车': 'BK0481',
+  '医药': 'BK0465',
+  '半导体': 'BK0484',
+  '互联网': 'BK0450',
+  '科技': 'BK0448',
+  '家电': 'BK0456',
+  '地产': 'BK0451',
+  '煤炭': 'BK0437',
+  '有色金属': 'BK0478',
+  '钢铁': 'BK0479',
+  '军工': 'BK0463',
+  '食品饮料': 'BK0483',
+  '电力': 'BK0428',
+  '交通运输': 'BK0429',
+  '建筑': 'BK0443',
+  '通信': 'BK0445',
+  '化工': 'BK0438',
+  '农林牧渔': 'BK0431',
+  '纺织服装': 'BK0433',
+  '公用事业': 'BK0427',
+};
+
+/**
+ * Get the sector that a stock belongs to with its Eastmoney BK code.
+ * Uses hardcoded name→code mapping (no API required).
+ * Returns sector name even without BK code match.
+ */
+export async function fetchStockSectors(stockCode: string): Promise<StockSector[]> {
+  try {
+    const sectorName = guessSector(stockCode);
+    if (!sectorName || sectorName === '其他') return [];
+
+    const bkCode = SECTOR_TO_BK[sectorName] ?? '';
+
+    return [{
+      code: bkCode,
+      name: sectorName,
+      changePct: Number.NaN, // TODO: add live changePct from board quote API
+    }];
+  } catch {
+    return [];
+  }
+}

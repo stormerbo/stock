@@ -10,6 +10,7 @@ import {
 } from "./stockDetail";
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../shared/risk-metrics";
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../shared/fundamentals";
+import { fetchStockSectors, type StockSector } from "../shared/sector";
 
 const UP_COLOR = "#e45555";
 const DN_COLOR = "#2aa568";
@@ -18,6 +19,7 @@ type Props = {
   code: string;
   fallbackName: string;
   onBack: () => void;
+  onSelectSector?: (sectorCode: string, sectorName: string) => void;
 };
 
 function formatNumber(value: number, digits = 2): string {
@@ -899,7 +901,7 @@ function KlineChart({ detail }: { detail: StockDetailData }) {
 
 // ─── Main Detail Panel ───
 
-export default function StockDetailView({ code, fallbackName, onBack }: Props) {
+export default function StockDetailView({ code, fallbackName, onBack, onSelectSector }: Props) {
   const [detail, setDetail] = useState<StockDetailData | null>(null);
   const [period, setPeriod] = useState<TabValue>("minute");
   const [loading, setLoading] = useState(true);
@@ -907,6 +909,7 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
   const [refreshAt, setRefreshAt] = useState(0);
   const [fundamentals, setFundamentals] = useState<FundamentalData | null>(null);
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
+  const [sectors, setSectors] = useState<StockSector[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -952,6 +955,21 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
       window.clearInterval(timer);
     };
   }, [code, fallbackName, period, refreshAt]);
+
+  // 获取所属板块
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const list = await fetchStockSectors(code);
+        if (!cancelled) setSectors(list);
+      } catch {
+        // non-critical
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [code]);
 
   return (
     <section className="stock-detail-panel">
@@ -1031,6 +1049,29 @@ export default function StockDetailView({ code, fallbackName, onBack }: Props) {
               <RiskMetrics kline={detail.kline} />
             ) : null}
           </div>
+
+          {/* ─── Sector Chips ─── */}
+          {sectors.length > 0 ? (
+            <div className="stock-sectors-row">
+              {sectors.map((s) => (
+                <button
+                  key={s.code}
+                  type="button"
+                  className="sector-chip"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (s.code) onSelectSector?.(s.code, s.name);
+                  }}
+                  title={s.code ? `查看 ${s.name} 成分股` : s.name}
+                >
+                  <span className="sector-chip-name">{s.name}</span>
+                  <span className={`sector-chip-change ${Number.isFinite(s.changePct) ? (s.changePct >= 0 ? 'up' : 'down') : ''}`}>
+                    {Number.isFinite(s.changePct) ? `${s.changePct >= 0 ? '+' : ''}${s.changePct.toFixed(2)}%` : '--'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {/* ─── Chart ─── */}
           <KlineChart detail={detail} />
