@@ -696,6 +696,26 @@ export default function App() {
     window.localStorage.setItem('popup-theme', theme);
   }, [theme]);
 
+  // 读取设置页的涨跌色配置
+  useEffect(() => {
+    const applyColorScheme = () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+        chrome.storage.sync.get('displayConfig', (result: Record<string, unknown>) => {
+          const cfg = result.displayConfig as { colorScheme?: string } | undefined;
+          document.body.classList.toggle('color-scheme-us', cfg?.colorScheme === 'us');
+        });
+      }
+    };
+    applyColorScheme();
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+        if (area === 'sync' && changes.displayConfig) applyColorScheme();
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, [theme]);
+
   useEffect(() => {
     window.localStorage.setItem('popup-opacity', String(popupOpacity));
     document.documentElement.style.setProperty('--panel-opacity', String(popupOpacity / 100));

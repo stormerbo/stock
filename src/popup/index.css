@@ -15,8 +15,10 @@
   --glass-blur: blur(20px) saturate(135%);
   --brand: #6b5cf6;
   --brand-soft: rgba(107, 92, 246, 0.2);
-  --up: #ff5e57;
-  --down: #1fc66d;
+  --_red: #ff5e57;
+  --_green: #1fc66d;
+  --up: var(--_red);
+  --down: var(--_green);
   --panel-opacity: 0.95;
 }
 
@@ -62,8 +64,16 @@ body.theme-light {
   --glass-blur: blur(18px) saturate(125%);
   --brand: #3f67f0;
   --brand-soft: rgba(63, 103, 240, 0.15);
-  --up: #cf2e2e;
-  --down: #13964b;
+  --_red: #cf2e2e;
+  --_green: #13964b;
+  --up: var(--_red);
+  --down: var(--_green);
+}
+
+/* 绿涨红跌（美股模式） */
+body.color-scheme-us {
+  --up: var(--_green);
+  --down: var(--_red);
 }
 
 .popup-root {
@@ -1147,6 +1157,11 @@ body.theme-light .data-table thead th {
   background: color-mix(in srgb, var(--brand-soft) 32%, transparent);
 }
 
+/* 整行悬停高亮 */
+.data-table tbody tr:not(.editing-row):hover td {
+  background: color-mix(in srgb, var(--brand-soft) 22%, transparent);
+}
+
 .sorting-row td {
   user-select: none;
 }
@@ -1336,7 +1351,8 @@ body.theme-light .data-table thead th {
   background: color-mix(in srgb, #e74c3c 10%, transparent);
 }
 
-.stock-table tbody tr:hover .remove-stock-btn {
+.stock-table tbody tr:hover .remove-stock-btn,
+.fund-table tbody tr:hover .remove-stock-btn {
   display: inline-flex;
 }
 
@@ -3604,6 +3620,27 @@ body.theme-light .notification-item.clickable:hover {
   color: #fff;
 }
 
+/* Trade history delete button */
+.trade-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
+}
+
+.trade-delete-btn:hover {
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 15%, var(--bg-2));
+}
+
 /* ═══════════════════════════════════════
    Risk Metrics Strip (StockDetailView)
    ═══════════════════════════════════════ */
@@ -3822,6 +3859,14 @@ body.theme-light .notification-item.clickable:hover {
 .diagnostic-list-compact .value {
   font-weight: 500;
   color: var(--text-0);
+}
+
+.diagnostic-list-compact .value.up {
+  color: var(--up);
+}
+
+.diagnostic-list-compact .value.down {
+  color: var(--down);
 }
 
 /* ─── Fundamental Panel ─── */
@@ -4958,4 +5003,46 @@ body.theme-light .analytics-section {
 .sector-detail-add-btn.disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ─── Sector Detail Tabs ─── */
+.sector-detail-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+}
+
+.sector-detail-tab {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  text-align: center;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-1);
+  transition: all 0.15s;
+}
+
+.sector-detail-tab.active {
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sector-detail-tab:hover:not(.active) {
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+.sector-detail-refresh {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-1);
+  padding: 2px 6px;
+  margin-left: auto;
 }

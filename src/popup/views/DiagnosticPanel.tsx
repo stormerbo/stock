@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { calcDiagnostics, type DiagnosticResult } from '../../shared/diagnostics';
 import type { StockPosition, FundPosition } from '../../shared/fetch';
+import { toneClass } from '../utils/format';
 
 // Color palette for sector bars
 const SECTOR_COLORS = [
@@ -175,7 +176,7 @@ function PnlView({ diagnostic }: { diagnostic: DiagnosticResult }) {
             {pnlAttribution.topGainers.slice(0, 3).map((g) => (
               <li key={g.code}>
                 <span className="name">{g.name}</span>
-                <span className="value" style={{ color: '#10b981' }}>+{formatNum(g.pnl, 1)}</span>
+                <span className={`value ${toneClass(g.pnl)}`}>+{formatNum(g.pnl, 1)}</span>
               </li>
             ))}
           </ul>
@@ -189,7 +190,7 @@ function PnlView({ diagnostic }: { diagnostic: DiagnosticResult }) {
             {pnlAttribution.topLosers.slice(0, 3).map((l) => (
               <li key={l.code}>
                 <span className="name">{l.name}</span>
-                <span className="value" style={{ color: '#ef4444' }}>{formatNum(l.pnl, 1)}</span>
+                <span className={`value ${toneClass(l.pnl)}`}>{formatNum(l.pnl, 1)}</span>
               </li>
             ))}
           </ul>
@@ -203,7 +204,7 @@ function PnlView({ diagnostic }: { diagnostic: DiagnosticResult }) {
             {pnlAttribution.largestDailyImpact.slice(0, 3).map((d) => (
               <li key={d.code}>
                 <span className="name">{d.name}</span>
-                <span className="value" style={{ color: d.dailyPnl >= 0 ? '#10b981' : '#ef4444' }}>
+                <span className={`value ${toneClass(d.dailyPnl)}`}>
                   {formatNum(d.dailyPnl, 1)}
                 </span>
               </li>
