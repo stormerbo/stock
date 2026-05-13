@@ -1,4 +1,4 @@
-import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Sun, TrendingUp, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Sun, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatNumber, formatMarketAmount } from '../utils/format';
@@ -61,15 +61,6 @@ export default function SideNav({
         <FileText size={12} />
         <span>交易</span>
       </button>
-      <button
-        type="button"
-        className={`nav-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-        onClick={() => { setActiveTab('analytics'); clearDetailTargets(); }}
-      >
-        <TrendingUp size={12} />
-        <span>分析</span>
-      </button>
-
       <div className="nav-spacer" />
 
       <div className="side-nav-footer">

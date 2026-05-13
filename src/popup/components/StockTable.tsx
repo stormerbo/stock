@@ -2,11 +2,9 @@ import { Fragment } from 'react';
 import { GripVertical, Pin, Star } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import IntradayChart from './IntradayChart';
-import ScoreBadge from './ScoreBadge';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
 import type { StockRow } from '../types';
-import type { StockScoreResult } from '../../shared/scoring';
 
 type EditingCell = {
   kind: 'stock' | 'fund';
@@ -21,7 +19,6 @@ type Props = {
   sortingMode: string | null;
   draggingCode: string | null;
   editingCell: EditingCell;
-  stockScores: Map<string, StockScoreResult>;
   signalStocks: Record<string, { name: string; signalCount: number }> | null;
   stocksLoading: boolean;
   stocksError: string;
@@ -44,7 +41,7 @@ type Props = {
 
 export default function StockTable({
   rows, stockPinnedCode, sortingMode, draggingCode, editingCell,
-  stockScores, signalStocks, stocksLoading, stocksError, stockTotalHoldingAmount,
+  signalStocks, stocksLoading, stocksError, stockTotalHoldingAmount,
   openStockDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleStockDrop, handleStockDropAfterPinned,
   getStockBadge, onRefresh, refreshing,
@@ -61,7 +58,6 @@ export default function StockTable({
             <th>成本/现价</th>
             <th>持仓股数</th>
             <th>仓位比</th>
-            <th>评级</th>
           </tr>
         </thead>
         <tbody>
@@ -200,14 +196,13 @@ export default function StockTable({
                   )}
                 </td>
                 <td>{formatRatioPercent(positionRatio)}</td>
-                <td className="score-cell"><ScoreBadge score={stockScores.get(item.code)} /></td>
               </tr>
               {sortingMode === 'stocks' && isLockedPinned ? (
                 <tr className={`sort-insert-row ${draggingCode ? 'active' : ''}`}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={handleStockDropAfterPinned}
                 >
-                  <td colSpan={8}>拖到这里可排到置顶后</td>
+                  <td colSpan={7}>拖到这里可排到置顶后</td>
                 </tr>
               ) : null}
               </Fragment>
@@ -216,7 +211,7 @@ export default function StockTable({
 
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={8} className="table-empty-cell">
+              <td colSpan={7} className="table-empty-cell">
                 {stocksLoading ? '股票数据加载中...' : stocksError || '暂无股票持仓，点击右上角搜索添加股票'}
               </td>
             </tr>

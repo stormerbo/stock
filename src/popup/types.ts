@@ -7,7 +7,7 @@ import type {
   MarketStats,
 } from '../shared/fetch';
 
-export type PageTab = 'stocks' | 'funds' | 'account' | 'notifications' | 'analytics' | 'trades';
+export type PageTab = 'stocks' | 'funds' | 'account' | 'notifications' | 'trades';
 export type ThemeMode = 'dark' | 'light';
 
 export type IndexDetailTarget = {

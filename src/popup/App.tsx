@@ -1,12 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, TrendingUp, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './views/StockDetailView';
-import ScoreDetailView from './views/ScoreDetailView';
 import SectorDetailView from './views/SectorDetailView';
 import IndexDetailModal from './views/IndexDetailModal';
 import FundDetailView from './views/FundDetailView';
 import DiagnosticPanel from './views/DiagnosticPanel';
-import AnalyticsView from './views/AnalyticsView';
 import TagBadge from './tags/TagBadge';
 import TagFilterBar from './tags/TagFilterBar';
 import TagEditor from './tags/TagEditor';
@@ -37,9 +35,7 @@ import {
   type MarketStats,
   MARKET_INDEXES,
 } from '../shared/fetch';
-import { computeStockScore, type StockScoreResult } from '../shared/scoring';
 import { fetchDayFqKline } from '../shared/technical-analysis';
-import { fetchFundamentals } from '../shared/fundamentals';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/risk-metrics';
 import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
 import { getFundTradesForCode, computeFundPositionFromTrades } from '../shared/fund-trade-history';
@@ -56,7 +52,6 @@ import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/sear
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
 import DetailErrorBoundary from './components/DetailErrorBoundary';
 import IntradayChart from './components/IntradayChart';
-import ScoreBadge from './components/ScoreBadge';
 import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
@@ -243,8 +238,6 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
-  const [stockScores, setStockScores] = useState<Map<string, StockScoreResult>>(new Map());
-  const [scoresLoading, setScoresLoading] = useState(false);
   const [fundPositions, setFundPositions] = useState<FundPosition[]>([]);
   const [marketIndexes, setMarketIndexes] = useState<MarketIndexQuote[]>(() => (
     MARKET_INDEXES.map((item) => ({
@@ -266,7 +259,6 @@ export default function App() {
   const [keyword, setKeyword] = useState('');
   const [suggestions, setSuggestions] = useState<SearchStock[]>([]);
   const [stockDetailTarget, setStockDetailTarget] = useState<StockDetailTarget | null>(null);
-  const [scoreDetailTarget, setScoreDetailTarget] = useState<{ code: string; name: string } | null>(null);
   const [sectorDetailTarget, setSectorDetailTarget] = useState<{ code: string; name: string } | null>(null);
   const [fundDetailTarget, setFundDetailTarget] = useState<FundDetailTarget | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
@@ -1070,67 +1062,6 @@ function clearIntradayIfStale(
     return () => { cancelled = true; };
   }, [portfolioReady, stockHoldings, refreshSig]);
 
-  // 综合评分计算：stockPositions 加载完成后，获取 K 线+基本面+风险指标并计算评分
-  useEffect(() => {
-    if (!portfolioReady || stockPositions.length === 0) return;
-
-    let cancelled = false;
-    const computeScores = async () => {
-      setScoresLoading(true);
-      try {
-        const { fetchDayFqKline } = await import('../shared/technical-analysis');
-        const { fetchFundamentals } = await import('../shared/fundamentals');
-        const { calcMaxDrawdownFromKline, calcVolatilityFromKline } = await import('../shared/risk-metrics');
-        const { computeStockScore } = await import('../shared/scoring');
-        const { pMap } = await import('../shared/fetch');
-
-        const results = await pMap(
-          stockPositions,
-          async (pos) => {
-            try {
-              const [kline, fundamentals] = await Promise.all([
-                fetchDayFqKline(pos.code),
-                fetchFundamentals(pos.code),
-              ]);
-
-              const maxDrawdown = calcMaxDrawdownFromKline(kline);
-              const volatility = calcVolatilityFromKline(kline);
-              const suspended = Number.isFinite(pos.price) && Number.isFinite(pos.prevClose)
-                && pos.price === pos.prevClose && pos.dailyChangePct === 0;
-
-              const score = computeStockScore({
-                kline,
-                fundamentals,
-                maxDrawdown,
-                volatility,
-                suspended,
-              });
-              return { code: pos.code, score };
-            } catch {
-              return { code: pos.code, score: null };
-            }
-          },
-          5,
-        );
-
-        if (!cancelled) {
-          const newScores = new Map<string, StockScoreResult>();
-          for (const { code, score } of results) {
-            if (score) newScores.set(code, score);
-          }
-          setStockScores(newScores);
-        }
-      } catch {
-        // 评分计算失败不影响主流程
-      } finally {
-        if (!cancelled) setScoresLoading(false);
-      }
-    };
-
-    void computeScores();
-    return () => { cancelled = true; };
-  }, [portfolioReady, stockPositions.length, refreshSig]);
-
   // 交易时段内定时刷新分时数据，确保分时图实时更新
   useEffect(() => {
     if (!portfolioReady || stockPositions.length === 0) return;
@@ -1350,13 +1281,10 @@ function clearIntradayIfStale(
     if (activeTab !== 'funds' && fundDetailTarget) {
       setFundDetailTarget(null);
     }
-    if (activeTab !== 'analytics' && scoreDetailTarget) {
-      setScoreDetailTarget(null);
-    }
     if (activeTab !== 'stocks' && sectorDetailTarget) {
       setSectorDetailTarget(null);
     }
-  }, [activeTab, stockDetailTarget, scoreDetailTarget, sectorDetailTarget]);
+  }, [activeTab, stockDetailTarget, sectorDetailTarget]);
 
   useEffect(() => {
     if (!stockDetailTarget && !fundDetailTarget) {
@@ -1795,7 +1723,6 @@ function clearIntradayIfStale(
     }
   };
 
-  // ScoreBadge imported from ./components/ScoreBadge
 
   return (
     <div className="popup-root" ref={popupRootRef}>
@@ -1812,8 +1739,8 @@ function clearIntradayIfStale(
           clearDetailTargets={() => { setStockDetailTarget(null); setFundDetailTarget(null); }}
         />
 
-        <main className={`main-area ${stockDetailTarget || fundDetailTarget || scoreDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+        <main className={`main-area ${stockDetailTarget || fundDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -1836,7 +1763,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -1998,7 +1925,6 @@ function clearIntradayIfStale(
                 sortingMode={sortingMode}
                 draggingCode={draggingCode}
                 editingCell={editingCell}
-                stockScores={stockScores}
                 signalStocks={signalStocks}
                 stocksLoading={stocksLoading}
                 stocksError={stocksError}
@@ -2048,28 +1974,6 @@ function clearIntradayIfStale(
               <TradeHistoryPage stockNames={stockNameMap} fundNames={fundNameMap} allStockCodes={stockHoldings.map(h => h.code)} allFundCodes={fundHoldings.map(h => h.code)} onStockTradesChanged={handleStockTradesChanged} onFundTradesChanged={handleFundTradesChanged} />
             ) : null}
 
-            {activeTab === 'analytics' && scoreDetailTarget ? (
-              <ScoreDetailView
-                code={scoreDetailTarget.code}
-                name={scoreDetailTarget.name}
-                score={stockScores.get(scoreDetailTarget.code)!}
-                onBack={() => setScoreDetailTarget(null)}
-              />
-            ) : null}
-
-            {activeTab === 'analytics' && !scoreDetailTarget ? (
-              <div className="table-panel">
-                {scoresLoading ? (
-                  <div className="table-empty-cell">评分计算中...</div>
-                ) : (
-                  <AnalyticsView
-                    scores={stockScores}
-                    stocks={stockDisplayRows.map((r) => ({ code: r.code, name: r.name || r.code }))}
-                    onSelectStock={(code, name) => setScoreDetailTarget({ code, name })}
-                  />
-                )}
-              </div>
-            ) : null}
           </section>
         </main>
 
