@@ -1606,6 +1606,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } else if (details.reason === 'update') {
     // 版本升级
     console.log(`[bg] updated from ${details.previousVersion} to ${chrome.runtime.getManifest().version}`);
+  } else {
+    // chrome_update / shared_module_update：确保角标配置存在
+    const existing = await chrome.storage.sync.get(BADGE_STORAGE_KEY);
+    if (!existing[BADGE_STORAGE_KEY]) {
+      await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
+    }
   }
   startRefreshLoop();
   // 等数据刷新后更新悬浮标题
@@ -1616,6 +1622,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 startRefreshLoop();
 // Service worker 重启后也更新标题
 setTimeout(() => void updateHoverTitleFromStorage(), 2000);
+// 初始更新角标（从缓存数据）
+setTimeout(() => scheduleBadgeUpdate(), 1000);
 
 // 监听配置变化
 chrome.storage.onChanged.addListener((changes, area) => {

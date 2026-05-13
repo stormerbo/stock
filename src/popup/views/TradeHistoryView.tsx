@@ -305,7 +305,7 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
                               <button type="button" className="tag-editor-btn-cancel" style={{ fontSize: 10, padding: '1px 6px', border: 'none', borderRadius: 3, cursor: 'pointer' }} onClick={() => setDeleteConfirm(null)}>取消</button>
                             </span>
                           ) : (
-                            <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }} onClick={() => setDeleteConfirm(t.id)} title="删除">
+                            <button type="button" className="trade-delete-btn" onClick={() => setDeleteConfirm(t.id)} title="删除">
                               <Trash2 size={12} />
                             </button>
                           )}
