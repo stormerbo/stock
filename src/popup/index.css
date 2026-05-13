@@ -1124,6 +1124,7 @@ body.theme-light .data-table thead th {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
+  text-align: right;
 }
 
 .fund-table tbody td {
@@ -1132,6 +1133,10 @@ body.theme-light .data-table thead th {
 
 .data-table tbody tr + tr td {
   border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.stock-table tbody td.stock-detail-chart {
+  text-align: center;
 }
 
 .stock-table tbody td.stock-detail-trigger {
@@ -1305,6 +1310,34 @@ body.theme-light .data-table thead th {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.remove-stock-btn {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: #e74c3c;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  z-index: 2;
+  opacity: 0.6;
+}
+
+.remove-stock-btn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, #e74c3c 10%, transparent);
+}
+
+.stock-table tbody tr:hover .remove-stock-btn {
+  display: inline-flex;
 }
 
 .name-inline {

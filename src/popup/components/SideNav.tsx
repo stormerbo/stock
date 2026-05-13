@@ -45,6 +45,14 @@ export default function SideNav({
       </button>
       <button
         type="button"
+        className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}
+        onClick={() => { setActiveTab('trades'); clearDetailTargets(); }}
+      >
+        <FileText size={12} />
+        <span>交易</span>
+      </button>
+      <button
+        type="button"
         className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
         onClick={() => { setActiveTab('notifications'); clearDetailTargets(); }}
         style={{ position: 'relative' }}
@@ -52,14 +60,6 @@ export default function SideNav({
         <Bell size={12} />
         <span>通知</span>
         {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
-      </button>
-      <button
-        type="button"
-        className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}
-        onClick={() => { setActiveTab('trades'); clearDetailTargets(); }}
-      >
-        <FileText size={12} />
-        <span>交易</span>
       </button>
       <div className="nav-spacer" />
 

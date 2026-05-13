@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { GripVertical, Pin, Star } from 'lucide-react';
+import { GripVertical, Pin, Star, X } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
@@ -34,6 +34,7 @@ type Props = {
   handleDragEnd: () => void;
   handleStockDrop: (code: string) => void;
   handleStockDropAfterPinned: () => void;
+  onRemoveStock: (code: string) => void;
   getStockBadge: (code: string) => { label: string; tone: 'growth' | 'tech' | 'beijing' } | null;
   onRefresh: () => void;
   refreshing: boolean;
@@ -44,7 +45,7 @@ export default function StockTable({
   signalStocks, stocksLoading, stocksError, stockTotalHoldingAmount,
   openStockDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleStockDrop, handleStockDropAfterPinned,
-  getStockBadge, onRefresh, refreshing,
+  onRemoveStock, getStockBadge, onRefresh, refreshing,
 }: Props) {
   return (
     <div className="table-panel">
@@ -105,6 +106,9 @@ export default function StockTable({
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStockDetail(item); }
                   }}
                 >
+                  <button type="button" className="remove-stock-btn" title="移除自选"
+                    onClick={(e) => { e.stopPropagation(); onRemoveStock(item.code); }}
+                  ><X size={10} strokeWidth={1} /></button>
                   <span className="primary">
                     <span className="name-inline">
                       {sortingMode === 'stocks' ? (
@@ -169,7 +173,7 @@ export default function StockTable({
                       {hasCost ? formatNumber(item.cost, 3) : '输入成本价'}
                     </span>
                   )}
-                  <span className="price-line">{formatNumber(item.price, 2)}</span>
+                  <span className="price-line">{formatNumber(item.price, 2)}<span style={{ display: 'inline', marginLeft: 6 }} className={toneClass(item.dailyChangePct)}>{formatPercent(item.dailyChangePct)}</span></span>
                   {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
                     <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                       <span>关注 {formatNumber(item.addedPrice!, 3)}</span>

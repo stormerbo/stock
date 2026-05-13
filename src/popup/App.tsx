@@ -1421,18 +1421,31 @@ function clearIntradayIfStale(
     event.preventDefault();
     event.stopPropagation();
     const rootRect = popupRootRef.current?.getBoundingClientRect();
+    const rootTop = rootRect?.top ?? 0;
+    const rootLeft = rootRect?.left ?? 0;
     const menuWidth = 132;
     const menuHeight = 148;
-    const x = rootRect ? event.clientX - rootRect.left : event.clientX;
-    const y = rootRect ? event.clientY - rootRect.top : event.clientY;
-    const maxX = (rootRect?.width ?? 800) - menuWidth - 8;
-    const maxY = (rootRect?.height ?? 600) - menuHeight - 8;
+    const viewportH = window.innerHeight;
+
+    // 转换为 popup-root 坐标系
+    let calcY = event.clientY - rootTop;
+    let calcX = event.clientX - rootLeft;
+
+    // 如果菜单底部超出视口，则翻转到鼠标上方（留足间隙避免仍被 popup 底部裁剪）
+    if (event.clientY + menuHeight + 12 > viewportH) {
+      calcY = Math.max(8, calcY - menuHeight - 24);
+    }
+    // 确保不超出右侧边界
+    const rootVisibleRight = (rootRect?.right ?? window.innerWidth) - rootLeft;
+    if (calcX + menuWidth + 8 > rootVisibleRight) {
+      calcX = Math.max(8, calcX - menuWidth - 8);
+    }
 
     setRowContextMenu({
       kind,
       code,
-      x: Math.max(8, Math.min(x, maxX)),
-      y: Math.max(8, Math.min(y, maxY)),
+      x: calcX,
+      y: calcY,
     });
   };
 
@@ -1461,12 +1474,24 @@ function clearIntradayIfStale(
   };
 
   const removeStockFromPortfolio = (code: string) => {
+    const holding = stockHoldings.find((h) => h.code === code);
+    if (holding && holding.shares > 0) {
+      if (!window.confirm(`"${holding.name || code}" 有 ${holding.shares} 股持仓，确定要移除吗？`)) {
+        return;
+      }
+    }
     setStockHoldings((prev) => prev.filter((item) => item.code !== code));
     setStockPositions((prev) => prev.filter((item) => item.code !== code));
     setRowContextMenu(null);
   };
 
   const removeFundFromPortfolio = (code: string) => {
+    const holding = fundHoldings.find((h) => h.code === code);
+    if (holding && holding.units > 0) {
+      if (!window.confirm(`"${holding.name || code}" 有 ${holding.units.toFixed(2)} 份持仓，确定要移除吗？`)) {
+        return;
+      }
+    }
     setFundHoldings((prev) => prev.filter((item) => item.code !== code));
     setFundPositions((prev) => prev.filter((item) => item.code !== code));
     setRowContextMenu(null);
@@ -1939,6 +1964,7 @@ function clearIntradayIfStale(
                 handleDragEnd={handleDragEnd}
                 handleStockDrop={handleStockDrop}
                 handleStockDropAfterPinned={handleStockDropAfterPinned}
+                onRemoveStock={removeStockFromPortfolio}
                 getStockBadge={getStockBadge}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
@@ -1965,6 +1991,7 @@ function clearIntradayIfStale(
                 handleDragEnd={handleDragEnd}
                 handleFundDrop={handleFundDrop}
                 handleFundDropAfterPinned={handleFundDropAfterPinned}
+                onRemoveFund={removeFundFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
               />

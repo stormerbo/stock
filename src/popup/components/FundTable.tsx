@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { GripVertical, Pin, Star } from 'lucide-react';
+import { GripVertical, Pin, Star, X } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatLooseNumber, formatPercent, toneClass } from '../utils/format';
@@ -32,6 +32,7 @@ type Props = {
   handleDragEnd: () => void;
   handleFundDrop: (code: string) => void;
   handleFundDropAfterPinned: () => void;
+  onRemoveFund: (code: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
 };
@@ -41,7 +42,7 @@ export default function FundTable({
   fundsLoading, fundsError, fundPositionsLength,
   openFundDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleFundDrop, handleFundDropAfterPinned,
-  onRefresh, refreshing,
+  onRemoveFund, onRefresh, refreshing,
 }: Props) {
   return (
     <div className="table-panel">
@@ -88,6 +89,9 @@ export default function FundTable({
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFundDetail(item); }
                 }}
               >
+                <button type="button" className="remove-stock-btn" title="移除自选"
+                  onClick={(e) => { e.stopPropagation(); onRemoveFund(item.code); }}
+                ><X size={10} strokeWidth={1} /></button>
                 <span className="primary" title={item.name}>
                   <span className="name-inline">
                     {sortingMode === 'funds' ? (
