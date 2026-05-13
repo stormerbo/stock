@@ -38,7 +38,6 @@ import {
 import { fetchDayFqKline } from '../shared/technical-analysis';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/risk-metrics';
 import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
-import { getFundTradesForCode, computeFundPositionFromTrades } from '../shared/fund-trade-history';
 import type {
   PageTab, ThemeMode, IndexDetailTarget, SearchStock,
   RowContextMenuState, SortingMode, StockDetailTarget, FundDetailTarget,
@@ -57,6 +56,7 @@ import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
+import ConfirmModal from './components/ConfirmModal';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const MARKET_STATS_CACHE_KEY = 'marketStats';
@@ -262,6 +262,7 @@ export default function App() {
   const [sectorDetailTarget, setSectorDetailTarget] = useState<{ code: string; name: string } | null>(null);
   const [fundDetailTarget, setFundDetailTarget] = useState<FundDetailTarget | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
+  const [removeConfirm, setRemoveConfirm] = useState<{ code: string; kind: 'stock' | 'fund'; message: string } | null>(null);
   const [sortingMode, setSortingMode] = useState<SortingMode>(null);
   const [stockSortDraft, setStockSortDraft] = useState<string[] | null>(null);
   const [fundSortDraft, setFundSortDraft] = useState<string[] | null>(null);
@@ -1263,15 +1264,6 @@ function clearIntradayIfStale(
     );
   }, []);
 
-  const handleFundTradesChanged = useCallback(async (code: string) => {
-    const trades = await getFundTradesForCode(code);
-    if (trades.length === 0) return;
-    const pos = computeFundPositionFromTrades(trades);
-    setFundHoldings((prev) =>
-      prev.map((h) => h.code === code ? { ...h, units: pos.units, cost: pos.avgCost } : h)
-    );
-  }, []);
-
 
 
   useEffect(() => {
@@ -1473,28 +1465,36 @@ function clearIntradayIfStale(
     setRowContextMenu(null);
   };
 
-  const removeStockFromPortfolio = (code: string) => {
-    const holding = stockHoldings.find((h) => h.code === code);
-    if (holding && holding.shares > 0) {
-      if (!window.confirm(`"${holding.name || code}" 有 ${holding.shares} 股持仓，确定要移除吗？`)) {
-        return;
-      }
-    }
+  const doRemoveStock = (code: string) => {
     setStockHoldings((prev) => prev.filter((item) => item.code !== code));
     setStockPositions((prev) => prev.filter((item) => item.code !== code));
     setRowContextMenu(null);
+    setRemoveConfirm(null);
+  };
+
+  const removeStockFromPortfolio = (code: string) => {
+    const holding = stockHoldings.find((h) => h.code === code);
+    if (holding && holding.shares > 0) {
+      setRemoveConfirm({ code, kind: 'stock', message: `"${holding.name || code}" 有 ${holding.shares} 股持仓，确定要移除吗？` });
+    } else {
+      doRemoveStock(code);
+    }
+  };
+
+  const doRemoveFund = (code: string) => {
+    setFundHoldings((prev) => prev.filter((item) => item.code !== code));
+    setFundPositions((prev) => prev.filter((item) => item.code !== code));
+    setRowContextMenu(null);
+    setRemoveConfirm(null);
   };
 
   const removeFundFromPortfolio = (code: string) => {
     const holding = fundHoldings.find((h) => h.code === code);
     if (holding && holding.units > 0) {
-      if (!window.confirm(`"${holding.name || code}" 有 ${holding.units.toFixed(2)} 份持仓，确定要移除吗？`)) {
-        return;
-      }
+      setRemoveConfirm({ code, kind: 'fund', message: `"${holding.name || code}" 有 ${holding.units.toFixed(2)} 份持仓，确定要移除吗？` });
+    } else {
+      doRemoveFund(code);
     }
-    setFundHoldings((prev) => prev.filter((item) => item.code !== code));
-    setFundPositions((prev) => prev.filter((item) => item.code !== code));
-    setRowContextMenu(null);
   };
 
   const beginSorting = (mode: Exclude<SortingMode, null>) => {
@@ -1998,7 +1998,7 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'trades' ? (
-              <TradeHistoryPage stockNames={stockNameMap} fundNames={fundNameMap} allStockCodes={stockHoldings.map(h => h.code)} allFundCodes={fundHoldings.map(h => h.code)} onStockTradesChanged={handleStockTradesChanged} onFundTradesChanged={handleFundTradesChanged} />
+              <TradeHistoryPage stockNames={stockNameMap} allStockCodes={stockHoldings.map(h => h.code)} onStockTradesChanged={handleStockTradesChanged} />
             ) : null}
 
           </section>
@@ -2117,6 +2117,20 @@ function clearIntradayIfStale(
         {showDemo ? (
           <DemoGuide onComplete={() => setShowDemo(false)} />
         ) : null}
+
+        <ConfirmModal
+          open={removeConfirm !== null}
+          title="移除自选"
+          message={removeConfirm?.message ?? ''}
+          danger
+          confirmLabel="确定移除"
+          onConfirm={() => {
+            if (!removeConfirm) return;
+            if (removeConfirm.kind === 'stock') doRemoveStock(removeConfirm.code);
+            else doRemoveFund(removeConfirm.code);
+          }}
+          onCancel={() => setRemoveConfirm(null)}
+        />
       </div>
     </div>
   );

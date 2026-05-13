@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, X } from 'lucide-react';
 import {
   type StockTradeRecord,
   type TradeType,
@@ -67,6 +67,7 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     void loadTrades();
@@ -169,6 +170,7 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
       note: form.note || undefined,
     });
 
+    setShowAddModal(false);
     setForm(INITIAL_FORM);
     await loadTrades();
   };
@@ -317,129 +319,96 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
           )}
         </div>
 
-        {/* Add Trade Form */}
-        <div className="tag-editor-section">
-          <span className="tag-editor-label">添加交易记录</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-            {/* Row 1: date + type */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="date"
-                className="tag-editor-new-input"
-                style={{ flex: 1 }}
-                value={form.date}
-                onChange={(e) => handleFormChange('date', e.target.value)}
-              />
-              <select
-                className="tag-editor-new-input"
-                style={{ flex: 1, cursor: 'pointer' }}
-                value={form.type}
-                onChange={(e) => handleFormChange('type', e.target.value as TradeType)}
-              >
-                <option value="buy">买入</option>
-                <option value="sell">卖出</option>
-                <option value="dividend">分红</option>
-              </select>
-            </div>
-            {/* Row 2: shares + price */}
-            {form.type !== 'dividend' && (
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  className="tag-editor-new-input"
-                  style={{ flex: 1 }}
-                  type="number"
-                  step="1"
-                  min="1"
-                  placeholder="股数"
-                  value={form.shares}
-                  onChange={(e) => handleFormChange('shares', e.target.value)}
-                />
-                <input
-                  className="tag-editor-new-input"
-                  style={{ flex: 1 }}
-                  type="number"
-                  step="0.001"
-                  min="0"
-                  placeholder="价格（支持3位小数）"
-                  value={form.price}
-                  onChange={(e) => handleFormChange('price', e.target.value)}
-                />
-              </div>
-            )}
-            {/* Row: auto-calculate fees */}
-            {form.type !== 'dividend' && (() => {
-              const est = calcDefaultFees();
-              if (est.total <= 0) return null;
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--text-1)', padding: '2px 4px', background: 'var(--brand-soft)', borderRadius: 4 }}>
-                  <span>预估费用：佣金 ¥{est.commission.toFixed(2)} {form.type === 'sell' ? `+ 印花税 ¥${est.stampTax.toFixed(2)}` : ''} + 过户费 ¥{est.transferFee.toFixed(2)} = <b style={{ color: 'var(--text-0)' }}>¥{est.total.toFixed(2)}</b></span>
-                  <button type="button" style={{ marginLeft: 'auto', padding: '1px 8px', fontSize: 10, borderRadius: 3, border: '1px solid var(--brand)', background: 'var(--brand-soft)', color: 'var(--brand)', cursor: 'pointer', fontWeight: 600 }} onClick={fillDefaultFees}>填入</button>
-                </div>
-              );
-            })()}
-            {/* Row: total + commission */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                className="tag-editor-new-input"
-                style={{ flex: 1 }}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder={form.type === 'dividend' ? '金额（必填）' : '总金额（选填）'}
-                value={form.total}
-                onChange={(e) => handleFormChange('total', e.target.value)}
-              />
-              <input
-                style={{ ...inputStyle, width: 0, flex: 1 }}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="佣金（万2.5, 最低5元）"
-                value={form.commission}
-                onChange={(e) => handleFormChange('commission', e.target.value)}
-              />
-            </div>
-            {/* Row: stampTax + transferFee */}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                style={{ ...inputStyle, width: 0, flex: 1 }}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder={form.type === 'sell' ? '印花税（卖出万5）' : '印花税（仅卖出）'}
-                value={form.stampTax}
-                onChange={(e) => handleFormChange('stampTax', e.target.value)}
-              />
-              <input
-                style={{ ...inputStyle, width: 0, flex: 1 }}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="过户费（万0.1）"
-                value={form.transferFee}
-                onChange={(e) => handleFormChange('transferFee', e.target.value)}
-              />
-              <div style={{ ...inputStyle, width: 0, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6, fontSize: 10, borderColor: 'transparent', background: 'transparent' }}>
-                合计: ¥{totalFeeInput().toFixed(2)}
-              </div>
-            </div>
-            {/* Row 5: note */}
-            <input
-              className="tag-editor-new-input"
-              placeholder="备注（选填）"
-              value={form.note}
-              onChange={(e) => handleFormChange('note', e.target.value)}
-            />
-            {/* Error + submit */}
-            {error && (
-              <div style={{ fontSize: 11, color: '#ef4444' }}>{error}</div>
-            )}
-            <button type="button" className="tag-editor-btn tag-editor-btn-save" style={{ alignSelf: 'flex-end' }} onClick={handleAddTrade}>
-              <Plus size={12} style={{ marginRight: 4 }} /> 添加记录
-            </button>
-          </div>
+        {/* Add Trade Button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <button type="button" className="tag-editor-btn tag-editor-btn-save" onClick={() => { setForm(INITIAL_FORM); setShowAddModal(true); }}>
+            <Plus size={12} style={{ marginRight: 4 }} /> 新增交易
+          </button>
         </div>
       </div>
+
+      {/* ─── Add Trade Modal ─── */}
+      {showAddModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.45)',
+        }} onClick={() => setShowAddModal(false)}>
+            <div style={{
+              background: 'var(--bg-1)', borderRadius: 12, padding: 20,
+              width: 420, maxHeight: '90vh', overflow: 'auto',
+              display: 'flex', flexDirection: 'column', gap: 10,
+              border: '1px solid var(--glass-border)', boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>新增交易记录</span>
+                <button type="button" onClick={() => setShowAddModal(false)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, border: 'none', background: 'transparent', color: 'var(--text-1)', cursor: 'pointer', borderRadius: 4 }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Row 1: date + type */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input type="date" className="tag-editor-new-input" style={{ flex: 1 }}
+                  value={form.date} onChange={(e) => handleFormChange('date', e.target.value)} />
+                <select className="tag-editor-new-input" style={{ flex: 1, cursor: 'pointer' }}
+                  value={form.type} onChange={(e) => handleFormChange('type', e.target.value as TradeType)}>
+                  <option value="buy">买入</option>
+                  <option value="sell">卖出</option>
+                  <option value="dividend">分红</option>
+                </select>
+              </div>
+
+              {/* Row 2: shares + price */}
+              {form.type !== 'dividend' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input className="tag-editor-new-input" style={{ flex: 1 }} type="number" step="1" min="1" placeholder="股数"
+                    value={form.shares} onChange={(e) => handleFormChange('shares', e.target.value)} />
+                  <input className="tag-editor-new-input" style={{ flex: 1 }} type="number" step="0.001" min="0" placeholder="价格（支持3位小数）"
+                    value={form.price} onChange={(e) => handleFormChange('price', e.target.value)} />
+                </div>
+              )}
+
+              {/* Auto-calculate fees */}
+              {form.type !== 'dividend' && (() => {
+                const est = calcDefaultFees();
+                if (est.total <= 0) return null;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--text-1)', padding: '6px 8px', background: 'var(--brand-soft)', borderRadius: 4 }}>
+                    <span>预估：¥{est.commission.toFixed(2)} 佣金 {form.type === 'sell' ? `+ ¥${est.stampTax.toFixed(2)} 印花税` : ''} + ¥{est.transferFee.toFixed(2)} 过户费 = <b>¥{est.total.toFixed(2)}</b></span>
+                    <button type="button" style={{ marginLeft: 'auto', padding: '2px 10px', fontSize: 10, borderRadius: 4, border: '1px solid var(--brand)', background: 'var(--brand-soft)', color: 'var(--brand)', cursor: 'pointer', fontWeight: 600 }} onClick={fillDefaultFees}>填入</button>
+                  </div>
+                );
+              })()}
+
+              {/* Fee inputs */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input style={{ ...inputStyle, flex: 1 }} type="number" step="0.01" min="0"
+                  placeholder={form.type === 'dividend' ? '金额（必填）' : '总金额（选填）'}
+                  value={form.total} onChange={(e) => handleFormChange('total', e.target.value)} />
+                <input style={{ ...inputStyle, flex: 1 }} type="number" step="0.01" min="0" placeholder="佣金"
+                  value={form.commission} onChange={(e) => handleFormChange('commission', e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input style={{ ...inputStyle, flex: 1 }} type="number" step="0.01" min="0"
+                  placeholder={form.type === 'sell' ? '印花税（卖出万5）' : '印花税（仅卖出）'}
+                  value={form.stampTax} onChange={(e) => handleFormChange('stampTax', e.target.value)} />
+                <input style={{ ...inputStyle, flex: 1 }} type="number" step="0.01" min="0" placeholder="过户费"
+                  value={form.transferFee} onChange={(e) => handleFormChange('transferFee', e.target.value)} />
+              </div>
+
+              <input className="tag-editor-new-input" placeholder="备注（选填）"
+                value={form.note} onChange={(e) => handleFormChange('note', e.target.value)} />
+
+              {error && <div style={{ fontSize: 11, color: '#ef4444' }}>{error}</div>}
+
+              <button type="button" className="tag-editor-btn tag-editor-btn-save" style={{ alignSelf: 'flex-end' }} onClick={handleAddTrade}>
+                <Plus size={12} style={{ marginRight: 4 }} /> 确认添加
+              </button>
+            </div>
+          </div>
+      )}
     </section>
   );
 }

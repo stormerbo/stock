@@ -11,6 +11,8 @@ import {
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../../shared/risk-metrics";
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
 import { fetchStockSectors, type StockSector } from "../../shared/sector";
+import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
+import TradeHistoryView from "./TradeHistoryView";
 
 const UP_COLOR = "#e45555";
 const DN_COLOR = "#2aa568";
@@ -85,7 +87,7 @@ function fractionToX(frac: number, svgWidth: number): number {
   return clamp(frac, 0, 1) * svgWidth;
 }
 
-type TabValue = StockPeriod | "fundamental";
+type TabValue = StockPeriod | "fundamental" | "trades";
 
 const PERIOD_TABS: Array<{ label: string; value: TabValue }> = [
   { label: "分时", value: "minute" },
@@ -910,6 +912,14 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [fundamentals, setFundamentals] = useState<FundamentalData | null>(null);
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
   const [sectors, setSectors] = useState<StockSector[]>([]);
+  const [trades, setTrades] = useState<StockTradeRecord[]>([]);
+
+  const hasTrades = trades.length > 0;
+
+  // 加载交易记录
+  useEffect(() => {
+    getTradesForStock(code).then(setTrades);
+  }, [code]);
 
   useEffect(() => {
     let cancelled = false;
@@ -930,6 +940,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         }
         return;
       }
+      if (period === "trades") return;
 
       setLoading(true);
       try {
@@ -989,7 +1000,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         <div className="detail-loading">详情加载中...</div>
       ) : null}
 
-      {error && !detail && period !== "fundamental" ? (
+      {error && !detail && period !== "fundamental" && period !== "trades" ? (
         <div className="detail-error">详情获取失败：{error}</div>
       ) : null}
 
@@ -1012,7 +1023,15 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         </div>
       ) : null}
 
-      {detail && period !== "fundamental" ? (
+      {period === "trades" ? (
+        <div className="detail-body">
+          <TradeHistoryView code={code} name={detail?.name || fallbackName}
+            onBack={() => setPeriod("minute")}
+            onUpdate={() => getTradesForStock(code).then(setTrades)} />
+        </div>
+      ) : null}
+
+      {detail && period !== "fundamental" && period !== "trades" ? (
         <div className="detail-body">
           {/* ─── Quote Header ─── */}
           <div className="detail-quote-header">
@@ -1088,6 +1107,12 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
                 {tab.label}
               </button>
             ))}
+            {hasTrades && (
+              <button type="button"
+                className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
+                onClick={() => setPeriod("trades")}
+              >交易</button>
+            )}
           </div>
         </div>
       ) : null}

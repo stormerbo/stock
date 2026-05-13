@@ -173,7 +173,7 @@ export default function StockTable({
                       {hasCost ? formatNumber(item.cost, 3) : '输入成本价'}
                     </span>
                   )}
-                  <span className="price-line">{formatNumber(item.price, 2)}<span style={{ display: 'inline', marginLeft: 6 }} className={toneClass(item.dailyChangePct)}>{formatPercent(item.dailyChangePct)}</span></span>
+                  <span className="price-line">{formatNumber(item.price, 2)}<span style={{ display: 'inline', marginLeft: 6 }} className={toneClass(item.price - item.prevClose)}>{formatPercent(item.prevClose > 0 ? (item.price - item.prevClose) / item.prevClose * 100 : 0)}</span></span>
                   {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
                     <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                       <span>关注 {formatNumber(item.addedPrice!, 3)}</span>
