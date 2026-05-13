@@ -615,6 +615,7 @@ async function refreshStocks() {
         await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });
       }
     }
+    void saveDailyAssetSnapshot();
   } catch (e) {
     console.warn('[Portfolio Pulse] stock refresh failed:', e);
     void notifyApiError('股票行情', 'stockQuoteErrorAt');
