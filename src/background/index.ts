@@ -357,6 +357,7 @@ function clearAlarms() {
   chrome.alarms.clear(ALARM_FUND);
   chrome.alarms.clear(ALARM_INDEX);
   chrome.alarms.clear(ALARM_TECH_REPORT);
+  chrome.alarms.clear(ALARM_UPDATE_CHECK);
 }
 
 async function handleAlarm(name: string) {
@@ -364,6 +365,7 @@ async function handleAlarm(name: string) {
   else if (name === ALARM_FUND) await refreshFunds();
   else if (name === ALARM_INDEX) await refreshIndexes();
   else if (name === ALARM_TECH_REPORT) await generateDailyTechnicalReport();
+  else if (name === ALARM_UPDATE_CHECK) await checkForUpdate();
 }
 
 // -----------------------------------------------------------
@@ -405,15 +407,20 @@ async function checkForUpdate(): Promise<{ found: boolean }> {
     if (isNewerVersion(latestVer, currentVer)) {
       const info: UpdateInfo = { version: latestVer, url: data.html_url, notified: true };
       await chrome.storage.local.set({ [UPDATE_INFO_KEY]: info });
-      await chrome.storage.local.set({ [UPDATE_COOLDOWN_KEY]: Date.now() });
 
-      await chrome.notifications.create('update_available', {
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('public/icon128.png'),
-        title: '有新版本可用',
-        message: `赚钱助手 v${latestVer} 已发布，点击查看详情`,
-        requireInteraction: true,
-      });
+      // Cooldown: 24 小时内不重复弹通知
+      const cooldownRaw = (await chrome.storage.local.get(UPDATE_COOLDOWN_KEY))[UPDATE_COOLDOWN_KEY] as number | undefined;
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      if (!cooldownRaw || Date.now() - cooldownRaw > cooldownMs) {
+        await chrome.storage.local.set({ [UPDATE_COOLDOWN_KEY]: Date.now() });
+        await chrome.notifications.create('update_available', {
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('public/icon128.png'),
+          title: '有新版本可用',
+          message: `赚钱助手 v${latestVer} 已发布，点击查看详情`,
+          requireInteraction: true,
+        });
+      }
       return { found: true };
     }
     return { found: false };
@@ -435,6 +442,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 function startRefreshLoop() {
   clearAlarms();
+  // 每 6 小时检查一次 GitHub 新版本
+  chrome.alarms.create(ALARM_UPDATE_CHECK, { periodInMinutes: 6 * 60 });
   void loadRefreshConfig().then((config) => {
     setupAlarms(config);
     // 立即刷新一次
@@ -1590,10 +1599,13 @@ function formatBadgeNumber(value: number): string {
 // Event listeners
 // -----------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(async () => {
-  const existing = await chrome.storage.sync.get(BADGE_STORAGE_KEY);
-  if (!existing[BADGE_STORAGE_KEY]) {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    // 首次安装：初始化默认配置
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
+  } else if (details.reason === 'update') {
+    // 版本升级
+    console.log(`[bg] updated from ${details.previousVersion} to ${chrome.runtime.getManifest().version}`);
   }
   startRefreshLoop();
   // 等数据刷新后更新悬浮标题

@@ -103,7 +103,7 @@ declare namespace chrome {
     function getManifest(): Manifest;
 
     const onInstalled: {
-      addListener(callback: (details: { reason: string }) => void): void;
+      addListener(callback: (details: { reason: string; previousVersion?: string }) => void): void;
     };
 
     const onMessage: {

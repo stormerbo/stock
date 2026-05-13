@@ -82,12 +82,6 @@ type FundYieldPoint = {
   benchmarkName: string;
 };
 
-type IntradayValPoint = {
-  time: string;
-  changePct: number;
-  nav?: number;
-};
-
 type FundHoldingStock = {
   code: string;
   name: string;
@@ -103,7 +97,6 @@ type FundDetailData = {
   navHistory3m: FundNavPoint[];
   navHistory5y: FundNavPoint[];
   yieldHistory: FundYieldPoint[];
-  intradayValuation: IntradayValPoint[];
   topHoldings: FundHoldingStock[];
   holdingReportDate: string;
   estimatedNav: number;
@@ -303,68 +296,6 @@ async function fetchYieldDiagram(code: string): Promise<{ points: FundYieldPoint
   }
 }
 
-/** 5. 分时估值明细 — 优先调用 FundValuationDetail API（仅支持指数/ETF），无数据时回退到 fundgz 单点 */
-async function fetchIntradayValuation(code: string): Promise<IntradayValPoint[]> {
-  // 1) 尝试 FundValuationDetail（支持指数基金、ETF 等，返回完整分时数据）
-  try {
-    const params = new URLSearchParams({
-      FCODE: code,
-      deviceid: 'Wap',
-      plat: 'Wap',
-      product: 'EFund',
-      version: '2.0.0',
-    });
-    const url = `https://fundcomapi.tiantianfunds.com/mm/fundTrade/FundValuationDetail?${params}`;
-    const text = await proxyFetchText(url);
-    const data = JSON.parse(text) as { data?: string | null };
-    if (data.data) {
-      // data.data 是嵌套的 JSON 字符串，需要二次解析
-      let inner: { Datas?: string[]; ErrCode?: number; Expansion?: { GZTIME?: string; DWJZ?: string; GSZZL?: string } };
-      try {
-        inner = JSON.parse(data.data);
-      } catch {
-        // 不是有效 JSON 字符串（部分基金返回格式不同），回退到 fundgz
-        inner = {};
-      }
-      const items = inner.Datas ?? [];
-      if (items.length > 0) {
-        const points: IntradayValPoint[] = [];
-        for (const item of items) {
-          const parts = item.split(',');
-          if (parts.length >= 3) {
-            const time = parts[1];
-            const changePct = Number(parts[2]);
-            if (time && Number.isFinite(changePct)) {
-              points.push({ time, changePct });
-            }
-          }
-        }
-        if (points.length > 0) return points;
-      }
-    }
-  } catch (e) {
-    console.warn('[fundIntraday] FundValuationDetail API failed:', e);
-  }
-
-  // 2) 回退：从 fundgz 获取当前单点估值（所有基金都支持）
-  try {
-    const text = await proxyFetchText(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`);
-    const match = text.match(/jsonpgz\((.*)\);?/);
-    if (!match) return [];
-    const gzData = JSON.parse(match[1]) as { gszzl?: string; gztime?: string };
-    const gszzl = toNumber(gzData.gszzl);
-    const gztime = (gzData.gztime || '').trim();
-    if (!Number.isFinite(gszzl) || !gztime) return [];
-    const timeMatch = gztime.match(/(\d{1,2}:\d{2})/);
-    const timeStr = timeMatch ? timeMatch[1] : '';
-    if (!timeStr) return [];
-    return [{ time: timeStr, changePct: gszzl }];
-  } catch (e) {
-    console.warn('[fundIntraday] fundgz fallback failed:', e);
-    return [];
-  }
-}
-
 /** 6. 十大重仓股 + 实时股价 */
 async function fetchTopHoldings(code: string): Promise<{ holdings: FundHoldingStock[]; reportDate: string }> {
   try {
@@ -453,7 +384,7 @@ async function fetchTopHoldings(code: string): Promise<{ holdings: FundHoldingSt
 // -----------------------------------------------------------
 
 async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promise<FundDetailData> {
-  // Parallel fetch: estimate, base info, nav diagrams (1m + 3m + 5y), yield diagram, intraday valuation, holdings
+  // Parallel fetch: estimate, base info, nav diagrams (1m + 3m + 5y), yield diagram, holdings
   console.log('[fetchFundDetail] start:', code);
   const [
     gzResult,
@@ -462,7 +393,6 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     nav3mResult,
     nav5yResult,
     yieldResult,
-    intradayResult,
     holdingsResult,
   ] = await Promise.allSettled([
     fetchGzEstimate(code),
@@ -471,7 +401,6 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     fetchNavDiagram(code, '3y'),     // 近3月
     fetchNavDiagram(code, '5n'),     // 近5年
     fetchYieldDiagram(code),
-    fetchIntradayValuation(code),
     fetchTopHoldings(code),
   ]);
   console.log('[fetchFundDetail] allSettled done:', code);
@@ -514,7 +443,6 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
   const navHistory3m = nav3mResult.status === 'fulfilled' ? nav3mResult.value : [];
   const navHistory5y = nav5yResult.status === 'fulfilled' ? nav5yResult.value : [];
   const { points: yieldHistory, benchmarkName: _bn } = yieldResult.status === 'fulfilled' ? yieldResult.value : { points: [], benchmarkName: '' };
-  const intradayValuation = intradayResult.status === 'fulfilled' ? intradayResult.value : [];
   const { holdings: topHoldings, reportDate: holdingReportDate } = holdingsResult.status === 'fulfilled' ? holdingsResult.value : { holdings: [], reportDate: '' };
 
   return {
@@ -523,7 +451,6 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     navHistory3m,
     navHistory5y,
     yieldHistory,
-    intradayValuation,
     topHoldings,
     holdingReportDate,
     ...estimate,
