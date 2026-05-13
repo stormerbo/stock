@@ -7,6 +7,7 @@ import {
   isTradingHours,
   normalizeStockCode,
   pMap,
+  type DailyAssetSnapshot,
   type FundHoldingConfig,
   type FundPosition,
   type MarketIndexQuote,
@@ -1287,6 +1288,33 @@ async function generateDailyTechnicalReport() {
   }
 }
 
+/** 每天保存一次总资产快照 */
+const DAILY_SNAPSHOT_KEY = 'dailyAssetSnapshots';
+
+async function saveDailyAssetSnapshot() {
+  if (!isTradingHours()) return;
+  const today = getShanghaiToday();
+  const result = await chrome.storage.local.get(['stockPositions', 'fundPositions', DAILY_SNAPSHOT_KEY]);
+  const snapshots = (result[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
+  if (snapshots[today]) return;
+
+  const stockPositions = (result.stockPositions ?? []) as StockPosition[];
+  const fundPositions = (result.fundPositions ?? []) as FundPosition[];
+
+  const stockMarketValue = stockPositions.reduce((s, p) =>
+    Number.isFinite(p.price) && p.shares > 0 ? s + p.price * p.shares : s, 0);
+  const fundHoldingAmount = fundPositions.reduce((s, p) =>
+    Number.isFinite(p.holdingAmount) ? s + p.holdingAmount : s, 0);
+
+  snapshots[today] = {
+    date: today,
+    totalAssets: Math.round((stockMarketValue + fundHoldingAmount) * 100) / 100,
+    stockMarketValue: Math.round(stockMarketValue * 100) / 100,
+    fundHoldingAmount: Math.round(fundHoldingAmount * 100) / 100,
+  };
+  await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
+}
+
 async function refreshFunds() {
   if (!isTradingHours()) return;
   if (refreshFundsInFlight) return;
@@ -1310,6 +1338,7 @@ async function refreshFunds() {
     }
     await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
     void updateHoverTitleFromStorage();
+    void saveDailyAssetSnapshot();
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
     void notifyApiError('基金净值', 'fundErrorAt');

@@ -59,6 +59,13 @@ export type FundPosition = {
   updatedAt: string;
 };
 
+export type DailyAssetSnapshot = {
+  date: string;
+  totalAssets: number;
+  stockMarketValue: number;
+  fundHoldingAmount: number;
+};
+
 export type MarketIndexQuote = {
   code: string;
   label: string;

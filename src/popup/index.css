@@ -5046,3 +5046,109 @@ body.theme-light .analytics-section {
   padding: 2px 6px;
   margin-left: auto;
 }
+
+/* ─── Asset Curve Chart ─── */
+.asset-curve-card {
+  background: color-mix(in srgb, var(--glass-bg-strong) 25%, transparent);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.asset-curve-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.asset-curve-summary {
+  font-size: 11px;
+  color: var(--text-1);
+}
+
+.asset-curve-summary strong {
+  color: var(--text-0);
+  font-size: 13px;
+}
+
+.asset-curve-chart-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.asset-curve-svg {
+  width: 100%;
+  display: block;
+}
+
+.asset-curve-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.asset-curve-gridline {
+  stroke: color-mix(in srgb, var(--line) 60%, transparent);
+  stroke-width: 1;
+}
+
+.asset-curve-y-label {
+  fill: var(--text-2);
+  font-size: 10px;
+}
+
+.asset-curve-x-label {
+  fill: var(--text-2);
+  font-size: 9px;
+}
+
+.asset-curve-line {
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.asset-curve-dot {
+  fill: var(--brand);
+  cursor: pointer;
+  transition: r 0.1s;
+}
+
+.asset-curve-dot.active {
+  fill: #fff;
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+
+.asset-curve-crosshair {
+  stroke: color-mix(in srgb, var(--text-1) 25%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.asset-curve-tooltip-bg {
+  fill: color-mix(in srgb, var(--bg-1) 92%, white);
+  stroke: var(--glass-border);
+  stroke-width: 1;
+}
+
+.asset-curve-tooltip-date {
+  fill: var(--text-1);
+  font-size: 10px;
+}
+
+.asset-curve-tooltip-val {
+  fill: var(--text-0);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.asset-curve-tooltip-detail {
+  fill: var(--text-2);
+  font-size: 9px;
+}
