@@ -10,7 +10,6 @@ import {
 } from '../stockDetail';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../../shared/risk-metrics";
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
-import { fetchStockSectors, type StockSector } from "../../shared/sector";
 import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
 import TradeHistoryView from "./TradeHistoryView";
 
@@ -911,7 +910,6 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [refreshAt, setRefreshAt] = useState(0);
   const [fundamentals, setFundamentals] = useState<FundamentalData | null>(null);
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
-  const [sectors, setSectors] = useState<StockSector[]>([]);
   const [trades, setTrades] = useState<StockTradeRecord[]>([]);
 
   const hasTrades = trades.length > 0;
@@ -966,21 +964,6 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
       window.clearInterval(timer);
     };
   }, [code, fallbackName, period, refreshAt]);
-
-  // 获取所属板块
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const list = await fetchStockSectors(code);
-        if (!cancelled) setSectors(list);
-      } catch {
-        // non-critical
-      }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, [code]);
 
   return (
     <section className="stock-detail-panel">
@@ -1068,29 +1051,6 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
               <RiskMetrics kline={detail.kline} />
             ) : null}
           </div>
-
-          {/* ─── Sector Chips ─── */}
-          {sectors.length > 0 ? (
-            <div className="stock-sectors-row">
-              {sectors.map((s) => (
-                <button
-                  key={s.code}
-                  type="button"
-                  className="sector-chip"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (s.code) onSelectSector?.(s.code, s.name);
-                  }}
-                  title={s.code ? `查看 ${s.name} 成分股` : s.name}
-                >
-                  <span className="sector-chip-name">{s.name}</span>
-                  <span className={`sector-chip-change ${Number.isFinite(s.changePct) ? (s.changePct >= 0 ? 'up' : 'down') : ''}`}>
-                    {Number.isFinite(s.changePct) ? `${s.changePct >= 0 ? '+' : ''}${s.changePct.toFixed(2)}%` : '--'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
 
           {/* ─── Chart ─── */}
           <KlineChart detail={detail} />
