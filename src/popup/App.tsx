@@ -1,16 +1,17 @@
-import { Component, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, TrendingUp, WalletCards, X } from 'lucide-react';
-import StockDetailView from './StockDetailView';
-import ScoreDetailView from './ScoreDetailView';
-import SectorDetailView from './SectorDetailView';
-import IndexDetailModal from './IndexDetailModal';
-import FundDetailView from './FundDetailView';
-import DiagnosticPanel from './DiagnosticPanel';
-import AnalyticsView from './AnalyticsView';
-import TagBadge from './TagBadge';
-import TagFilterBar from './TagFilterBar';
-import TagEditor from './TagEditor';
-import DemoGuide, { loadDemoFlag } from './DemoGuide';
+import StockDetailView from './views/StockDetailView';
+import ScoreDetailView from './views/ScoreDetailView';
+import SectorDetailView from './views/SectorDetailView';
+import IndexDetailModal from './views/IndexDetailModal';
+import FundDetailView from './views/FundDetailView';
+import DiagnosticPanel from './views/DiagnosticPanel';
+import AnalyticsView from './views/AnalyticsView';
+import TagBadge from './tags/TagBadge';
+import TagFilterBar from './tags/TagFilterBar';
+import TagEditor from './tags/TagEditor';
+import DemoGuide, { loadDemoFlag } from './views/DemoGuide';
+import TradeHistoryPage from './views/TradeHistoryPage';
 import {
   loadTagConfig,
   saveTagConfig,
@@ -40,113 +41,47 @@ import { computeStockScore, type StockScoreResult } from '../shared/scoring';
 import { fetchDayFqKline } from '../shared/technical-analysis';
 import { fetchFundamentals } from '../shared/fundamentals';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/risk-metrics';
+import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
+import { getFundTradesForCode, computeFundPositionFromTrades } from '../shared/fund-trade-history';
+import type {
+  PageTab, ThemeMode, IndexDetailTarget, SearchStock,
+  RowContextMenuState, SortingMode, StockDetailTarget, FundDetailTarget,
+  TradeHistoryTarget, StockRow, FundRow, NotificationRecord, PortfolioConfig,
+  IntradayDataPoint, MarketStats as MarketStatsType,
+} from './types';
+import { formatNumber, formatLooseNumber, formatMarketAmount, formatPercent, formatRatioPercent, toneClass, formatRelativeTime, getShanghaiDateKey, resolvePrevTurnover, deriveMarketStats } from './utils/format';
+import { applyPinnedOrder, insertAfterPinned, reorderCodes, moveCodeAfterPinned, sortRowsByCodes } from './utils/sorting';
+import { STORAGE_KEYS, EMPTY_PORTFOLIO, parseStockHoldings, parseFundHoldings, loadPortfolioConfig, savePortfolioConfig } from './utils/portfolio-io';
+import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/search-suggestions';
+import FloatingRefreshBtn from './components/FloatingRefreshBtn';
+import DetailErrorBoundary from './components/DetailErrorBoundary';
+import IntradayChart from './components/IntradayChart';
+import ScoreBadge from './components/ScoreBadge';
+import SideNav from './components/SideNav';
+import AccountDashboard from './components/AccountDashboard';
+import NotificationPanel from './components/NotificationPanel';
+import StockTable from './components/StockTable';
+import FundTable from './components/FundTable';
+
 const BADGE_STORAGE_KEY = 'badgeConfig';
-
-type PageTab = 'stocks' | 'funds' | 'account' | 'notifications' | 'analytics';
-type ThemeMode = 'dark' | 'light';
-
-type IndexDetailTarget = {
-  code: string;
-  label: string;
-};
-
-type SearchStock = {
-  code: string;
-  name: string;
-};
-
-type FundSearchEntry = SearchStock & {
-  jp: string;
-  category: string;
-  fullNamePinyin: string;
-  haystack: string;
-};
-
-type RowContextMenuState =
-  | { kind: 'stock'; code: string; x: number; y: number }
-  | { kind: 'fund'; code: string; x: number; y: number };
-
-type SortingMode = 'stocks' | 'funds' | null;
-
-type StockDetailTarget = {
-  code: string;
-  name: string;
-};
-
-type FundDetailTarget = {
-  code: string;
-  name: string;
-};
-
-type StockRow = StockPosition & {
-  pinned: boolean;
-  special: boolean;
-  tags: string[];
-  addedPrice?: number;
-  addedAt?: string;
-};
-
-type FundRow = FundPosition & {
-  pinned: boolean;
-  special: boolean;
-  tags: string[];
-  addedNav?: number;
-  addedAt?: string;
-};
-
-type NotificationRecord = {
-  id: string;
-  code: string;
-  name: string;
-  message: string;
-  ruleType: string;
-  price: number;
-  changePct: number;
-  firedAt: number;
-  read: boolean;
-};
-
-type PortfolioConfig = {
-  stockHoldings: StockHoldingConfig[];
-  fundHoldings: FundHoldingConfig[];
-};
-
-const EMPTY_PORTFOLIO: PortfolioConfig = {
-  stockHoldings: [],
-  fundHoldings: [],
-};
-
-const TRADING_MINUTES = 240;
-const MORNING_START = 9 * 60 + 30;
-const MORNING_END = 11 * 60 + 30;
-const AFTERNOON_START = 13 * 60;
-const AFTERNOON_END = 15 * 60;
-
-const STORAGE_KEYS = {
-  stockHoldings: 'stockHoldings',
-  fundHoldings: 'fundHoldings',
-};
 const MARKET_STATS_CACHE_KEY = 'marketStats';
 const MARKET_STATS_UPDATED_AT_KEY = 'marketStatsUpdatedAt';
 const MARKET_STATS_HISTORY_KEY = 'marketStatsHistory';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
 
-function formatRelativeTime(timestampMs: number): string {
-  const diffMs = Date.now() - timestampMs;
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec} 秒前`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} 分钟前`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} 小时前`;
-  const d = new Date(timestampMs);
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' | 'beijing' } | null {
+  const plain = normalizeStockCode(code);
+  if (!plain) return null;
+  if (/^(300|301)/.test(plain)) return { label: '创', tone: 'growth' };
+  if (/^(688|689)/.test(plain)) return { label: '科', tone: 'tech' };
+  if (/^(430|440|830|831|832|833|835|836|837|838|839|870|871|872|873|874|875|876|877|878|879|880|881|882|883|884|885|886|887|888|889)/.test(plain)) {
+    return { label: '北', tone: 'beijing' };
+  }
+  return null;
 }
 
-// Render notification message with colored prices and change percentages
-function renderNotificationMessage(message: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  // Match patterns: ¥123.45, +1.23%, -1.23%, 上涨至 ¥123.45, 上涨/下跌 1.23%
+function renderNotificationMessage(message: string): ReactNode {
+  const parts: ReactNode[] = [];
   const regex = /([¥¥]?\d+\.\d+|\+\d+\.\d+%|-\d+\.\d+%)/g;
   let lastIndex = 0;
   let match;
@@ -155,7 +90,6 @@ function renderNotificationMessage(message: string): React.ReactNode {
       parts.push(message.slice(lastIndex, match.index));
     }
     const text = match[0];
-    // Determine color: negative numbers and percentages = down, positive = up
     if (text.startsWith('-')) {
       parts.push(<span key={match.index} className="down notif-value">{text}</span>);
     } else if (text.startsWith('+') || text.includes('%')) {
@@ -170,585 +104,6 @@ function renderNotificationMessage(message: string): React.ReactNode {
   }
   return parts.length > 0 ? parts : message;
 }
-
-function getShanghaiDateKey(timestampMs: number): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date(timestampMs));
-
-  const year = parts.find((item) => item.type === 'year')?.value ?? '0000';
-  const month = parts.find((item) => item.type === 'month')?.value ?? '00';
-  const day = parts.find((item) => item.type === 'day')?.value ?? '00';
-  return `${year}-${month}-${day}`;
-}
-
-function resolvePrevTurnover(
-  history: Record<string, number>,
-  referenceDate: string,
-): number {
-  const dates = Object.keys(history)
-    .filter((date) => date < referenceDate && Number.isFinite(history[date]))
-    .sort();
-  if (dates.length === 0) return Number.NaN;
-  return history[dates[dates.length - 1]];
-}
-
-function deriveMarketStats(
-  stats: MarketStats,
-  history: Record<string, number>,
-  referenceDate: string,
-): MarketStats {
-  const historyPrev = resolvePrevTurnover(history, referenceDate);
-  const prevTurnover = Number.isFinite(stats.prevTurnover) ? stats.prevTurnover : historyPrev;
-  const volumeChange = Number.isFinite(stats.volumeChange)
-    ? stats.volumeChange
-    : Number.isFinite(prevTurnover)
-      ? stats.turnover - prevTurnover
-    : Number.NaN;
-
-  return {
-    ...stats,
-    prevTurnover: Number.isFinite(prevTurnover) ? Math.round(prevTurnover * 100) / 100 : Number.NaN,
-    volumeChange: Number.isFinite(volumeChange) ? Math.round(volumeChange * 100) / 100 : Number.NaN,
-  };
-}
-
-let fundSearchIndexPromise: Promise<FundSearchEntry[]> | null = null;
-
-type IntradayDataPoint = {
-  time: string;
-  price: number;
-  minuteIndex: number;
-};
-
-function getMinuteIndex(timeStr: string): number | null {
-  const [h, m] = timeStr.split(':').map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  const minutesFromMidnight = h * 60 + m;
-  
-  if (minutesFromMidnight >= MORNING_START && minutesFromMidnight <= MORNING_END) {
-    return minutesFromMidnight - MORNING_START;
-  }
-  if (minutesFromMidnight >= AFTERNOON_START && minutesFromMidnight <= AFTERNOON_END) {
-    return (MORNING_END - MORNING_START) + (minutesFromMidnight - AFTERNOON_START);
-  }
-  return null;
-}
-
-function formatNumber(value: number, digits = 2): string {
-  if (!Number.isFinite(value)) return '-';
-  return value.toLocaleString('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatLooseNumber(value: number, maximumFractionDigits = 4): string {
-  if (!Number.isFinite(value)) return '-';
-  return value.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits,
-  });
-}
-
-function formatMarketAmount(value: number): string {
-  if (!Number.isFinite(value)) return '--';
-  return value >= 10000
-    ? `${(value / 10000).toFixed(2)}万亿`
-    : `${formatLooseNumber(value, 0)}亿`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return '-';
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-}
-
-// 可拖拽悬浮刷新按钮（相对父容器 .table-panel 定位）
-function FloatingRefreshBtn({ onRefresh, spinning }: { onRefresh: () => void; spinning: boolean }) {
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const dragging = useRef(false);
-  const dragOrigin = useRef({ x: 0, y: 0 });
-  const posOrigin = useRef({ right: 12, bottom: 12 });
-  const [pos, setPos] = useState<{ right: number; bottom: number }>({ right: 12, bottom: 12 });
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    posOrigin.current = pos;
-    const onMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const dx = ev.clientX - dragOrigin.current.x;
-      const dy = ev.clientY - dragOrigin.current.y;
-      setPos({
-        right: Math.max(0, posOrigin.current.right - dx),
-        bottom: Math.max(0, posOrigin.current.bottom - dy),
-      });
-    };
-    const onUp = () => {
-      dragging.current = false;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (dragging.current) return;
-    e.stopPropagation();
-    onRefresh();
-  };
-
-  return (
-    <button
-      ref={btnRef}
-      type="button"
-      className="floating-refresh-btn"
-      style={{ right: pos.right, bottom: pos.bottom }}
-      onMouseDown={onMouseDown}
-      onClick={handleClick}
-      title="刷新数据"
-    >
-      <RefreshCw size={14} className={spinning ? 'spinning' : ''} />
-    </button>
-  );
-}
-
-function formatRatioPercent(value: number): string {
-  if (!Number.isFinite(value)) return '-';
-  return `${value.toFixed(2)}%`;
-}
-
-function toneClass(value: number): string {
-  if (!Number.isFinite(value)) return '';
-  return value >= 0 ? 'up' : 'down';
-}
-
-function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' | 'beijing' } | null {
-  const plain = normalizeStockCode(code);
-  if (!plain) return null;
-  if (/^(300|301)/.test(plain)) return { label: '创', tone: 'growth' };
-  if (/^(688|689)/.test(plain)) return { label: '科', tone: 'tech' };
-  if (/^(430|440|830|831|832|833|835|836|837|838|839|870|871|872|873|874|875|876|877|878|879|880|881|882|883|884|885|886|887|888|889)/.test(plain)) {
-    return { label: '北', tone: 'beijing' };
-  }
-  return null;
-}
-
-function applyPinnedOrder<T extends { code: string; pinned?: boolean }>(items: T[], code: string): T[] {
-  const target = items.find((item) => item.code === code);
-  if (!target) return items;
-
-  if (target.pinned) {
-    return items.map((item) => (item.code === code ? { ...item, pinned: false } : { ...item, pinned: false }));
-  }
-
-  const currentPinned = items.find((item) => item.pinned && item.code !== code);
-  const remaining = items
-    .filter((item) => item.code !== code && item.code !== currentPinned?.code)
-    .map((item) => ({ ...item, pinned: false }));
-
-  const next: T[] = [{ ...target, pinned: true }];
-  if (currentPinned) {
-    next.push({ ...currentPinned, pinned: false });
-  }
-  return [...next, ...remaining];
-}
-
-function insertAfterPinned<T extends { pinned?: boolean }>(items: T[], nextItem: T): T[] {
-  const pinnedIndex = items.findIndex((item) => item.pinned);
-  if (pinnedIndex === -1) {
-    return [nextItem, ...items];
-  }
-  return [
-    ...items.slice(0, pinnedIndex + 1),
-    nextItem,
-    ...items.slice(pinnedIndex + 1),
-  ];
-}
-
-function reorderCodes(codes: string[], draggedCode: string, targetCode: string, lockedCode?: string): string[] {
-  if (draggedCode === targetCode) return codes;
-
-  const movable = lockedCode ? codes.filter((code) => code !== lockedCode) : [...codes];
-  const fromIndex = movable.indexOf(draggedCode);
-  const targetIndex = movable.indexOf(targetCode);
-  if (fromIndex < 0 || targetIndex < 0) return codes;
-
-  const next = [...movable];
-  const [dragged] = next.splice(fromIndex, 1);
-  next.splice(targetIndex, 0, dragged);
-
-  return lockedCode ? [lockedCode, ...next] : next;
-}
-
-function moveCodeAfterPinned(codes: string[], draggedCode: string, lockedCode?: string): string[] {
-  const movable = lockedCode ? codes.filter((code) => code !== lockedCode) : [...codes];
-  const fromIndex = movable.indexOf(draggedCode);
-  if (fromIndex < 0) return codes;
-
-  const next = [...movable];
-  const [dragged] = next.splice(fromIndex, 1);
-  next.unshift(dragged);
-
-  return lockedCode ? [lockedCode, ...next] : next;
-}
-
-function sortRowsByCodes<T extends { code: string }>(rows: T[], codes: string[]): T[] {
-  const rowMap = new Map(rows.map((row) => [row.code, row]));
-  const ordered = codes
-    .map((code) => rowMap.get(code))
-    .filter((row): row is T => row !== undefined);
-  const used = new Set(ordered.map((row) => row.code));
-  const rest = rows.filter((row) => !used.has(row.code));
-  return [...ordered, ...rest];
-}
-
-function parseStockHoldings(input: unknown): StockHoldingConfig[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((item) => {
-      const code = normalizeStockCode(String((item as StockHoldingConfig)?.code ?? ''));
-      const shares = Math.max(0, toNumber((item as StockHoldingConfig)?.shares));
-      const cost = Math.max(0, toNumber((item as StockHoldingConfig)?.cost));
-      if (!code) return null;
-      const parsed: StockHoldingConfig = {
-        code,
-        shares: Number.isFinite(shares) ? shares : 0,
-        cost: Number.isFinite(cost) ? cost : 0,
-        pinned: Boolean((item as StockHoldingConfig)?.pinned),
-        special: Boolean((item as StockHoldingConfig)?.special),
-      };
-      const addedPrice = toNumber((item as StockHoldingConfig)?.addedPrice);
-      const addedAt = String((item as StockHoldingConfig)?.addedAt ?? '').trim();
-      if (Number.isFinite(addedPrice) && addedPrice > 0) parsed.addedPrice = addedPrice;
-      if (addedAt) parsed.addedAt = addedAt;
-      return parsed;
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-}
-
-function parseFundHoldings(input: unknown): FundHoldingConfig[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((item) => {
-      const code = normalizeFundCode(String((item as FundHoldingConfig)?.code ?? ''));
-      const units = Math.max(0, toNumber((item as FundHoldingConfig)?.units));
-      const cost = Math.max(0, toNumber((item as FundHoldingConfig)?.cost));
-      const name = String((item as FundHoldingConfig)?.name ?? '').trim();
-      if (!code) return null;
-      const parsed: FundHoldingConfig = {
-        code,
-        units: Number.isFinite(units) ? units : 0,
-        cost: Number.isFinite(cost) ? cost : 0,
-        pinned: Boolean((item as FundHoldingConfig)?.pinned),
-        special: Boolean((item as FundHoldingConfig)?.special),
-      };
-      if (name) parsed.name = name;
-      const addedNav = toNumber((item as FundHoldingConfig)?.addedNav);
-      const addedAt = String((item as FundHoldingConfig)?.addedAt ?? '').trim();
-      if (Number.isFinite(addedNav) && addedNav > 0) parsed.addedNav = addedNav;
-      if (addedAt) parsed.addedAt = addedAt;
-      return parsed;
-    })
-    .filter((item): item is FundHoldingConfig => item !== null);
-}
-
-async function loadPortfolioConfig(): Promise<PortfolioConfig> {
-  if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-    const result = await chrome.storage.sync.get([STORAGE_KEYS.stockHoldings, STORAGE_KEYS.fundHoldings]);
-    return {
-      stockHoldings: parseStockHoldings(result[STORAGE_KEYS.stockHoldings]),
-      fundHoldings: parseFundHoldings(result[STORAGE_KEYS.fundHoldings]),
-    };
-  }
-
-  try {
-    const raw = window.localStorage.getItem('portfolio-config-v1');
-    if (!raw) return EMPTY_PORTFOLIO;
-    const parsed = JSON.parse(raw) as Partial<PortfolioConfig>;
-    return {
-      stockHoldings: parseStockHoldings(parsed.stockHoldings),
-      fundHoldings: parseFundHoldings(parsed.fundHoldings),
-    };
-  } catch {
-    return EMPTY_PORTFOLIO;
-  }
-}
-
-async function savePortfolioConfig(config: PortfolioConfig): Promise<void> {
-  if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-    await chrome.storage.sync.set({
-      [STORAGE_KEYS.stockHoldings]: config.stockHoldings,
-      [STORAGE_KEYS.fundHoldings]: config.fundHoldings,
-    });
-    return;
-  }
-
-  window.localStorage.setItem('portfolio-config-v1', JSON.stringify(config));
-}
-
-async function fetchTencentStockSuggestions(keyword: string): Promise<SearchStock[]> {
-  const q = keyword.trim();
-  if (!q) return [];
-
-  const response = await fetch(`https://smartbox.gtimg.cn/s3/?t=all&c=1&q=${encodeURIComponent(q)}`);
-  const text = await response.text();
-  const matched = text.match(/v_hint="([\s\S]*?)";?/);
-  if (!matched || matched[1] === 'N') return [];
-
-  const decoded = matched[1].replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => (
-    String.fromCharCode(parseInt(hex, 16))
-  ));
-
-  const dedup = new Set<string>();
-  const suggestions: SearchStock[] = [];
-
-  decoded.split('^').forEach((segment) => {
-    const parts = segment.split('~');
-    if (parts.length < 5) return;
-
-    const market = parts[0];
-    const code = parts[1];
-    const name = parts[2];
-    const productType = parts[4] ?? '';
-
-    if (!(market === 'sh' || market === 'sz')) return;
-    if (!/^\d{6}$/.test(code)) return;
-    if (!productType.includes('GP')) return;
-    if (dedup.has(code)) return;
-
-    dedup.add(code);
-    suggestions.push({ code, name });
-  });
-
-  return suggestions.slice(0, 16);
-}
-
-async function fetchFundSuggestions(keyword: string): Promise<SearchStock[]> {
-  const q = keyword.trim();
-  if (!q) return [];
-
-  try {
-    if (!fundSearchIndexPromise) {
-      fundSearchIndexPromise = fetch('https://fund.eastmoney.com/js/fundcode_search.js')
-        .then((r) => r.text())
-        .then((text) => {
-          const matched = text.match(/var\s+r\s*=\s*(\[[\s\S]*\]);?/);
-          if (!matched) return [];
-
-          const parsed = JSON.parse(matched[1]) as Array<[string, string, string, string, string]>;
-          return parsed
-            .map((item) => {
-              const code = String(item[0] ?? '').trim();
-              const jp = String(item[1] ?? '').trim();
-              const name = String(item[2] ?? '').trim();
-              const category = String(item[3] ?? '').trim();
-              const fullNamePinyin = String(item[4] ?? '').trim();
-              if (!/^\d{6}$/.test(code) || !name) return null;
-
-              return {
-                code,
-                name,
-                jp,
-                category,
-                fullNamePinyin,
-                haystack: [code, name, jp, category, fullNamePinyin].join('|').toLowerCase(),
-              };
-            })
-            .filter((item): item is FundSearchEntry => item !== null);
-        })
-        .catch(() => {
-          fundSearchIndexPromise = null;
-          return [];
-        });
-    }
-
-    const entries = await fundSearchIndexPromise;
-    if (!entries) return [];
-    const query = q.toLowerCase();
-    return entries
-      .filter((item) => item.haystack.includes(query))
-      .slice(0, 16)
-      .map(({ code, name }) => ({ code, name }));
-  } catch {
-    return [];
-  }
-}
-
-class DetailErrorBoundary extends Component<{ children: React.ReactNode; onBack: () => void }, { hasError: boolean; errorMessage: string }> {
-  constructor(props: { children: React.ReactNode; onBack: () => void }) {
-    super(props);
-    this.state = { hasError: false, errorMessage: '' };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, errorMessage: error?.message || String(error) };
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[DetailErrorBoundary]', error?.message, error?.stack, info?.componentStack);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>
-          <p style={{ marginBottom: 8, fontSize: 14 }}>详情加载异常，请重试</p>
-          <p style={{ marginBottom: 12, fontSize: 11, wordBreak: 'break-all', maxWidth: 320, margin: '0 auto 12px' }}>{this.state.errorMessage}</p>
-          <button type="button" onClick={this.props.onBack} style={{ padding: '6px 16px', cursor: 'pointer' }}>
-            返回列表
-          </button>
-          <button type="button" onClick={() => this.setState({ hasError: false, errorMessage: '' })} style={{ padding: '6px 16px', cursor: 'pointer', marginLeft: 8 }}>
-            重试
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const CHART_WIDTH = 280;
-const CHART_HEIGHT = 50;
-const CHART_PAD_TOP = 4;
-const CHART_PAD_RIGHT = 4;
-const CHART_PAD_BOTTOM = 4;
-const CHART_PAD_LEFT = 4;
-const CHART_INNER_W = CHART_WIDTH - CHART_PAD_LEFT - CHART_PAD_RIGHT;
-const CHART_INNER_H = CHART_HEIGHT - CHART_PAD_TOP - CHART_PAD_BOTTOM;
-
-const IntradayChart = memo(function IntradayChart({
-  data,
-  prevClose,
-  intradayPrevClose,
-  changePct,
-}: {
-  data: Array<{ time: string; price: number }>;
-  prevClose?: number;
-  intradayPrevClose?: number;
-  changePct?: number;
-}) {
-  const pathInfo = useMemo(() => {
-    if (!data || data.length === 0) return null;
-
-    const dataPoints: IntradayDataPoint[] = [];
-    for (const item of data) {
-      const index = getMinuteIndex(item.time);
-      if (index !== null && Number.isFinite(item.price)) {
-        dataPoints.push({ time: item.time, price: item.price, minuteIndex: index });
-      }
-    }
-    if (dataPoints.length === 0) return null;
-
-    const maybeIntradayPrevClose: number = intradayPrevClose ?? Number.NaN;
-    const effectivePrevClose: number = Number.isFinite(maybeIntradayPrevClose)
-      ? maybeIntradayPrevClose
-      : (prevClose !== undefined && Number.isFinite(prevClose) ? prevClose : Number.NaN);
-    const hasPrevClose = Number.isFinite(effectivePrevClose);
-
-    const prices = dataPoints.map((d) => d.price);
-    let minPrice = Math.min(...prices);
-    let maxPrice = Math.max(...prices);
-    if (hasPrevClose) {
-      minPrice = Math.min(minPrice, effectivePrevClose);
-      maxPrice = Math.max(maxPrice, effectivePrevClose);
-    }
-
-    const rawRange = Math.max(maxPrice - minPrice, Math.max(maxPrice * 0.0002, 0.01));
-    const step = rawRange / 10;
-    const edgePadding = step;
-    const displayMin = minPrice - edgePadding;
-    const displayMax = maxPrice + edgePadding;
-    const displayRange = Math.max(displayMax - displayMin, rawRange);
-
-    const sorted = [...dataPoints].sort((a, b) => a.minuteIndex - b.minuteIndex);
-
-    const toX = (mi: number) => CHART_PAD_LEFT + (mi / TRADING_MINUTES) * CHART_INNER_W;
-    const toY = (price: number) => {
-      const normalized = (price - displayMin) / displayRange;
-      return CHART_PAD_TOP + (1 - normalized) * CHART_INNER_H;
-    };
-
-    // Build continuous segments (split at lunch break gaps)
-    const segments: IntradayDataPoint[][] = [];
-    let cur: IntradayDataPoint[] = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i].minuteIndex - sorted[i - 1].minuteIndex > 1) {
-        segments.push(cur);
-        cur = [sorted[i]];
-      } else {
-        cur.push(sorted[i]);
-      }
-    }
-    segments.push(cur);
-
-    const baselinePrice = hasPrevClose ? effectivePrevClose : (dataPoints[0]?.price ?? 0);
-    const baselineY = toY(baselinePrice);
-
-    // Pre-compute all SVG sub-segments
-    const subSegments: { path: string; color: string; key: string }[] = [];
-    for (let si = 0; si < segments.length; si++) {
-      const seg = segments[si];
-      for (let i = 0; i < seg.length - 1; i++) {
-        const p = `${toX(seg[i].minuteIndex).toFixed(2)} ${toY(seg[i].price).toFixed(2)} ${toX(seg[i + 1].minuteIndex).toFixed(2)} ${toY(seg[i + 1].price).toFixed(2)}`;
-        const mid = (seg[i].price + seg[i + 1].price) / 2;
-        subSegments.push({
-          path: p,
-          color: mid >= baselinePrice ? '#ff5e57' : '#1fc66d',
-          key: `s${si}-${i}`,
-        });
-      }
-    }
-
-    return { baselineY, subSegments };
-  }, [data, prevClose, intradayPrevClose]);
-
-  if (!pathInfo) {
-    // 无分时数据时，用涨跌幅画一个简易涨跌条
-    if (Number.isFinite(changePct)) {
-      const w = Math.min(Math.abs(changePct!) / 10, 1) * 36;
-      const fill = changePct! >= 0 ? '#ff5e57' : '#1fc66d';
-      return (
-        <svg className="intraday-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none">
-          <rect x={CHART_WIDTH / 2 - w / 2} y={CHART_HEIGHT / 2 - 4} width={Math.max(w, 4)} height={8} rx={2} fill={fill} opacity={0.6} />
-        </svg>
-      );
-    }
-    return <div className="intraday-chart-empty" style={{ fontSize: 9, color: 'var(--text-2)', opacity: 0.5 }}>-</div>;
-  }
-
-  return (
-    <svg
-      className="intraday-chart"
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-      preserveAspectRatio="none"
-    >
-      <line
-        x1={CHART_PAD_LEFT}
-        x2={CHART_WIDTH - CHART_PAD_RIGHT}
-        y1={pathInfo.baselineY.toFixed(2)}
-        y2={pathInfo.baselineY.toFixed(2)}
-        className="intraday-open-line"
-      />
-      {pathInfo.subSegments.map(({ path, color, key }) => (
-        <path
-          key={key}
-          d={`M ${path}`}
-          fill="none"
-          stroke={color}
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-    </svg>
-  );
-});
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
@@ -920,6 +275,9 @@ export default function App() {
   const [fundSortDraft, setFundSortDraft] = useState<string[] | null>(null);
   const [draggingCode, setDraggingCode] = useState<string | null>(null);
 
+  // 交易记录缓存（用于修正当日盈亏）
+  const [tradeHistoryForPnl, setTradeHistoryForPnl] = useState<Record<string, StockTradeRecord[]>>({});
+
   // 内联编辑状态
   const [editingCell, setEditingCell] = useState<{
     kind: 'stock' | 'fund';
@@ -938,28 +296,47 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const scrollPosRef = useRef(0);
 
+  // 统一出口：从 stockPositions + 交易记录汇总盈亏（区分隔夜/当日建仓）
+  const correctedStockDaily = useMemo(() => {
+    const today = getShanghaiToday();
+    return stockPositions.reduce((sum, item) => {
+      const trades = tradeHistoryForPnl[item.code];
+      if (trades && trades.length > 0) {
+        const corrected = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
+        if (Number.isFinite(corrected)) return sum + corrected;
+      }
+      if (!Number.isFinite(item.dailyPnl)) return sum;
+      return sum + item.dailyPnl;
+    }, 0);
+  }, [stockPositions, tradeHistoryForPnl]);
+
+  const correctedStockFloating = useMemo(() => {
+    return stockPositions.reduce((sum, item) => {
+      const trades = tradeHistoryForPnl[item.code];
+      if (trades && trades.length > 0) {
+        // 用持仓成本重算浮动盈亏
+        const holding = stockHoldings.find(h => h.code === item.code);
+        if (holding && holding.cost > 0 && holding.shares > 0 && Number.isFinite(item.price)) {
+          return sum + (item.price - holding.cost) * holding.shares;
+        }
+      }
+      if (!Number.isFinite(item.floatingPnl)) return sum;
+      return sum + item.floatingPnl;
+    }, 0);
+  }, [stockPositions, stockHoldings, tradeHistoryForPnl]);
+
   const stockMetrics = useMemo(() => {
     const totalMarketValue = stockPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
       return sum + item.price * item.shares;
     }, 0);
 
-    const totalPnl = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.floatingPnl)) return sum;
-      return sum + item.floatingPnl;
-    }, 0);
-
-    const daily = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.dailyPnl)) return sum;
-      return sum + item.dailyPnl;
-    }, 0);
-
     return [
       { label: '总市值', value: formatNumber(totalMarketValue, 2), tone: 'neutral' },
-      { label: '总盈亏', value: formatNumber(totalPnl, 1), tone: toneClass(totalPnl) },
-      { label: '当日盈亏', value: formatNumber(daily, 1), tone: toneClass(daily) },
+      { label: '总盈亏', value: formatNumber(correctedStockFloating, 1), tone: toneClass(correctedStockFloating) },
+      { label: '当日盈亏', value: formatNumber(correctedStockDaily, 1), tone: toneClass(correctedStockDaily) },
     ] as const;
-  }, [stockPositions]);
+  }, [stockPositions, correctedStockFloating, correctedStockDaily]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -990,21 +367,12 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    const stockTotalPnl = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.floatingPnl)) return sum;
-      return sum + item.floatingPnl;
-    }, 0);
-
-    const stockDaily = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.dailyPnl)) return sum;
-      return sum + item.dailyPnl;
-    }, 0);
-
+    const stockTotalPnl = correctedStockFloating;
+    const stockDaily = correctedStockDaily;
     const fundHoldingAmount = fundPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.holdingAmount)) return sum;
       return sum + item.holdingAmount;
     }, 0);
-
     const fundHoldingProfit = fundPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.holdingProfit)) return sum;
       return sum + item.holdingProfit;
@@ -1024,7 +392,7 @@ export default function App() {
       { label: '综合预估收益', value: formatNumber(previewProfit, 2), tone: toneClass(previewProfit) },
       { label: '股票当日盈亏', value: formatNumber(stockDaily, 2), tone: toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions]);
+  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily]);
 
   const metrics = activeTab === 'stocks'
     ? stockMetrics
@@ -1049,12 +417,8 @@ export default function App() {
     const stockMarketValue = stockPositions.reduce((sum, item) => (
       Number.isFinite(item.price) && item.shares > 0 ? sum + item.price * item.shares : sum
     ), 0);
-    const stockFloating = stockPositions.reduce((sum, item) => (
-      Number.isFinite(item.floatingPnl) ? sum + item.floatingPnl : sum
-    ), 0);
-    const stockDaily = stockPositions.reduce((sum, item) => (
-      Number.isFinite(item.dailyPnl) ? sum + item.dailyPnl : sum
-    ), 0);
+    const stockFloating = correctedStockFloating;
+    const stockDaily = correctedStockDaily;
 
     const fundHoldingAmount = fundPositions.reduce((sum, item) => (
       Number.isFinite(item.holdingAmount) ? sum + item.holdingAmount : sum
@@ -1118,11 +482,12 @@ export default function App() {
       fundSinceAddedRate,
       totalSinceAddedRate,
     };
-  }, [fundHoldings, fundPositions, stockHoldings, stockPositions]);
+  }, [fundHoldings, fundPositions, stockHoldings, stockPositions, correctedStockFloating, correctedStockDaily]);
   const stockPinnedCode = stockHoldings.find((item) => item.pinned)?.code ?? null;
   const fundPinnedCode = fundHoldings.find((item) => item.pinned)?.code ?? null;
   const stockRows = useMemo<StockRow[]>(() => {
     const positionMap = new Map(stockPositions.map((item) => [item.code, item]));
+    const today = getShanghaiToday();
     const rows: StockRow[] = [];
     for (const holding of stockHoldings) {
       const row = positionMap.get(holding.code);
@@ -1140,10 +505,28 @@ export default function App() {
         next.addedAt = holding.addedAt;
       }
 
+      // 用交易记录修正浮动盈亏和当日盈亏
+      const trades = tradeHistoryForPnl[holding.code];
+      if (trades && trades.length > 0) {
+        const correctedDaily = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
+        if (Number.isFinite(correctedDaily)) {
+          next.dailyPnl = correctedDaily;
+          const positionCost = holding.cost > 0 && holding.shares > 0
+            ? holding.cost * holding.shares : Number.NaN;
+          if (Number.isFinite(positionCost) && positionCost > 0) {
+            next.dailyChangePct = (correctedDaily / positionCost) * 100;
+          }
+        }
+        // 同步修正浮动盈亏 = (现价 - 持仓成本) × 持仓股数
+        if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
+          next.floatingPnl = (row.price - holding.cost) * holding.shares;
+        }
+      }
+
       rows.push(next);
     }
     return rows;
-  }, [stockHoldings, stockPositions]);
+  }, [stockHoldings, stockPositions, tradeHistoryForPnl]);
 
   const fundRows = useMemo<FundRow[]>(() => {
     const positionMap = new Map(fundPositions.map((item) => [item.code, item]));
@@ -1180,6 +563,17 @@ export default function App() {
     }
     return map;
   }, [stockPositions, stockHoldings]);
+
+  const fundNameMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const pos of fundPositions) {
+      if (pos.name) map[pos.code] = pos.name;
+    }
+    for (const h of fundHoldings) {
+      if (h.name) map[h.code] = h.name;
+    }
+    return map;
+  }, [fundPositions, fundHoldings]);
 
   const stockDisplayRows = useMemo(() => {
     let rows = sortingMode === 'stocks' && stockSortDraft
@@ -1294,6 +688,11 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
+  // 加载交易记录用于修正当日盈亏
+  useEffect(() => {
+    loadTradeHistory().then((history) => setTradeHistoryForPnl(history));
+  }, [portfolioReady, refreshSig]);
+
   useEffect(() => {
     if (!portfolioReady) return;
     void savePortfolioConfig({ stockHoldings, fundHoldings });
@@ -1352,58 +751,6 @@ export default function App() {
     }
   }, []);
 
-  // 更新角标数据
-  useEffect(() => {
-    if (!portfolioReady || !badgeConfig?.enabled) return;
-
-    const stockMarketValue = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
-      return sum + item.price * item.shares;
-    }, 0);
-
-    const stockFloating = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.floatingPnl)) return sum;
-      return sum + item.floatingPnl;
-    }, 0);
-
-    const stockDaily = stockPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.dailyPnl)) return sum;
-      return sum + item.dailyPnl;
-    }, 0);
-
-    const fundHoldingAmount = fundPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.holdingAmount)) return sum;
-      return sum + item.holdingAmount;
-    }, 0);
-
-    const fundHoldingProfit = fundPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.holdingProfit)) return sum;
-      return sum + item.holdingProfit;
-    }, 0);
-
-    const fundEstimatedProfit = fundPositions.reduce((sum, item) => {
-      if (!Number.isFinite(item.estimatedProfit)) return sum;
-      return sum + item.estimatedProfit;
-    }, 0);
-
-    if (typeof chrome.runtime?.sendMessage === 'function') {
-      void chrome.runtime.sendMessage({
-        type: 'update-badge',
-        badge: badgeConfig,
-        metrics: {
-          stockCount: stockHoldings.length,
-          fundCount: fundHoldings.length,
-          stockMarket: stockMarketValue,
-          stockFloatingPnl: stockFloating,
-          stockDailyPnl: stockDaily,
-          fundAmount: fundHoldingAmount,
-          fundHoldingProfit,
-          fundEstimatedProfit,
-          combinedPnl: stockDaily + fundEstimatedProfit,
-        },
-      });
-    }
-  }, [portfolioReady, badgeConfig, stockPositions, fundPositions, stockHoldings, fundHoldings]);
 
   // ---- Market Stats: always visible, refresh only during trading hours ----
   // 非交易时段保留最后一次获取的数据，不刷新
@@ -1619,6 +966,13 @@ function clearIntradayIfStale(
               intraday: normalizeIntraday((p as unknown as { intraday: unknown }).intraday),
             }));
             cached = clearIntradayIfStale(normalized, intradayDate);
+            // 用 stockHoldings 的最新 shares/cost 覆写缓存数据，防止编辑被缓存冲掉
+            const holdingMap = new Map(stockHoldings.map((h) => [normalizeStockCode(h.code), h]));
+            cached = cached.map((p) => {
+              const h = holdingMap.get(p.code);
+              if (!h) return p;
+              return { ...p, shares: Math.max(0, h.shares), cost: Math.max(0, h.cost) };
+            });
             setStockPositions(cached);
           }
         }
@@ -1950,6 +1304,44 @@ function clearIntradayIfStale(
     setRefreshSig((prev) => prev + 1);
     setTimeout(() => setRefreshing(false), 2000);
   }, []);
+
+
+  const handleStockTradesChanged = useCallback(async (code: string) => {
+    const trades = await getTradesForStock(code);
+    if (trades.length === 0) {
+      setTradeHistoryForPnl((prev) => {
+        const next = { ...prev };
+        delete next[code];
+        return next;
+      });
+      return;
+    }
+    const pos = computePositionFromTrades(trades);
+    setTradeHistoryForPnl((prev) => ({ ...prev, [code]: trades }));
+    setStockHoldings((prev) =>
+      prev.map((h) => h.code === code ? { ...h, shares: pos.shares, cost: pos.avgCost } : h)
+    );
+    setStockPositions((prev) =>
+      prev.map((p) => {
+        if (p.code !== code) return p;
+        const floatingPnl = pos.shares > 0 && pos.avgCost > 0 && Number.isFinite(p.price)
+          ? (p.price - pos.avgCost) * pos.shares
+          : Number.NaN;
+        return { ...p, shares: pos.shares, cost: pos.avgCost, floatingPnl };
+      })
+    );
+  }, []);
+
+  const handleFundTradesChanged = useCallback(async (code: string) => {
+    const trades = await getFundTradesForCode(code);
+    if (trades.length === 0) return;
+    const pos = computeFundPositionFromTrades(trades);
+    setFundHoldings((prev) =>
+      prev.map((h) => h.code === code ? { ...h, units: pos.units, cost: pos.avgCost } : h)
+    );
+  }, []);
+
+
 
   useEffect(() => {
     if (activeTab !== 'stocks' && stockDetailTarget) {
@@ -2403,145 +1795,25 @@ function clearIntradayIfStale(
     }
   };
 
-  const ScoreBadge = ({ code }: { code: string }) => {
-    const score = stockScores.get(code);
-    if (!score) return null;
-    const colorMap: Record<string, string> = {
-      S: '#FFD700', A: '#2aa568', B: '#3b82f6', C: '#f59e0b', D: '#e45555',
-    };
-    const color = colorMap[score.rating] || '#888';
-    const radius = 10;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (score.totalScore / 100) * circumference;
-    return (
-      <span className="score-badge" title={`${score.totalScore}分 — ${score.rating}级`}>
-        <svg width="24" height="24" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r={radius} fill="none" stroke="var(--border-2)" strokeWidth="2" />
-          <circle
-            cx="12" cy="12" r={radius} fill="none" stroke={color} strokeWidth="2"
-            strokeDasharray={circumference} strokeDashoffset={offset}
-            strokeLinecap="round" transform="rotate(-90 12 12)"
-          />
-          <text x="12" y="12" textAnchor="middle" dominantBaseline="central"
-            fill={color} fontSize="10" fontWeight="700"
-          >
-            {score.rating}
-          </text>
-        </svg>
-      </span>
-    );
-  };
+  // ScoreBadge imported from ./components/ScoreBadge
 
   return (
     <div className="popup-root" ref={popupRootRef}>
       <div className="grid-overlay" />
       <div className="app-shell">
-        <aside className="side-nav">
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'stocks' ? 'active' : ''}`}
-            onClick={() => setActiveTab('stocks')}
-          >
-            <BarChart3 size={12} />
-            <span>股票</span>
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'funds' ? 'active' : ''}`}
-            onClick={() => setActiveTab('funds')}
-          >
-            <WalletCards size={12} />
-            <span>基金</span>
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => setActiveTab('account')}
-          >
-            <PieChart size={12} />
-            <span>账户</span>
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('notifications'); setStockDetailTarget(null); setFundDetailTarget(null); }}
-            style={{ position: 'relative' }}
-          >
-            <Bell size={12} />
-            <span>通知</span>
-            {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('analytics'); setStockDetailTarget(null); setFundDetailTarget(null); }}
-          >
-            <TrendingUp size={12} />
-            <span>分析</span>
-          </button>
-
-          <div className="nav-spacer" />
-
-          <div className="side-nav-footer">
-            <div className="market-stats-panel" aria-label="市场统计">
-              <div className="market-stats-entry">
-                <span className="market-stats-label">上涨</span>
-                <span className="market-stats-value up">{marketStats ? formatNumber(marketStats.upCount, 0) : '--'}</span>
-              </div>
-              <div className="market-stats-entry">
-                <span className="market-stats-label">平盘</span>
-                <span className="market-stats-value flat">{marketStats ? formatNumber(marketStats.flatCount, 0) : '--'}</span>
-              </div>
-              <div className="market-stats-entry">
-                <span className="market-stats-label">下跌</span>
-                <span className="market-stats-value down">{marketStats ? formatNumber(marketStats.downCount, 0) : '--'}</span>
-              </div>
-              <div className="market-stats-entry">
-                <span className="market-stats-label">成交额</span>
-                <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.turnover) : '--'}</span>
-              </div>
-              <div className="market-stats-entry">
-                <span className="market-stats-label">
-                  {marketStats && Number.isFinite(marketStats.volumeChange)
-                    ? (marketStats.volumeChange >= 0 ? '放量' : '缩量')
-                    : '缩量'}
-                </span>
-                <span className={`market-stats-value ${marketStats && Number.isFinite(marketStats.volumeChange) ? (marketStats.volumeChange >= 0 ? 'up' : 'down') : ''}`}>
-                  {marketStats && Number.isFinite(marketStats.volumeChange)
-                    ? formatMarketAmount(Math.abs(marketStats.volumeChange))
-                    : '--'}
-                </span>
-              </div>
-              <div className="market-stats-entry">
-                <span className="market-stats-label">昨成交</span>
-                <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.prevTurnover) : '--'}</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="nav-btn theme-toggle-btn"
-              onClick={openSettings}
-              aria-label="打开设置"
-            >
-              <Settings size={12} />
-              <span>设置</span>
-            </button>
-
-            <button
-              type="button"
-              className="nav-btn theme-toggle-btn"
-              onClick={toggleTheme}
-              aria-label="切换主题"
-            >
-              {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
-              <span>{theme === 'dark' ? '浅色' : '深色'}</span>
-            </button>
-          </div>
-        </aside>
+        <SideNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          unreadCount={unreadCount}
+          marketStats={marketStats}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          openSettings={openSettings}
+          clearDetailTargets={() => { setStockDetailTarget(null); setFundDetailTarget(null); }}
+        />
 
         <main className={`main-area ${stockDetailTarget || fundDetailTarget || scoreDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' ? (
+          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -2564,7 +1836,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' ? (
+          {!stockDetailTarget && !fundDetailTarget && !scoreDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -2638,7 +1910,7 @@ function clearIntradayIfStale(
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${sectorDetailTarget ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${sectorDetailTarget || activeTab === 'trades' ? 'detail-mode' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget && !sectorDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -2670,139 +1942,11 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'account' && !stockDetailTarget ? (
-              <div className="account-dashboard">
-                <section className="account-hero-card">
-                  <div className="account-hero-main">
-                    <span className="account-section-label">总投资资产</span>
-                    <strong>{formatNumber(accountSnapshot.totalAssets, 2)}</strong>
-                    <p>当前账户由股票市值与基金持有金额共同构成，下面是两类资产的实时占比。</p>
-                  </div>
-                  <div className="account-allocation">
-                    <div className="allocation-row">
-                      <div className="allocation-meta">
-                        <span>股票资产</span>
-                        <strong>{formatNumber(accountSnapshot.stockMarketValue, 2)}</strong>
-                      </div>
-                      <span className="allocation-ratio">{`${accountSnapshot.stockRatio.toFixed(1)}%`}</span>
-                    </div>
-                    <div className="allocation-bar">
-                      <span className="stock" style={{ width: `${Math.max(accountSnapshot.stockRatio, 0)}%` }} />
-                    </div>
-                    <div className="allocation-row">
-                      <div className="allocation-meta">
-                        <span>基金资产</span>
-                        <strong>{formatNumber(accountSnapshot.fundHoldingAmount, 2)}</strong>
-                      </div>
-                      <span className="allocation-ratio">{`${accountSnapshot.fundRatio.toFixed(1)}%`}</span>
-                    </div>
-                    <div className="allocation-bar">
-                      <span className="fund" style={{ width: `${Math.max(accountSnapshot.fundRatio, 0)}%` }} />
-                    </div>
-                  </div>
-                </section>
-
-                <div className="account-grid">
-                  <article className="account-card">
-                    <span className="account-section-label">收益快照</span>
-                    <div className="account-stat-list">
-                      <div className="account-stat-row">
-                        <span>综合持仓收益</span>
-                        <strong className={toneClass(accountSnapshot.stockFloating + accountSnapshot.fundHoldingProfit)}>
-                          {formatNumber(accountSnapshot.stockFloating + accountSnapshot.fundHoldingProfit, 2)}
-                        </strong>
-                      </div>
-                      <div className="account-stat-row">
-                        <span>综合预估收益</span>
-                        <strong className={toneClass(accountSnapshot.stockDaily + accountSnapshot.fundEstimated)}>
-                          {formatNumber(accountSnapshot.stockDaily + accountSnapshot.fundEstimated, 2)}
-                        </strong>
-                      </div>
-                      <div className="account-stat-row">
-                        <span>股票当日盈亏</span>
-                        <strong className={toneClass(accountSnapshot.stockDaily)}>
-                          {formatNumber(accountSnapshot.stockDaily, 2)}
-                        </strong>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="account-card">
-                    <span className="account-section-label">披露状态</span>
-                    <div className="account-stat-list">
-                      <div className="account-stat-row">
-                        <span>基金持仓数</span>
-                        <strong>{formatNumber(accountSnapshot.heldFundCount, 0)}</strong>
-                      </div>
-                      <div className="account-stat-row">
-                        <span>已披露净值</span>
-                        <strong>{formatNumber(accountSnapshot.disclosedFundCount, 0)}</strong>
-                      </div>
-                      <div className="account-stat-row">
-                        <span>待估算净值</span>
-                        <strong>{formatNumber(accountSnapshot.heldFundCount - accountSnapshot.disclosedFundCount, 0)}</strong>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="account-card account-detail-card">
-                    <span className="account-section-label">股票概览</span>
-                    <div className="account-detail-list">
-                      <div className="account-detail-item">
-                        <span>持仓只数</span>
-                        <strong>{formatNumber(accountSnapshot.heldStockCount, 0)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>仅自选</span>
-                        <strong>{formatNumber(accountSnapshot.watchStockCount, 0)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>股票市值</span>
-                        <strong>{formatNumber(accountSnapshot.stockMarketValue, 2)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>持仓收益</span>
-                        <strong className={toneClass(accountSnapshot.stockFloating)}>{formatNumber(accountSnapshot.stockFloating, 2)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>当日盈亏</span>
-                        <strong className={toneClass(accountSnapshot.stockDaily)}>{formatNumber(accountSnapshot.stockDaily, 2)}</strong>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="account-card account-detail-card">
-                    <span className="account-section-label">基金概览</span>
-                    <div className="account-detail-list">
-                      <div className="account-detail-item">
-                        <span>持仓只数</span>
-                        <strong>{formatNumber(accountSnapshot.heldFundCount, 0)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>仅自选</span>
-                        <strong>{formatNumber(accountSnapshot.watchFundCount, 0)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>持有金额</span>
-                        <strong>{formatNumber(accountSnapshot.fundHoldingAmount, 2)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>持有收益</span>
-                        <strong className={toneClass(accountSnapshot.fundHoldingProfit)}>{formatNumber(accountSnapshot.fundHoldingProfit, 2)}</strong>
-                      </div>
-                      <div className="account-detail-item">
-                        <span>估算收益</span>
-                        <strong className={toneClass(accountSnapshot.fundEstimated)}>{formatNumber(accountSnapshot.fundEstimated, 2)}</strong>
-                      </div>
-                    </div>
-                  </article>
-                </div>
-
-                <DiagnosticPanel
-                  stockPositions={stockPositions}
-                  fundPositions={fundPositions}
-                />
-
-              </div>
+              <AccountDashboard
+                snapshot={accountSnapshot}
+                stockPositions={stockPositions}
+                fundPositions={fundPositions}
+              />
             ) : null}
 
             {sortingMode ? (
@@ -2817,216 +1961,25 @@ function clearIntradayIfStale(
 
             {/* ---- Notification Panel ---- */}
             {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget ? (
-              <div className="notification-panel" style={{ opacity: panelOpacity }}>
-                <div className="notification-header">
-                  <span className="notification-title">消息通知</span>
-                  <div className="notification-actions">
-                    {unreadCount > 0 && (
-                      <button type="button" className="notif-btn" onClick={markAllRead}>
-                        全部已读
-                      </button>
-                    )}
-                    {notifications.length > 0 && (
-                      <button type="button" className="notif-btn danger" onClick={clearNotifications}>
-                        清空
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ---- 子标签切换 ---- */}
-                <div className="notif-sub-tabs">
-                  <button
-                    type="button"
-                    className={`notif-sub-tab ${notifSubTab === 'alerts' ? 'active' : ''}`}
-                    onClick={() => setNotifSubTab('alerts')}
-                  >
-                    股票告警
-                  </button>
-                  <button
-                    type="button"
-                    className={`notif-sub-tab ${notifSubTab === 'tech-report' ? 'active' : ''}`}
-                    onClick={() => setNotifSubTab('tech-report')}
-                  >
-                    技术报告
-                  </button>
-                </div>
-
-                {notifSubTab === 'tech-report' && (
-                  <>
-                    {/* ---- 技术报告状态 ---- */}
-                    <div className="tech-report-status">
-                      {techReportStatus === 'loading' ? (
-                        <div className="tech-report-loading">盘后技术报告加载中...</div>
-                      ) : techReportStatus ? (
-                        <>
-                          <div className="tech-report-header">
-                            <span className="tech-report-title">盘后技术报告</span>
-                            <span className={`tech-report-enabled ${techReportStatus.enabled ? 'on' : 'off'}`}>
-                              {techReportStatus.enabled ? '已启用' : '已禁用'}
-                            </span>
-                          </div>
-                          <div className="tech-report-body">
-                            {techReportStatus.enabled ? (
-                              <>
-                                <div className="tech-report-row">
-                                  <span className="tech-report-label">上次运行</span>
-                                  <span className="tech-report-value">
-                                    {techReportStatus.lastRunDate
-                                      ? `${techReportStatus.lastRunDate} ${techReportStatus.lastRunTime ? formatRelativeTime(techReportStatus.lastRunTime) : ''}`
-                                      : '尚未运行'}
-                                    {techReportStatus.lastRunDate && (
-                                      <span className={`tech-report-badge ${techReportStatus.status === 'success' ? 'ok' : techReportStatus.status === 'error' ? 'err' : 'idle'}`}>
-                                        {techReportStatus.status === 'success' ? `✓ ${techReportStatus.details}` : ''}
-                                        {techReportStatus.status === 'no_signal' ? '○ 无新信号' : ''}
-                                        {techReportStatus.status === 'error' ? '✗ 出错' : ''}
-                                        {techReportStatus.status === 'pending' ? '⋯ 运行中' : ''}
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                {techReportStatus.errorMessage && (
-                                  <div className="tech-report-row">
-                                    <span className="tech-report-label">错误信息</span>
-                                    <span className="tech-report-value error">{techReportStatus.errorMessage}</span>
-                                  </div>
-                                )}
-                                <div className="tech-report-row">
-                                  <span className="tech-report-label">下次运行</span>
-                                  <span className="tech-report-value">
-                                    {techReportStatus.nextRunTime > 0 ? (
-                                      <>
-                                        {new Date(techReportStatus.nextRunTime).toLocaleString('zh-CN', {
-                                          month: '2-digit', day: '2-digit',
-                                          hour: '2-digit', minute: '2-digit',
-                                        })}
-                                        <button type="button" className="tech-report-run-btn" onClick={() => {
-                                          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-                                            void chrome.runtime.sendMessage({ type: 'trigger-tech-report' }).then(() => {
-                                              chrome.storage.local.get('technicalReportStatus').then((r) => {
-                                                const s = r.technicalReportStatus as typeof techReportStatus;
-                                                if (s) setTechReportStatus(s);
-                                              });
-                                            });
-                                          }
-                                        }}>
-                                          {(() => {
-                                            const todayStr = new Date().toLocaleDateString('en-CA');
-                                            return techReportStatus.lastRunDate === todayStr ? '重新生成' : '立即运行';
-                                          })()}
-                                        </button>
-                                      </>
-                                    ) : '等待调度'}
-                                  </span>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="tech-report-row">
-                                <span className="tech-report-value disabled">请在设置页面启用盘后技术指标报告</span>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-
-                    {(() => {
-                      const techNotifs = notifications.filter((n) => n.name === '盘后技术报告');
-                      return techNotifs.length === 0 ? (
-                        <div className="notification-empty">暂无技术报告</div>
-                      ) : (
-                        <div className="notification-list">
-                          {techNotifs.map((item) => (
-                            <div
-                              key={item.id}
-                              className={`notification-item ${item.read ? '' : 'unread'} clickable`}
-                              onClick={() => {
-                                markNotificationRead(item.id);
-                                setTechReportDetail({ name: item.name, message: item.message, firedAt: item.firedAt });
-                              }}
-                            >
-                              <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
-                              <div className="notification-text">
-                                <span className="notification-stock">
-                                  {(() => {
-                                    const stockLines = item.message.split('\n').filter(l => /^\S+\(\d{6}\)/.test(l.trim()));
-                                    const first = stockLines[0]?.trim().replace(/\(.*$/, '') || '';
-                                    return <>{'📊 '}<span className="tech-report-title-inline">盘后技术报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
-                                  })()}
-                                </span>
-                                <span className="notification-message">{renderNotificationMessage(item.message)}</span>
-                              </div>
-                              <span className="notification-time">
-                                <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
-                                  <X size={10} />
-                                </button>
-                                {formatRelativeTime(item.firedAt)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-
-                {notifSubTab === 'alerts' && (
-                  <>
-                    {(() => {
-                      const alertNotifs = notifications.filter((n) => n.name !== '盘后技术报告');
-                      return alertNotifs.length === 0 ? (
-                        <div className="notification-empty">暂无股票告警</div>
-                      ) : (
-                        <div className="notification-list">
-                          {alertNotifs.map((item) => {
-                            const changeUp = Number.isFinite(item.changePct) && item.changePct >= 0;
-                            const priceValid = Number.isFinite(item.price) && item.price > 0;
-                            const handleAlertNotifClick = () => {
-                              markNotificationRead(item.id);
-                              if (item.code) {
-                                const el = document.querySelector('.content-scroll');
-                                if (el) scrollPosRef.current = el.scrollTop;
-                                setActiveTab('stocks');
-                              }
-                            };
-                            return (
-                              <div
-                                key={item.id}
-                                className={`notification-item ${item.read ? '' : 'unread'} ${item.code ? 'clickable' : ''}`}
-                                onClick={item.code ? handleAlertNotifClick : undefined}
-                              >
-                                <span className={`notification-dot ${item.read ? '' : 'unread'}`} />
-                                <div className="notification-text">
-                                  <span className="notification-stock">
-                                    {item.name}
-                                    {item.code && <span className="notification-code">({item.code})</span>}
-                                  </span>
-                                  {priceValid && (
-                                    <span className="notification-price-row">
-                                      <span className="notif-price-label">现价 </span>
-                                      <span className="notif-price-value">¥{item.price.toFixed(2)}</span>
-                                      <span className={`notif-change-value ${changeUp ? 'up' : 'down'}`}>
-                                        {item.changePct >= 0 ? '+' : ''}{item.changePct.toFixed(2)}%
-                                      </span>
-                                    </span>
-                                  )}
-                                  <span className="notification-message">{renderNotificationMessage(item.message)}</span>
-                                </div>
-                                <span className="notification-time">
-                                  <button type="button" className="notif-del-btn" title="删除" onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}>
-                                    <X size={10} />
-                                  </button>
-                                  {formatRelativeTime(item.firedAt)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
+              <NotificationPanel
+                notifications={notifications}
+                panelOpacity={panelOpacity}
+                notifSubTab={notifSubTab}
+                setNotifSubTab={setNotifSubTab}
+                techReportStatus={techReportStatus}
+                techReportDetail={techReportDetail}
+                signalStocks={signalStocks}
+                unreadCount={unreadCount}
+                markAllRead={markAllRead}
+                markNotificationRead={markNotificationRead}
+                clearNotifications={clearNotifications}
+                deleteNotification={deleteNotification}
+                setTechReportDetail={setTechReportDetail}
+                setTechReportStatus={setTechReportStatus}
+                setActiveTab={setActiveTab}
+                scrollPosRef={scrollPosRef}
+                renderNotificationMessage={renderNotificationMessage}
+              />
             ) : null}
 
             {(activeTab === 'stocks' || activeTab === 'funds') && !stockDetailTarget && !fundDetailTarget ? (
@@ -3039,449 +1992,60 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'stocks' && !stockDetailTarget ? (
-              <div className="table-panel">
-                <table className="data-table stock-table">
-                  <thead>
-                    <tr>
-                      <th>股票</th>
-                      <th>分时图</th>
-                      <th>盈亏</th>
-                      <th>当日盈亏</th>
-                      <th>成本/现价</th>
-                      <th>持仓股数</th>
-                      <th>仓位比</th>
-                      <th>评级</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stockDisplayRows.map((item) => {
-                      const hasShares = item.shares > 0;
-                      const hasCost = item.cost > 0;
-                      const hasPosition = hasShares && hasCost;
-                      const badge = getStockBadge(item.code);
-                      const isLockedPinned = sortingMode === 'stocks' && item.code === stockPinnedCode;
-                      const holdingAmount = hasPosition && Number.isFinite(item.price)
-                        ? item.price * item.shares
-                        : Number.NaN;
-                      const holdingRate = hasPosition && Number.isFinite(item.price)
-                        ? ((item.price - item.cost) / item.cost) * 100
-                        : Number.NaN;
-                      const positionRatio = stockTotalHoldingAmount > 0 && Number.isFinite(holdingAmount)
-                        ? (holdingAmount / stockTotalHoldingAmount) * 100
-                        : Number.NaN;
-
-                      return (
-                        <Fragment key={item.code}>
-                        <tr
-                          className={[
-                            editingCell?.code === item.code ? 'editing-row' : '',
-                            sortingMode === 'stocks' ? 'sorting-row' : '',
-                            draggingCode === item.code ? 'dragging-row' : '',
-                            isLockedPinned ? 'locked-row' : '',
-                          ].filter(Boolean).join(' ')}
-                          onContextMenu={(event) => openRowContextMenu(event, 'stock', item.code)}
-                          draggable={sortingMode === 'stocks' && !isLockedPinned}
-                          onDragStart={() => handleDragStart(item.code)}
-                          onDragEnd={handleDragEnd}
-                          onDragOver={(event) => {
-                            if (sortingMode === 'stocks') event.preventDefault();
-                          }}
-                          onDrop={() => handleStockDrop(item.code)}
-                        >
-                          <td
-                            className={`name-col stock-detail-trigger ${item.special ? 'special-row' : ''}`}
-                            onClick={() => {
-                              if (sortingMode === 'stocks') return;
-                              openStockDetail(item);
-                            }}
-                            role="button"
-                            tabIndex={sortingMode === 'stocks' ? -1 : 0}
-                            onKeyDown={(e) => {
-                              if (sortingMode === 'stocks') return;
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openStockDetail(item);
-                              }
-                            }}
-                          >
-                            <span className="primary">
-                              <span className="name-inline">
-                                {sortingMode === 'stocks' ? (
-                                  <span className={`drag-handle ${isLockedPinned ? 'disabled' : ''}`}>
-                                    <GripVertical size={12} />
-                                  </span>
-                                ) : null}
-                                {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
-                                <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
-                                {badge ? (
-                                  <span className={`stock-badge ${badge.tone}`}>{badge.label}</span>
-                                ) : null}
-                                {signalStocks?.[item.code] ? (
-                                  <span className="stock-badge signal" title={`${signalStocks[item.code].signalCount} 个技术信号`}>
-                                    技
-                                  </span>
-                                ) : null}
-                                {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
-                              </span>
-                              {item.tags.length > 0 ? (
-                                <span className="tag-row">
-                                  {item.tags.slice(0, 2).map(tag => (
-                                    <TagBadge key={tag} tag={tag} />
-                                  ))}
-                                  {item.tags.length > 2 ? (
-                                    <span className="tag-badge-more">+{item.tags.length - 2}</span>
-                                  ) : null}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span className="secondary">{item.code}</span>
-                          </td>
-                          <td
-                            className="stock-detail-trigger stock-detail-chart"
-                            onClick={() => {
-                              if (sortingMode === 'stocks') return;
-                              openStockDetail(item);
-                            }}
-                            role="button"
-                            tabIndex={sortingMode === 'stocks' ? -1 : 0}
-                            onKeyDown={(e) => {
-                              if (sortingMode === 'stocks') return;
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openStockDetail(item);
-                              }
-                            }}
-                          >
-                            <IntradayChart
-                              data={item.intraday?.data ?? []}
-                              prevClose={item.prevClose}
-                              intradayPrevClose={item.intraday?.prevClose}
-                              changePct={item.dailyChangePct}
-                            />
-                          </td>
-                          <td className="dual-value">
-                            <span className={toneClass(item.floatingPnl)}>{formatNumber(item.floatingPnl, 1)}</span>
-                            <span className={toneClass(holdingRate)}>{formatPercent(holdingRate)}</span>
-                          </td>
-                          <td className="dual-value">
-                            <span className={toneClass(item.dailyPnl)}>{formatNumber(item.dailyPnl, 0)}</span>
-                            <span className={toneClass(item.dailyChangePct)}>{formatPercent(item.dailyChangePct)}</span>
-                          </td>
-                          <td className="dual-value price-cell">
-                            {editingCell?.kind === 'stock' && editingCell.code === item.code && editingCell.field === 'cost' ? (
-                              <input
-                                className="inline-edit-input inline-edit-compact"
-                                value={editingCell.value}
-                                placeholder="输入成本价"
-                                onChange={(e) => updateEditingValue(e.target.value)}
-                                onBlur={finishEditing}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    finishEditing();
-                                  } else if (e.key === 'Escape') {
-                                    cancelEditing();
-                                  }
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <span
-                                className={hasCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditing('stock', item.code, 'cost');
-                                }}
-                                title="点击编辑成本价"
-                              >
-                                {hasCost ? formatNumber(item.cost, 3) : '输入成本价'}
-                              </span>
-                            )}
-                            <span className="price-line">{formatNumber(item.price, 2)}</span>
-                            {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
-                              <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                                <span>关注 {formatNumber(item.addedPrice!, 3)}</span>
-                                <span className={toneClass(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}>
-                                  {formatPercent(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}
-                                </span>
-                              </span>
-                            ) : null}
-                          </td>
-                          <td>
-                            {editingCell?.kind === 'stock' && editingCell.code === item.code && editingCell.field === 'shares' ? (
-                              <input
-                                className="inline-edit-input inline-edit-compact"
-                                value={editingCell.value}
-                                placeholder="输入股数"
-                                onChange={(e) => updateEditingValue(e.target.value)}
-                                onBlur={finishEditing}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    finishEditing();
-                                  } else if (e.key === 'Escape') {
-                                    cancelEditing();
-                                  }
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <span
-                                className={hasShares ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditing('stock', item.code, 'shares');
-                                }}
-                                title="点击编辑股数"
-                              >
-                                {hasShares ? formatNumber(item.shares, 0) : '输入股数'}
-                              </span>
-                            )}
-                          </td>
-                          <td>{formatRatioPercent(positionRatio)}</td>
-                          <td className="score-cell"><ScoreBadge code={item.code} /></td>
-                        </tr>
-                        {sortingMode === 'stocks' && isLockedPinned ? (
-                          <tr
-                            className={`sort-insert-row ${draggingCode ? 'active' : ''}`}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={handleStockDropAfterPinned}
-                          >
-                            <td colSpan={8}>拖到这里可排到置顶后</td>
-                          </tr>
-                        ) : null}
-                        </Fragment>
-                      );
-                    })}
-
-                    {stockDisplayRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="table-empty-cell">
-                          {stocksLoading
-                            ? '股票数据加载中...'
-                            : stocksError || '暂无股票持仓，点击右上角搜索添加股票'}
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-                <FloatingRefreshBtn onRefresh={handleRefresh} spinning={refreshing} />
-              </div>
+              <StockTable
+                rows={stockDisplayRows}
+                stockPinnedCode={stockPinnedCode}
+                sortingMode={sortingMode}
+                draggingCode={draggingCode}
+                editingCell={editingCell}
+                stockScores={stockScores}
+                signalStocks={signalStocks}
+                stocksLoading={stocksLoading}
+                stocksError={stocksError}
+                stockTotalHoldingAmount={stockTotalHoldingAmount}
+                openStockDetail={openStockDetail}
+                openRowContextMenu={openRowContextMenu}
+                startEditing={startEditing}
+                updateEditingValue={updateEditingValue}
+                finishEditing={finishEditing}
+                cancelEditing={cancelEditing}
+                handleDragStart={handleDragStart}
+                handleDragEnd={handleDragEnd}
+                handleStockDrop={handleStockDrop}
+                handleStockDropAfterPinned={handleStockDropAfterPinned}
+                getStockBadge={getStockBadge}
+                onRefresh={handleRefresh}
+                refreshing={refreshing}
+              />
             ) : null}
 
             {activeTab === 'funds' && !fundDetailTarget ? (
-              <div className="table-panel">
-                <table className="data-table fund-table">
-                  <thead>
-                    <tr>
-                      <th>基金名称</th>
-                      <th>
-                        <span className="stacked-th">
-                          <span>持仓净值</span>
-                          <span>估算净值</span>
-                        </span>
-                      </th>
-                      <th>持有额</th>
-                      <th>持有收益</th>
-                      <th>持有收益率</th>
-                      <th>涨跌幅</th>
-                      <th>估算收益</th>
-                      <th>更新时间</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fundDisplayRows.map((item) => {
-                      const isLockedPinned = sortingMode === 'funds' && item.code === fundPinnedCode;
-                      const hasFundCost = item.cost > 0;
-                      const hasFundUnits = item.units > 0;
-                      return (
-                      <Fragment key={item.code}>
-                      <tr
-                        onContextMenu={(event) => openRowContextMenu(event, 'fund', item.code)}
-                        className={[
-                          sortingMode === 'funds' ? 'sorting-row' : '',
-                          draggingCode === item.code ? 'dragging-row' : '',
-                          isLockedPinned ? 'locked-row' : '',
-                        ].filter(Boolean).join(' ')}
-                        draggable={sortingMode === 'funds' && !isLockedPinned}
-                        onDragStart={() => handleDragStart(item.code)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(event) => {
-                          if (sortingMode === 'funds') event.preventDefault();
-                        }}
-                        onDrop={() => handleFundDrop(item.code)}
-                      >
-                        <td
-                          className={`name-col fund-detail-trigger ${item.special ? 'special-row' : ''}`}
-                          onClick={() => {
-                            if (sortingMode === 'funds') return;
-                            openFundDetail(item);
-                          }}
-                          role="button"
-                          tabIndex={sortingMode === 'funds' ? -1 : 0}
-                          onKeyDown={(e) => {
-                            if (sortingMode === 'funds') return;
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              openFundDetail(item);
-                            }
-                          }}
-                        >
-                          <span
-                            className="primary"
-                            title={item.name}
-                          >
-                            <span className="name-inline">
-                              {sortingMode === 'funds' ? (
-                                <span className={`drag-handle ${isLockedPinned ? 'disabled' : ''}`}>
-                                  <GripVertical size={12} />
-                                </span>
-                              ) : null}
-                              {item.navDisclosedToday ? (
-                                <span
-                                  className="fund-disclosed-check"
-                                  aria-label="当日净值已披露"
-                                  title={`当日净值已披露${item.navDate ? `：${item.navDate}` : ''}`}
-                                >
-                                  ✓
-                                </span>
-                              ) : null}
-                              {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
-                              <span className="name-text">{item.name}</span>
-                              {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
-                            </span>
-                            {item.tags.length > 0 ? (
-                              <span className="tag-row">
-                                {item.tags.slice(0, 2).map(tag => (
-                                  <TagBadge key={tag} tag={tag} />
-                                ))}
-                                {item.tags.length > 2 ? (
-                                  <span className="tag-badge-more">+{item.tags.length - 2}</span>
-                                ) : null}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="secondary">{item.code}</span>
-                        </td>
-                        <td className="dual-value price-cell">
-                          {editingCell?.kind === 'fund' && editingCell.code === item.code && editingCell.field === 'cost' ? (
-                            <input
-                              className="inline-edit-input inline-edit-compact"
-                              value={editingCell.value}
-                              placeholder="输入持仓净值"
-                              onChange={(e) => updateEditingValue(e.target.value)}
-                              onBlur={finishEditing}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  finishEditing();
-                                } else if (e.key === 'Escape') {
-                                  cancelEditing();
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className={hasFundCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditing('fund', item.code, 'cost');
-                              }}
-                            >
-                              {hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值'}
-                            </span>
-                          )}
-                          <span className="price-line">
-                            {Number.isFinite(item.estimatedNav) ? item.estimatedNav.toFixed(4) : '-'}
-                          </span>
-                          {Number.isFinite(item.addedNav) && item.addedNav! > 0 ? (
-                            <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                              <span>关注 {item.addedNav!.toFixed(4)}</span>
-                              <span className={toneClass(((item.estimatedNav - item.addedNav!) / item.addedNav!) * 100)}>
-                                {formatPercent(((item.estimatedNav - item.addedNav!) / item.addedNav!) * 100)}
-                              </span>
-                            </span>
-                          ) : null}
-                        </td>
-                        <td>
-                          {editingCell?.kind === 'fund' && editingCell.code === item.code && editingCell.field === 'units' ? (
-                            <input
-                              className="inline-edit-input inline-edit-compact"
-                              value={editingCell.value}
-                              placeholder="输入持有额"
-                              onChange={(e) => updateEditingValue(e.target.value)}
-                              onBlur={finishEditing}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  finishEditing();
-                                } else if (e.key === 'Escape') {
-                                  cancelEditing();
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className={hasFundUnits ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditing('fund', item.code, 'units');
-                              }}
-                            >
-                              {hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额'}
-                            </span>
-                          )}
-                        </td>
-                        <td className={toneClass(item.holdingProfit)}>{formatNumber(item.holdingProfit, 2)}</td>
-                        <td className={toneClass(item.holdingProfitRate)}>{formatPercent(item.holdingProfitRate)}</td>
-                        <td className={toneClass(item.changePct)}>{formatPercent(item.changePct)}</td>
-                        <td className={toneClass(item.estimatedProfit)}>{formatNumber(item.estimatedProfit, 2)}</td>
-                        <td>{item.updatedAt}</td>
-                      </tr>
-                      {sortingMode === 'funds' && isLockedPinned ? (
-                        <tr
-                          className={`sort-insert-row ${draggingCode ? 'active' : ''}`}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={handleFundDropAfterPinned}
-                        >
-                          <td colSpan={8}>拖到这里可排到置顶后</td>
-                        </tr>
-                      ) : null}
-                      </Fragment>
-                    )})}
+              <FundTable
+                rows={fundDisplayRows}
+                fundPinnedCode={fundPinnedCode}
+                sortingMode={sortingMode}
+                draggingCode={draggingCode}
+                editingCell={editingCell}
+                fundsLoading={fundsLoading}
+                fundsError={fundsError}
+                fundPositionsLength={fundPositions.length}
+                openFundDetail={openFundDetail}
+                openRowContextMenu={openRowContextMenu}
+                startEditing={startEditing}
+                updateEditingValue={updateEditingValue}
+                finishEditing={finishEditing}
+                cancelEditing={cancelEditing}
+                handleDragStart={handleDragStart}
+                handleDragEnd={handleDragEnd}
+                handleFundDrop={handleFundDrop}
+                handleFundDropAfterPinned={handleFundDropAfterPinned}
+                onRefresh={handleRefresh}
+                refreshing={refreshing}
+              />
+            ) : null}
 
-                    {fundsLoading && fundPositions.length === 0 ? (
-                      <>
-                        <tr className="skeleton-row">
-                          <td className="skeleton-cell"><div className="skeleton-bar medium" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                        </tr>
-                        <tr className="skeleton-row">
-                          <td className="skeleton-cell"><div className="skeleton-bar medium" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                          <td className="skeleton-cell"><div className="skeleton-bar short" /></td>
-                        </tr>
-                      </>
-                    ) : fundDisplayRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="table-empty-cell">
-                          {fundsError || '暂无基金持仓，点击右上角搜索添加基金'}
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-                <FloatingRefreshBtn onRefresh={handleRefresh} spinning={refreshing} />
-              </div>
+            {activeTab === 'trades' ? (
+              <TradeHistoryPage stockNames={stockNameMap} fundNames={fundNameMap} allStockCodes={stockHoldings.map(h => h.code)} allFundCodes={fundHoldings.map(h => h.code)} onStockTradesChanged={handleStockTradesChanged} onFundTradesChanged={handleFundTradesChanged} />
             ) : null}
 
             {activeTab === 'analytics' && scoreDetailTarget ? (

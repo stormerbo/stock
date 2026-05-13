@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Flame, Search, X } from 'lucide-react';
-import { fetchSectorList, type SectorData } from '../shared/sector';
+import { fetchSectorList, type SectorData } from '../../shared/sector';
 
 function toNumber(v: unknown): number {
   const n = Number(v);

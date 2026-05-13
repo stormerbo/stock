@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import type { StockScoreResult, ScoreBreakdown } from '../shared/scoring';
+import type { StockScoreResult, ScoreBreakdown } from '../../shared/scoring';
 
 type Props = {
   code: string;

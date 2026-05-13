@@ -48,7 +48,7 @@ import {
   type SpikeGlobalConfig,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
-import { TRADE_HISTORY_KEY } from '../shared/trade-history';
+import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
 import { detectAllSignals, fetchDayFqKline } from '../shared/technical-analysis';
 
 export type BadgeMode =
@@ -97,6 +97,7 @@ const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
 const API_ERROR_KEY = '_apiErrorState';
 const API_ERROR_COOLDOWN_MS = 30 * 60 * 1000; // 30 分钟
 let refreshStocksInFlight = false;
+let refreshFundsInFlight = false;
 
 const DEFAULT_BADGE_CONFIG: BadgeConfig = {
   enabled: true,
@@ -154,41 +155,62 @@ const DEFAULT_REFRESH: RefreshConfig = {
 // -----------------------------------------------------------
 
 let badgeUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+let badgeUpdateInFlight = false;
 
 function scheduleBadgeUpdate() {
   if (badgeUpdateTimer) return;
   badgeUpdateTimer = setTimeout(() => {
     badgeUpdateTimer = null;
-    void updateBadgeFromCache();
+    if (!badgeUpdateInFlight) {
+      void updateBadgeFromCache();
+    }
   }, 300);
 }
 
 async function updateBadgeFromCache() {
-  const config = await loadBadgeConfig();
+  if (badgeUpdateInFlight) return;
+  badgeUpdateInFlight = true;
+  try {
+    const config = await loadBadgeConfig();
 
-  // Always update hover title regardless of badge config
-  void updateHoverTitleFromStorage();
+    // Always update hover title regardless of badge config
+    void updateHoverTitleFromStorage();
 
-  if (!config.enabled || config.mode === 'off') {
-    void chrome.action.setBadgeText({ text: '' });
-    return;
+    if (!config.enabled || config.mode === 'off') {
+      void chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+
+    const [stockResult, fundResult, indexResult] = await Promise.all([
+      chrome.storage.local.get(['stockPositions']),
+      chrome.storage.local.get(['fundPositions']),
+      chrome.storage.local.get(['indexPositions']),
+    ]);
+
+    const stockPositions = (Array.isArray(stockResult.stockPositions) ? stockResult.stockPositions : []) as StockPosition[];
+    const fundPositions = (Array.isArray(fundResult.fundPositions) ? fundResult.fundPositions : []) as FundPosition[];
+    const indexPositions = (Array.isArray(indexResult.indexPositions) ? indexResult.indexPositions : []) as MarketIndexQuote[];
+    const holdingsResult = await chrome.storage.sync.get(['stockHoldings', 'fundHoldings']);
+    const stockHoldings = (Array.isArray(holdingsResult.stockHoldings) ? holdingsResult.stockHoldings : []) as StockHoldingConfig[];
+    const fundHoldings = (Array.isArray(holdingsResult.fundHoldings) ? holdingsResult.fundHoldings : []) as FundHoldingConfig[];
+
+    // 持仓为空时清空角标和缓存数据
+    if (stockHoldings.length === 0 && fundHoldings.length === 0) {
+      void chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+
+    const tradeHistory = await loadTradeHistoryForBadge();
+    const metrics = computeMetrics(stockPositions, fundPositions, stockHoldings, fundHoldings, tradeHistory);
+    applyBadgeText(config, metrics);
+  } finally {
+    badgeUpdateInFlight = false;
+    // 如果在执行期间又触发了新的调度，立即再跑一次
+    if (badgeUpdateTimer) {
+      badgeUpdateTimer = null;
+      scheduleBadgeUpdate();
+    }
   }
-
-  const [stockResult, fundResult, indexResult] = await Promise.all([
-    chrome.storage.local.get(['stockPositions']),
-    chrome.storage.local.get(['fundPositions']),
-    chrome.storage.local.get(['indexPositions']),
-  ]);
-
-  const stockPositions = (Array.isArray(stockResult.stockPositions) ? stockResult.stockPositions : []) as StockPosition[];
-  const fundPositions = (Array.isArray(fundResult.fundPositions) ? fundResult.fundPositions : []) as FundPosition[];
-  const indexPositions = (Array.isArray(indexResult.indexPositions) ? indexResult.indexPositions : []) as MarketIndexQuote[];
-  const holdingsResult = await chrome.storage.sync.get(['stockHoldings', 'fundHoldings']);
-  const stockHoldings = (Array.isArray(holdingsResult.stockHoldings) ? holdingsResult.stockHoldings : []) as StockHoldingConfig[];
-  const fundHoldings = (Array.isArray(holdingsResult.fundHoldings) ? holdingsResult.fundHoldings : []) as FundHoldingConfig[];
-
-  const metrics = computeMetrics(stockPositions, fundPositions, stockHoldings, fundHoldings);
-  applyBadgeText(config, metrics);
 }
 
 async function updateHoverTitleFromStorage() {
@@ -1258,6 +1280,8 @@ async function generateDailyTechnicalReport() {
 
 async function refreshFunds() {
   if (!isTradingHours()) return;
+  if (refreshFundsInFlight) return;
+  refreshFundsInFlight = true;
   try {
     const result = await chrome.storage.sync.get('fundHoldings');
     const funds = (Array.isArray(result.fundHoldings) ? result.fundHoldings : []) as FundHoldingConfig[];
@@ -1280,6 +1304,8 @@ async function refreshFunds() {
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
     void notifyApiError('基金净值', 'fundErrorAt');
+  } finally {
+    refreshFundsInFlight = false;
   }
 }
 
@@ -1308,23 +1334,50 @@ async function refreshIndexes() {
 // 角标渲染
 // -----------------------------------------------------------
 
+async function loadTradeHistoryForBadge(): Promise<Record<string, StockTradeRecord[]>> {
+  try {
+    const result = await chrome.storage.sync.get(TRADE_HISTORY_KEY);
+    const raw = result[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
+    if (!raw || typeof raw !== 'object') return {};
+    return raw;
+  } catch {
+    return {};
+  }
+}
+
 function computeMetrics(
   stockPositions: StockPosition[],
   fundPositions: FundPosition[],
   stockHoldings: StockHoldingConfig[],
   fundHoldings: FundHoldingConfig[],
+  tradeHistory: Record<string, StockTradeRecord[]> = {},
 ): Record<string, number> {
+  const today = getShanghaiToday();
+  const holdingMap = new Map(stockHoldings.map((h) => [h.code, h]));
+
   const stockMarketValue = stockPositions.reduce((sum, item) => {
     if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
     return sum + item.price * item.shares;
   }, 0);
 
   const floating = stockPositions.reduce((sum, item) => {
+    const trades = tradeHistory[item.code];
+    if (trades && trades.length > 0) {
+      const holding = holdingMap.get(item.code);
+      if (holding && holding.cost > 0 && holding.shares > 0 && Number.isFinite(item.price)) {
+        return sum + (item.price - holding.cost) * holding.shares;
+      }
+    }
     if (!Number.isFinite(item.floatingPnl)) return sum;
     return sum + item.floatingPnl;
   }, 0);
 
   const daily = stockPositions.reduce((sum, item) => {
+    const trades = tradeHistory[item.code];
+    if (trades && trades.length > 0) {
+      const corrected = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
+      if (Number.isFinite(corrected)) return sum + corrected;
+    }
     if (!Number.isFinite(item.dailyPnl)) return sum;
     return sum + item.dailyPnl;
   }, 0);

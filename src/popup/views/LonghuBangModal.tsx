@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpDown } from 'lucide-react';
-import { fetchLonghuBang, type LonghuBangStock } from '../shared/longhubang';
+import { fetchLonghuBang, type LonghuBangStock } from '../../shared/longhubang';
 
 type Props = {
   stockCodes: string[];

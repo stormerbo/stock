@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
-import { type FundPosition, type FundHoldingConfig } from '../shared/fetch';
+import { type FundPosition, type FundHoldingConfig } from '../../shared/fetch';
 
 // Proxy fetch through background to avoid CORS
 // Uses a long-lived port connection to keep the Service Worker alive during fetch

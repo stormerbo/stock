@@ -22,6 +22,7 @@ import {
   type TagConfig,
   type TagDefinition,
 } from '../shared/tags';
+import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const DISPLAY_STORAGE_KEY = 'displayConfig';
@@ -530,11 +531,19 @@ export default function App() {
   const [showDonate, setShowDonate] = useState(false);
 
   // ---- Settings Tabs ----
-  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'tech-report' | 'other'>('basic');
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'trading' | 'tech-report' | 'other'>('basic');
 
   // ---- Work Mode Config ----
   const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
   const [workModeDraft, setWorkModeDraft] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
+
+  // ---- Fee Config ----
+  const [feeConfig, setFeeConfig] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
+  const [feeDraft, setFeeDraft] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
+
+  useEffect(() => {
+    loadFeeConfig().then((cfg) => { setFeeConfig(cfg); setFeeDraft(cfg); });
+  }, []);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -917,6 +926,7 @@ export default function App() {
         <div className="settings-tabs">
           <button type="button" className={`settings-tab ${settingsTab === 'basic' ? 'active' : ''}`} onClick={() => setSettingsTab('basic')}>基本</button>
           <button type="button" className={`settings-tab ${settingsTab === 'alerts' ? 'active' : ''}`} onClick={() => setSettingsTab('alerts')}>告警</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'trading' ? 'active' : ''}`} onClick={() => setSettingsTab('trading')}>交易</button>
           <button type="button" className={`settings-tab ${settingsTab === 'tech-report' ? 'active' : ''}`} onClick={() => setSettingsTab('tech-report')}>技术报告</button>
           <button type="button" className={`settings-tab ${settingsTab === 'other' ? 'active' : ''}`} onClick={() => setSettingsTab('other')}>其他</button>
         </div>
@@ -1152,6 +1162,64 @@ export default function App() {
             </div>
           </div>
         </section>)}
+
+        {/* ---- 交易费率 ---- */}
+        {settingsTab === 'trading' && (
+          <section className="options-section">
+            <h2>交易费率 <span className="badge-tag">即时生效</span></h2>
+            <p className="section-desc">设置默认费率，添加交易记录时自动计算费用。</p>
+
+            <div className="config-card" style={{ padding: '16px', borderRadius: 10, border: '1px solid var(--line)', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-0)', margin: '0 0 12px' }}>股票费率</h3>
+              <div className="work-mode-row">
+                <span className="work-mode-label">佣金费率</span>
+                <input type="number" step="0.00001" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.stockCommissionRate} onChange={e => setFeeDraft(p => ({ ...p, stockCommissionRate: Number(e.target.value) }))} />
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>（如 0.00025 = 万2.5）</span>
+              </div>
+              <div className="work-mode-row">
+                <span className="work-mode-label">最低佣金（元）</span>
+                <input type="number" step="0.01" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.stockCommissionMin} onChange={e => setFeeDraft(p => ({ ...p, stockCommissionMin: Number(e.target.value) }))} />
+              </div>
+              <div className="work-mode-row">
+                <span className="work-mode-label">印花税率（卖出）</span>
+                <input type="number" step="0.00001" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.stockStampTaxRate} onChange={e => setFeeDraft(p => ({ ...p, stockStampTaxRate: Number(e.target.value) }))} />
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>（如 0.0005 = 万5）</span>
+              </div>
+              <div className="work-mode-row">
+                <span className="work-mode-label">过户费率</span>
+                <input type="number" step="0.000001" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.stockTransferFeeRate} onChange={e => setFeeDraft(p => ({ ...p, stockTransferFeeRate: Number(e.target.value) }))} />
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>（如 0.00001 = 万0.1）</span>
+              </div>
+            </div>
+
+            <div className="config-card" style={{ padding: '16px', borderRadius: 10, border: '1px solid var(--line)', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-0)', margin: '0 0 12px' }}>基金费率</h3>
+              <div className="work-mode-row">
+                <span className="work-mode-label">申购费率</span>
+                <input type="number" step="0.0001" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.fundSubscriptionRate} onChange={e => setFeeDraft(p => ({ ...p, fundSubscriptionRate: Number(e.target.value) }))} />
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>（如 0.0015 = 0.15%）</span>
+              </div>
+              <div className="work-mode-row">
+                <span className="work-mode-label">赎回费率</span>
+                <input type="number" step="0.0001" min="0" style={{ width: 120, padding: '6px 8px', fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--bg-0)', color: 'var(--text-0)' }}
+                  value={feeDraft.fundRedemptionRate} onChange={e => setFeeDraft(p => ({ ...p, fundRedemptionRate: Number(e.target.value) }))} />
+                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>（如 0.005 = 0.5%）</span>
+              </div>
+            </div>
+
+            {JSON.stringify(feeDraft) !== JSON.stringify(feeConfig) && (
+              <button type="button" onClick={async () => { await saveFeeConfig(feeDraft); setFeeConfig(feeDraft); }}
+                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                保存费率配置
+              </button>
+            )}
+          </section>
+        )}
 
         {/* ---- 告警设置 ---- */}
         {settingsTab === 'alerts' && (<section className="options-section">

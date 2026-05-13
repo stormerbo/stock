@@ -1,5 +1,5 @@
-import { getTagColor } from '../shared/tags';
-import type { TagDefinition } from '../shared/tags';
+import { getTagColor } from '../../shared/tags';
+import type { TagDefinition } from '../../shared/tags';
 
 type TagFilterBarProps = {
   tags: TagDefinition[];

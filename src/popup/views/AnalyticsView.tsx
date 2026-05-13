@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { StockScoreResult } from '../shared/scoring';
+import type { StockScoreResult } from '../../shared/scoring';
 
 type Props = {
   scores: Map<string, StockScoreResult>;

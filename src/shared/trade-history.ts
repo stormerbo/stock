@@ -96,6 +96,67 @@ export function computePositionFromTrades(
   };
 }
 
+/** 计算当日盈亏，区分隔夜持仓和当日买入 */
+export function computeDailyPnlFromTrades(
+  trades: StockTradeRecord[],
+  currentPrice: number,
+  prevClose: number,
+  today: string,
+): number {
+  if (!Array.isArray(trades) || trades.length === 0) return Number.NaN;
+  if (!Number.isFinite(currentPrice) || !Number.isFinite(prevClose)) return Number.NaN;
+
+  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+
+  let yesterdayShares = 0;
+  let yesterdayTotalCost = 0;
+  let todayBuyShares = 0;
+  let todayBuyAmount = 0;
+
+  for (const t of sorted) {
+    if (t.date < today) {
+      if (t.type === 'buy') {
+        yesterdayShares += t.shares;
+        yesterdayTotalCost += t.shares * t.price + totalFees(t);
+      } else if (t.type === 'sell') {
+        if (yesterdayShares <= 0) continue;
+        const sellShares = Math.min(t.shares, yesterdayShares);
+        yesterdayTotalCost *= (yesterdayShares - sellShares) / yesterdayShares;
+        yesterdayShares -= sellShares;
+      }
+    } else if (t.date === today) {
+      if (t.type === 'buy') {
+        todayBuyShares += t.shares;
+        todayBuyAmount += t.shares * t.price + totalFees(t);
+      } else if (t.type === 'sell') {
+        if (todayBuyShares > 0) {
+          // 优先从当日买入中扣减
+          const fromToday = Math.min(t.shares, todayBuyShares);
+          todayBuyShares -= fromToday;
+          todayBuyAmount *= (todayBuyShares + fromToday > 0 ? todayBuyShares / (todayBuyShares + fromToday) : 0);
+        }
+        if (t.shares > (todayBuyShares > 0 ? 0 : 0)) {
+          const remaining = t.shares - Math.min(t.shares, todayBuyShares);
+          if (yesterdayShares > 0) {
+            const fromYesterday = Math.min(remaining, yesterdayShares);
+            yesterdayTotalCost *= (yesterdayShares - fromYesterday) / yesterdayShares;
+            yesterdayShares -= fromYesterday;
+          }
+        }
+      }
+    }
+  }
+
+  const overnightPnl = yesterdayShares > 0
+    ? (currentPrice - prevClose) * yesterdayShares
+    : 0;
+  const intradayPnl = todayBuyShares > 0
+    ? (currentPrice - todayBuyAmount / todayBuyShares) * todayBuyShares
+    : 0;
+
+  return Math.round((overnightPnl + intradayPnl) * 100) / 100;
+}
+
 // -----------------------------------------------------------
 // Persistence
 // -----------------------------------------------------------

@@ -8,7 +8,8 @@ import {
   getTradesForStock,
   addTrade,
   deleteTrade,
-} from '../shared/trade-history';
+} from '../../shared/trade-history';
+import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
 
 type Props = {
   code: string;
@@ -88,6 +89,32 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
 
   const handleFormChange = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const [feeCfg, setFeeCfg] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
+  useEffect(() => { loadFeeConfig().then(setFeeCfg); }, []);
+
+  const calcDefaultFees = useCallback(() => {
+    const shares = Number(form.shares);
+    const price = Number(form.price);
+    if (!Number.isFinite(shares) || shares <= 0 || !Number.isFinite(price) || price <= 0) {
+      return { commission: 0, stampTax: 0, transferFee: 0, total: 0 };
+    }
+    const amount = shares * price;
+    const commission = Math.max(Math.round(amount * feeCfg.stockCommissionRate * 100) / 100, feeCfg.stockCommissionMin);
+    const stampTax = form.type === 'sell' ? Math.round(amount * feeCfg.stockStampTaxRate * 100) / 100 : 0;
+    const transferFee = Math.round(amount * feeCfg.stockTransferFeeRate * 100) / 100;
+    return { commission, stampTax, transferFee, total: commission + stampTax + transferFee };
+  }, [form.shares, form.price, form.type, feeCfg]);
+
+  const fillDefaultFees = () => {
+    const fees = calcDefaultFees();
+    setForm((prev) => ({
+      ...prev,
+      commission: fees.commission > 0 ? String(fees.commission) : prev.commission,
+      stampTax: fees.stampTax > 0 ? String(fees.stampTax) : prev.stampTax,
+      transferFee: fees.transferFee > 0 ? String(fees.transferFee) : prev.transferFee,
+    }));
   };
 
   const validate = useCallback((): string | null => {
@@ -339,7 +366,18 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
                 />
               </div>
             )}
-            {/* Row 3: total + commission */}
+            {/* Row: auto-calculate fees */}
+            {form.type !== 'dividend' && (() => {
+              const est = calcDefaultFees();
+              if (est.total <= 0) return null;
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--text-1)', padding: '2px 4px', background: 'var(--brand-soft)', borderRadius: 4 }}>
+                  <span>预估费用：佣金 ¥{est.commission.toFixed(2)} {form.type === 'sell' ? `+ 印花税 ¥${est.stampTax.toFixed(2)}` : ''} + 过户费 ¥{est.transferFee.toFixed(2)} = <b style={{ color: 'var(--text-0)' }}>¥{est.total.toFixed(2)}</b></span>
+                  <button type="button" style={{ marginLeft: 'auto', padding: '1px 8px', fontSize: 10, borderRadius: 3, border: '1px solid var(--brand)', background: 'var(--brand-soft)', color: 'var(--brand)', cursor: 'pointer', fontWeight: 600 }} onClick={fillDefaultFees}>填入</button>
+                </div>
+              );
+            })()}
+            {/* Row: total + commission */}
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 className="tag-editor-new-input"
@@ -356,19 +394,19 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="手续费（佣金）"
+                placeholder="佣金（万2.5, 最低5元）"
                 value={form.commission}
                 onChange={(e) => handleFormChange('commission', e.target.value)}
               />
             </div>
-            {/* Row 4: stampTax + transferFee */}
+            {/* Row: stampTax + transferFee */}
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 style={{ ...inputStyle, width: 0, flex: 1 }}
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="印花税（卖出时产生）"
+                placeholder={form.type === 'sell' ? '印花税（卖出万5）' : '印花税（仅卖出）'}
                 value={form.stampTax}
                 onChange={(e) => handleFormChange('stampTax', e.target.value)}
               />
@@ -377,7 +415,7 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="过户费"
+                placeholder="过户费（万0.1）"
                 value={form.transferFee}
                 onChange={(e) => handleFormChange('transferFee', e.target.value)}
               />

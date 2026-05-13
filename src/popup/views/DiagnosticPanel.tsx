@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { calcDiagnostics, type DiagnosticResult } from '../shared/diagnostics';
-import type { StockPosition, FundPosition } from '../shared/fetch';
+import { calcDiagnostics, type DiagnosticResult } from '../../shared/diagnostics';
+import type { StockPosition, FundPosition } from '../../shared/fetch';
 
 // Color palette for sector bars
 const SECTOR_COLORS = [

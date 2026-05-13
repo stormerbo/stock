@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { isTradingHours } from './stockDetail';
+import { isTradingHours } from '../stockDetail';
 
 const UP_COLOR = '#e45555';
 const DN_COLOR = '#2aa568';

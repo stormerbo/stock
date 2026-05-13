@@ -5,7 +5,7 @@ import {
   type TagDefinition,
   MAX_TAGS_PER_HOLDING,
   MAX_TAG_NAME_LENGTH,
-} from '../shared/tags';
+} from '../../shared/tags';
 
 type TagEditorProps = {
   currentTags: string[];

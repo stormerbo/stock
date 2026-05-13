@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { getTagColor } from '../shared/tags';
+import { getTagColor } from '../../shared/tags';
 
 type TagBadgeProps = {
   tag: string;

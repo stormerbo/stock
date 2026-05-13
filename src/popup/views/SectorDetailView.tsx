@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { fetchSectorStocks, type SectorStock } from '../shared/sector';
+import { fetchSectorStocks, type SectorStock } from '../../shared/sector';
 
 type Props = {
   sectorCode: string;

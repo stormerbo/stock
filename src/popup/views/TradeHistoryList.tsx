@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import {
   type StockTradeRecord,
   computePositionFromTrades,
-} from '../shared/trade-history';
+} from '../../shared/trade-history';
 
 type Props = {
   tradeHistory: Record<string, StockTradeRecord[]>;

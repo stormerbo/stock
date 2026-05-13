@@ -7,10 +7,10 @@ import {
   isTradingHours,
   type StockDetailData,
   type StockPeriod,
-} from "./stockDetail";
-import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../shared/risk-metrics";
-import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../shared/fundamentals";
-import { fetchStockSectors, type StockSector } from "../shared/sector";
+} from '../stockDetail';
+import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../../shared/risk-metrics";
+import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
+import { fetchStockSectors, type StockSector } from "../../shared/sector";
 
 const UP_COLOR = "#e45555";
 const DN_COLOR = "#2aa568";
