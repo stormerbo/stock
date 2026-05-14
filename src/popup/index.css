@@ -2201,6 +2201,12 @@ body.theme-light .row-context-menu {
   stroke-width: 1.1;
 }
 
+.ma20-line {
+  fill: none;
+  stroke: #00a86b;
+  stroke-width: 1.1;
+}
+
 .ma30-line {
   fill: none;
   stroke: #d94ee0;

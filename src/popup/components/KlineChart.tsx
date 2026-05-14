@@ -129,6 +129,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
 
   const [showMa5, setShowMa5] = useState(true);
   const [showMa10, setShowMa10] = useState(true);
+  const [showMa20, setShowMa20] = useState(true);
   const [showMa30, setShowMa30] = useState(true);
   const [showMa60, setShowMa60] = useState(true);
   const [showAvgLine, setShowAvgLine] = useState(true);
@@ -199,13 +200,20 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
   const volumes = useMemo(() => visibleKline.map((item) => item.volume), [visibleKline]);
   const ma5 = useMemo(() => calcMA(closes, 5), [closes]);
   const ma10 = useMemo(() => calcMA(closes, 10), [closes]);
+  const ma20 = useMemo(() => calcMA(closes, 20), [closes]);
   const ma30 = useMemo(() => calcMA(closes, 30), [closes]);
   const ma60 = useMemo(() => calcMA(closes, 60), [closes]);
   const macdData = useMemo(() => calcMACD(closes), [closes]);
+
   const avgLineData = useMemo(() => {
-    let sum = 0;
-    return closes.map((v, i) => { sum += v; return sum / (i + 1); });
-  }, [closes]);
+    let sumAmount = 0;
+    let sumVol = 0;
+    return visibleKline.map((v) => {
+      sumAmount += v.close * v.volume;
+      sumVol += v.volume;
+      return sumVol > 0 ? sumAmount / sumVol : v.close;
+    });
+  }, [visibleKline]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!canPan) return;
@@ -490,6 +498,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
 
   const lastMa5  = valueByIndex(ma5, last);
   const lastMa10 = valueByIndex(ma10, last);
+  const lastMa20 = valueByIndex(ma20, last);
   const lastMa30 = valueByIndex(ma30, last);
   const lastMa60 = valueByIndex(ma60, last);
 
@@ -520,10 +529,11 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
       {/* ─── Indicator Toggles ─── */}
       {!isMinuteStyle ? (
         <div className="indicator-bar">
-          <IndicatorToggle label="MA5" color="#f4b400" value={lastMa5 === null ? '-' : formatNumber(lastMa5, 2)} active={showMa5} onClick={() => setShowMa5((v) => !v)} />
-          <IndicatorToggle label="MA10" color="#8e44ff" value={lastMa10 === null ? '-' : formatNumber(lastMa10, 2)} active={showMa10} onClick={() => setShowMa10((v) => !v)} />
-          <IndicatorToggle label="MA30" color="#4a78ff" value={lastMa30 === null ? '-' : formatNumber(lastMa30, 2)} active={showMa30} onClick={() => setShowMa30((v) => !v)} />
-          <IndicatorToggle label="MA60" color="#14263f" value={lastMa60 === null ? '-' : formatNumber(lastMa60, 2)} active={showMa60} onClick={() => setShowMa60((v) => !v)} />
+          <IndicatorToggle label="MA5" color="#e8ecf4" value={lastMa5 === null ? '-' : formatNumber(lastMa5, 2)} active={showMa5} onClick={() => setShowMa5((v) => !v)} />
+          <IndicatorToggle label="MA10" color="#f4c542" value={lastMa10 === null ? '-' : formatNumber(lastMa10, 2)} active={showMa10} onClick={() => setShowMa10((v) => !v)} />
+          <IndicatorToggle label="MA20" color="#00a86b" value={lastMa20 === null ? '-' : formatNumber(lastMa20, 2)} active={showMa20} onClick={() => setShowMa20((v) => !v)} />
+          <IndicatorToggle label="MA30" color="#d94ee0" value={lastMa30 === null ? '-' : formatNumber(lastMa30, 2)} active={showMa30} onClick={() => setShowMa30((v) => !v)} />
+          <IndicatorToggle label="MA60" color="#33cc66" value={lastMa60 === null ? '-' : formatNumber(lastMa60, 2)} active={showMa60} onClick={() => setShowMa60((v) => !v)} />
           <span className="indicator-sep" />
           <IndicatorToggle label="MACD" color="#24a5d6" active={showMacdBar} onClick={() => setShowMacdBar((v) => !v)} />
           <IndicatorToggle label="DIF" color="#f6c545" active={showDif} onClick={() => setShowDif((v) => !v)} />
@@ -533,6 +543,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
         <div className="indicator-bar">
           <IndicatorToggle label="分时" color={minuteColor} value={formatNumber(closes[last], 2)} active={true} onClick={() => {}} />
           <IndicatorToggle label="均价" color="#c6ad58" value={avgLineData.length > 0 ? formatNumber(avgLineData[avgLineData.length - 1], 2) : '-'} active={showAvgLine} onClick={() => setShowAvgLine((v) => !v)} />
+          <IndicatorToggle label="当前价" color="#e45555" value={formatNumber(closes[last], 2)} active={true} onClick={() => {}} />
         </div>
       )}
 
@@ -617,7 +628,6 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
               </defs>
               <path d={minuteFillPath} fill="url(#min-fill-up)" clipPath="url(#min-clip-up)" />
               <path d={minuteFillPath} fill="url(#min-fill-dn)" clipPath="url(#min-clip-dn)" />
-              {showAvgLine && <path d={minuteAvgPath} className="minute-avg-line" fill="none" />}
               {closes.length >= 2 ? (
                 <>
                   <path d={minutePriceSegments.up} fill="none" stroke={UP_COLOR} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -626,6 +636,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
               ) : (
                 <path d={minutePricePath} fill="none" stroke={minuteColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               )}
+              {showAvgLine && <path d={minuteAvgPath} className="minute-avg-line" fill="none" />}
               <line x1="0" x2={SVG_W} y1={minuteBaselineY.toFixed(2)} y2={minuteBaselineY.toFixed(2)} className="minute-baseline" />
               {noonBreakX > 0 ? (
                 <line x1={noonBreakX.toFixed(2)} x2={noonBreakX.toFixed(2)} y1="0" y2={mainHeight} className="chart-grid-line" />
@@ -664,6 +675,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
             <>
               {showMa5 && <polyline points={createLinePath(ma5,  SVG_W, mainHeight, min, max)} className="ma5-line" />}
               {showMa10 && <polyline points={createLinePath(ma10, SVG_W, mainHeight, min, max)} className="ma10-line" />}
+              {showMa20 && <polyline points={createLinePath(ma20, SVG_W, mainHeight, min, max)} className="ma20-line" />}
               {showMa30 && <polyline points={createLinePath(ma30, SVG_W, mainHeight, min, max)} className="ma30-line" />}
               {showMa60 && <polyline points={createLinePath(ma60, SVG_W, mainHeight, min, max)} className="ma60-line" />}
             </>
@@ -767,7 +779,6 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
               <div className="chart-tooltip-row"><span className="chart-tooltip-label">价格</span><span className={`chart-tooltip-value ${toneClass(activeBar.close - baseline)}`}>{formatNumber(activeBar.close, 2)}</span></div>
               <div className="chart-tooltip-row"><span className="chart-tooltip-label">涨跌幅</span><span className={`chart-tooltip-value ${toneClass(activeBar.close - baseline)}`}>{activeChangePct >= 0 ? '+' : ''}{activeChangePct.toFixed(2)}%</span></div>
               <div className="chart-tooltip-row"><span className="chart-tooltip-label">均价</span><span className="chart-tooltip-value">{formatNumber(avgPrice, 2)}</span></div>
-              <div className="chart-tooltip-row"><span className="chart-tooltip-label">成交量</span><span className="chart-tooltip-value">{formatNumber(activeBar.volume, 0)}手</span></div>
               <div className="chart-tooltip-row"><span className="chart-tooltip-label">金额</span><span className="chart-tooltip-value">{formatNumber(amountWan, 2)}万</span></div>
             </div>
           );
@@ -819,7 +830,6 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
           <div
             ref={rangeBarRef}
             className={`chart-range-bar${rangeBarDragRef.current ? ' dragging' : ''}`}
-            onMouseDown={handleRangeMouseDown}
             onMouseMove={handleRangeMouseMove}
             onMouseUp={handleRangeMouseUp}
           >
@@ -827,6 +837,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
               <div
                 className="range-bar-window"
                 style={{ left: `${thumbLeft.toFixed(2)}%`, width: `${thumbWidth.toFixed(2)}%` }}
+                onMouseDown={handleRangeMouseDown}
               >
                 <span
                   className="range-resize-handle left"
