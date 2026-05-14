@@ -112,9 +112,11 @@ type StockAlertEditorProps = {
   stockName: string;
   onUpdate: (updated: StockAlertConfig) => void;
   onRemove: () => void;
+  onSave?: () => void;
+  saved?: boolean;
 };
 
-function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertEditorProps) {
+function StockAlertEditor({ config, stockName, onUpdate, onRemove, onSave, saved }: StockAlertEditorProps) {
   const [expanded, setExpanded] = useState(true);
 
   const updateRule = (ri: number, updater: (rule: AlertRule) => AlertRule) => {
@@ -146,6 +148,11 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove }: StockAlertE
           <span className={`alert-badge ${config.rules.some(r => r.enabled) ? 'active' : ''}`}>
             {config.rules.filter(r => r.enabled).length} 条规则
           </span>
+          {onSave && (
+            <button type="button" className={`btn-small ${saved ? 'active' : 'primary'}`} onClick={onSave}>
+              {saved ? '已保存' : '保存'}
+            </button>
+          )}
           <button type="button" className="btn-small danger" onClick={onRemove}>
             移除
           </button>
@@ -716,6 +723,7 @@ export default function App() {
   // ---- Alert Config ----
   const [alertConfig, setAlertConfig] = useState<AlertConfig>(DEFAULT_ALERT_CONFIG);
   const [alertDraft, setAlertDraft] = useState<AlertConfig>(DEFAULT_ALERT_CONFIG);
+  const [savedStocks, setSavedStocks] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadAlertConfig().then((config) => {
@@ -785,6 +793,9 @@ export default function App() {
     try {
       await saveAlertConfig(alertDraft);
       setAlertConfig(alertDraft);
+      const map: Record<string, string> = {};
+      for (const s of alertDraft.stocks) map[s.code] = JSON.stringify(s);
+      setSavedStocks(map);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -794,6 +805,14 @@ export default function App() {
 
   const alertDirty = JSON.stringify(alertDraft) !== JSON.stringify(alertConfig);
   const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty || techReportDirty;
+
+  const saveSingleStock = (code: string) => {
+    const current = JSON.stringify(alertDraft.stocks.find((s) => s.code === code));
+    saveAlertConfig(alertDraft).then(() => {
+      setAlertConfig(alertDraft);
+      setSavedStocks((prev) => ({ ...prev, [code]: current }));
+    });
+  };
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [updateStatus, setUpdateStatus] = useState('');
@@ -1373,6 +1392,9 @@ export default function App() {
                 const defaultConfig = createDefaultStockAlertConfig(stock.code, 'all');
                 const config = existingConfig || defaultConfig;
 
+                const stockKey = stock.code;
+                const stockJson = JSON.stringify(config);
+                const isSaved = savedStocks[stockKey] === stockJson;
                 return (
                   <StockAlertEditor
                     key={stock.code}
@@ -1392,6 +1414,8 @@ export default function App() {
                         stocks: prev.stocks.filter((s) => s.code !== stock.code),
                       }));
                     }}
+                    onSave={() => saveSingleStock(stock.code)}
+                    saved={isSaved}
                   />
                 );
               })

@@ -6,7 +6,9 @@ import {
 } from '../../shared/trade-history';
 import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
 import { formatNumber, formatPercent, toneClass } from '../utils/format';
-import type { DailyAssetSnapshot } from '../../shared/fetch';
+import type { DailyAssetSnapshot, StockPosition, FundPosition } from '../../shared/fetch';
+import { pMap } from '../../shared/fetch';
+import { fetchDayFqKline } from '../../shared/technical-analysis';
 import AssetCurveChart from '../components/AssetCurveChart';
 
 type Props = {
@@ -65,6 +67,13 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   const [feeCfg, setFeeCfg] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
   const [stockSearch, setStockSearch] = useState('');
   const [assetSnapshots, setAssetSnapshots] = useState<Record<string, DailyAssetSnapshot>>({});
+  const [recalcDate, setRecalcDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [showRecalcModal, setShowRecalcModal] = useState(false);
 
   useEffect(() => { loadFeeConfig().then(setFeeCfg); }, []);
 
@@ -91,6 +100,108 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   };
 
   useEffect(() => { void loadAll(); }, []);
+
+  const [recalcError, setRecalcError] = useState('');
+  const handleRecalcSnapshot = async () => {
+    setRecalcLoading(true);
+    setRecalcError('');
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      if (recalcDate > today) throw new Error('起始日期不能晚于今天');
+
+      // 读取数据
+      const [posResult, tradeResult] = await Promise.all([
+        chrome.storage.local.get(['stockPositions', 'fundPositions']),
+        chrome.storage.local.get('stockTradeHistory'),
+      ]);
+      const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
+      const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
+      const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
+
+      // 构建当前价格映射（K线数据缺失时的降级）
+      const currentPriceMap = new Map<string, number>();
+      for (const sp of stockPositions) {
+        if (Number.isFinite(sp.price)) currentPriceMap.set(sp.code, sp.price);
+      }
+      // 历史回算不包含基金收益（基金无交易记录无法回溯日期），基金收益由自动快照保存时计算
+      const currentFundPnl = 0;
+
+      // 预加载历史K线 → date→closePrice 映射
+      const allStockCodes = [...new Set([...Object.keys(allTrades), ...stockPositions.map((s) => s.code)])];
+      const klinePriceMap = new Map<string, Map<string, number>>();
+      await pMap(allStockCodes, async (code) => {
+        try {
+          const kline = await fetchDayFqKline(code, 240);
+          const m = new Map<string, number>();
+          for (const k of kline) m.set(k.date, k.close);
+          klinePriceMap.set(code, m);
+        } catch { /* skip */ }
+      }, 4);
+
+      // 获取现有快照
+      const snapResult = await chrome.storage.local.get('dailyAssetSnapshots');
+      const snapshots = (snapResult.dailyAssetSnapshots ?? {}) as Record<string, DailyAssetSnapshot>;
+      const tradedCodes = new Set(Object.keys(allTrades));
+
+      // 遍历日期范围
+      const cursor = new Date(recalcDate);
+      const endDate = new Date(today);
+      while (cursor <= endDate) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) {
+          let stockRealizedPnl = 0;
+          let stockFloatingAtDate = 0;
+
+          // 有交易记录的股票
+          for (const [code, trades] of Object.entries(allTrades)) {
+            const upToDate = trades.filter((t) => t.date <= dateStr);
+            if (upToDate.length > 0) {
+              stockRealizedPnl += computePositionFromTrades(upToDate).realizedPnl;
+              // 用该日收盘价算浮动盈亏
+              const pos = computePositionFromTrades(upToDate);
+              if (pos.shares > 0) {
+                const price = klinePriceMap.get(code)?.get(dateStr) ?? currentPriceMap.get(code);
+                if (Number.isFinite(price)) {
+                  stockFloatingAtDate += (price! - pos.avgCost) * pos.shares;
+                }
+              }
+            }
+          }
+          // 无交易记录的股票：用K线收盘价或当前价
+          for (const sp of stockPositions) {
+            if (tradedCodes.has(sp.code)) continue;
+            const price = klinePriceMap.get(sp.code)?.get(dateStr) ?? sp.price;
+            if (Number.isFinite(price) && sp.shares > 0 && sp.cost > 0) {
+              stockFloatingAtDate += (price! - sp.cost) * sp.shares;
+            } else if (Number.isFinite(sp.floatingPnl)) {
+              stockFloatingAtDate += sp.floatingPnl;
+            }
+          }
+
+          const stockPnl = stockFloatingAtDate + stockRealizedPnl;
+
+          snapshots[dateStr] = {
+            date: dateStr,
+            totalPnl: Math.round((stockPnl + currentFundPnl) * 100) / 100,
+            floatingPnl: Math.round((stockFloatingAtDate + currentFundPnl) * 100) / 100,
+            realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
+            stockPnl: Math.round(stockPnl * 100) / 100,
+            fundPnl: Math.round(currentFundPnl * 100) / 100,
+          };
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      await chrome.storage.local.set({ dailyAssetSnapshots: snapshots });
+      setAssetSnapshots(snapshots);
+      setShowRecalcModal(false);
+    } catch (err) {
+      setRecalcError(err instanceof Error ? err.message : '计算失败');
+    } finally {
+      setRecalcLoading(false);
+    }
+  };
 
   // 刷新单只股票的交易记录
   const refreshStock = async (code: string) => {
@@ -205,7 +316,8 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
         <span>股票 <b style={{ color: 'var(--text-0)' }}>{summary.totalStocks}</b> 只</span>
         <span>共 <b style={{ color: 'var(--text-0)' }}>{summary.totalTrades}</b> 笔</span>
         <span>合计已实现盈亏 <b className={toneClass(summary.totalRealizedPnl)}>{formatNumber(summary.totalRealizedPnl, 2)}</b></span>
-        <button type="button" style={{ ...btnStyle('brand'), marginLeft: 'auto' }} onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}>
+        <button type="button" style={{ ...btnStyle('ghost'), marginLeft: 'auto', fontSize: 18, lineHeight: 1, padding: '2px 6px' }} onClick={() => setShowRecalcModal(true)} title="重新计算累计收益">⏱</button>
+        <button type="button" style={{ ...btnStyle('brand') }} onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}>
           <Plus size={13} /> 新增交易
         </button>
       </div>
@@ -370,6 +482,58 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
             }}>
               <Plus size={14} /> 确认添加
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 重新计算累计收益弹窗 ─── */}
+      {showRecalcModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,0.45)",
+        }} onClick={() => setShowRecalcModal(false)}>
+          <div style={{
+            background: "var(--bg-1)", borderRadius: 12, padding: 20, width: 340,
+            display: "flex", flexDirection: "column", gap: 12,
+            border: "1px solid var(--glass-border)", boxShadow: "0 12px 36px rgba(0,0,0,0.25)",
+          }} onClick={(e) => e.stopPropagation()}>
+            {recalcLoading ? (
+              <>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>正在计算...</span>
+                <div style={{ fontSize: 11, color: "var(--text-1)", lineHeight: 1.5 }}>
+                  正在获取历史K线数据并重新计算，请稍候...
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
+                  <span className="recalc-spinner" />
+                </div>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>重新计算累计收益</span>
+                <div style={{ fontSize: 11, color: "var(--text-1)", lineHeight: 1.5 }}>
+                  选择起始日期，从该日期到今天的累计收益将被重新计算。
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-1)" }}>起始日期</span>
+                  <input type="date" value={recalcDate} onChange={(e) => setRecalcDate(e.target.value)}
+                    style={{
+                      padding: "8px 10px", fontSize: 12, border: "1px solid var(--line)", borderRadius: 6,
+                      background: "var(--bg-0)", color: "var(--text-0)", outline: "none",
+                    }} />
+                </div>
+                {recalcError && <div style={{ fontSize: 11, color: "#ef4444" }}>{recalcError}</div>}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+                  <button type="button" onClick={() => setShowRecalcModal(false)}
+                    style={{ ...btnStyle("ghost"), padding: "7px 16px", fontSize: 12 }}>
+                    取消
+                  </button>
+                  <button type="button" onClick={handleRecalcSnapshot}
+                    style={{ ...btnStyle("brand"), padding: "7px 16px", fontSize: 12 }}>
+                    开始计算
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

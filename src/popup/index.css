@@ -5109,3 +5109,17 @@ body.theme-light .analytics-section {
   fill: var(--text-2);
   font-size: 9px;
 }
+
+@keyframes recalc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.recalc-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--brand);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: recalc-spin 0.8s linear infinite;
+}

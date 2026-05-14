@@ -1293,16 +1293,16 @@ async function generateDailyTechnicalReport() {
 /** 收盘后保存累计收益快照 */
 const DAILY_SNAPSHOT_KEY = 'dailyAssetSnapshots';
 
-async function saveDailyAssetSnapshot() {
-  if (isTradingHours() || isWeekendInShanghai()) return;
-  const today = getShanghaiToday();
+async function saveDailyAssetSnapshot(options?: { forceDate?: string; overwrite?: boolean }) {
+  if (isWeekendInShanghai() && !options?.forceDate) return;
+  const dateKey = options?.forceDate || getShanghaiToday();
   const [posResult, snapResult, tradeResult] = await Promise.all([
     chrome.storage.local.get(['stockPositions', 'fundPositions']),
     chrome.storage.local.get(DAILY_SNAPSHOT_KEY),
     chrome.storage.local.get('stockTradeHistory'),
   ]);
   const snapshots = (snapResult[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
-  if (snapshots[today]) return;
+  if (!options?.overwrite && snapshots[dateKey]) return;
 
   const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
   const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
@@ -1324,14 +1324,148 @@ async function saveDailyAssetSnapshot() {
   const stockPnl = stockFloating + stockRealizedPnl;
   const fundPnl = fundHoldingProfit;
 
-  snapshots[today] = {
-    date: today,
+  snapshots[dateKey] = {
+    date: dateKey,
     totalPnl: Math.round((stockPnl + fundPnl) * 100) / 100,
     floatingPnl: Math.round(floatingPnl * 100) / 100,
     realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
     stockPnl: Math.round(stockPnl * 100) / 100,
     fundPnl: Math.round(fundPnl * 100) / 100,
   };
+  await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
+}
+
+/** 构建股票代码→日期→收盘价 的映射，用于回溯浮动盈亏 */
+async function buildPriceMap(codes: string[]): Promise<Map<string, Map<string, number>>> {
+  const map = new Map<string, Map<string, number>>();
+  const results = await pMap(codes, async (code) => {
+    try {
+      const kline = await fetchDayFqKline(code, 240);
+      const dateMap = new Map<string, number>();
+      for (const k of kline) {
+        dateMap.set(k.date, k.close);
+      }
+      map.set(code, dateMap);
+    } catch {
+      // 无法获取K线数据，跳过
+    }
+  }, 4);
+  return map;
+}
+
+/** 构建基金代码→日期→单位净值 的映射 */
+async function buildFundNavMap(codes: string[]): Promise<Map<string, Map<string, number>>> {
+  const map = new Map<string, Map<string, number>>();
+  const apiCommon = { appVersion: '6.3.9', deviceType: '1', platType: 'android', productType: 'EFund', version: '6.3.9' };
+  await pMap(codes, async (code) => {
+    try {
+      const params = new URLSearchParams({ FCODE: code, RANGE: 'y', ...apiCommon, _: String(Date.now()) });
+      const url = `https://fundmobapi.eastmoney.com/FundMApi/FundNetDiagram.ashx?${params}`;
+      const response = await fetch(url);
+      const json = await response.json() as { Datas?: Array<{ FSRQ: string; DWJZ: string }> };
+      const dateMap = new Map<string, number>();
+      for (const item of json.Datas ?? []) {
+        const nav = Number(item.DWJZ);
+        if (Number.isFinite(nav) && nav > 0) {
+          dateMap.set(item.FSRQ, nav);
+        }
+      }
+      map.set(code, dateMap);
+    } catch {
+      // 无法获取基金净值数据，跳过
+    }
+  }, 4);
+  return map;
+}
+
+/** 根据指定日期范围重新计算累计收益快照 */
+async function recalcSnapshotRange(startDate: string) {
+  const today = getShanghaiToday();
+  if (startDate > today) return;
+
+  const [posResult, tradeResult] = await Promise.all([
+    chrome.storage.local.get(['stockPositions', 'fundPositions']),
+    chrome.storage.local.get('stockTradeHistory'),
+  ]);
+  const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
+  const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
+  const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
+
+  // 预加载历史价格数据
+  const stockCodes = new Set<string>([...Object.keys(allTrades), ...stockPositions.map((s) => s.code)]);
+  const fundCodes = fundPositions.filter((f) => f.units > 0).map((f) => f.code);
+  const [priceMap, fundNavMap] = await Promise.all([
+    buildPriceMap([...stockCodes]),
+    buildFundNavMap(fundCodes),
+  ]);
+
+  // 获取现有快照
+  const snapResult = await chrome.storage.local.get(DAILY_SNAPSHOT_KEY);
+  const snapshots = (snapResult[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
+
+  // 遍历日期范围
+  const cursor = new Date(startDate);
+  const endDate = new Date(today);
+  while (cursor <= endDate) {
+    const dateStr = cursor.toISOString().slice(0, 10);
+    const dow = cursor.getDay();
+    if (dow !== 0 && dow !== 6) {
+      let stockRealizedPnl = 0;
+      let stockFloatingAtDate = 0;
+      let fundPnlAtDate = 0;
+
+      // 有交易记录的股票
+      for (const [code, trades] of Object.entries(allTrades)) {
+        const allUpToDate = trades.filter((t) => t.date <= dateStr);
+        if (allUpToDate.length > 0) {
+          stockRealizedPnl += computePositionFromTrades(allUpToDate).realizedPnl;
+        }
+        const closePrice = priceMap.get(code)?.get(dateStr);
+        const filtered = trades.filter((t) => t.date <= dateStr);
+        if (Number.isFinite(closePrice) && filtered.length > 0) {
+          const pos = computePositionFromTrades(filtered);
+          if (pos.shares > 0) {
+            stockFloatingAtDate += (closePrice! - pos.avgCost) * pos.shares;
+          }
+        }
+      }
+      // 无交易记录的股票
+      const tradedCodes = new Set(Object.keys(allTrades));
+      for (const sp of stockPositions) {
+        if (tradedCodes.has(sp.code)) continue;
+        const closePrice = priceMap.get(sp.code)?.get(dateStr);
+        if (Number.isFinite(closePrice) && sp.shares > 0 && sp.cost > 0) {
+          stockFloatingAtDate += (closePrice! - sp.cost) * sp.shares;
+        } else if (Number.isFinite(sp.floatingPnl)) {
+          stockFloatingAtDate += sp.floatingPnl;
+        }
+      }
+
+      // 基金：用当日单位净值算持有收益
+      for (const fp of fundPositions) {
+        const nav = fundNavMap.get(fp.code)?.get(dateStr);
+        if (Number.isFinite(nav) && fp.units > 0 && fp.cost > 0) {
+          fundPnlAtDate += (nav! - fp.cost) * fp.units;
+        } else if (Number.isFinite(fp.holdingProfit)) {
+          fundPnlAtDate += fp.holdingProfit;
+        }
+      }
+
+      const floatingPnl = stockFloatingAtDate + fundPnlAtDate;
+      const stockPnl = stockFloatingAtDate + stockRealizedPnl;
+
+      snapshots[dateStr] = {
+        date: dateStr,
+        totalPnl: Math.round((stockPnl + fundPnlAtDate) * 100) / 100,
+        floatingPnl: Math.round(floatingPnl * 100) / 100,
+        realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
+        stockPnl: Math.round(stockPnl * 100) / 100,
+        fundPnl: Math.round(fundPnlAtDate * 100) / 100,
+      };
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
   await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
 }
 
@@ -1881,6 +2015,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // Clear date + signal keys so manual re-run detects all signals fresh
         await chrome.storage.local.remove([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY]);
         await generateDailyTechnicalReport();
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'recalc-snapshot') {
+    const msg = message as { type: 'recalc-snapshot'; startDate?: string };
+    void (async () => {
+      try {
+        if (msg.startDate) {
+          await recalcSnapshotRange(msg.startDate);
+        } else {
+          await saveDailyAssetSnapshot({ overwrite: true });
+        }
         sendResponse({ ok: true });
       } catch (error) {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });

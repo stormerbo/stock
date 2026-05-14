@@ -128,6 +128,13 @@ export default function AssetCurveChart({ snapshots }: Props) {
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           className="asset-curve-svg"
           preserveAspectRatio="none"
+          onMouseMove={(e) => {
+            const r=e.currentTarget.getBoundingClientRect();
+            const x=(e.clientX-r.left)/r.width*SVG_W;
+            if(x<PAD_L||x>PAD_L+INNER_W){setHoverIdx(null);return;}
+            const idx=Math.round(((x-PAD_L)/INNER_W)*(entries.length-1));
+            setHoverIdx(Math.max(0,Math.min(idx,entries.length-1)));
+          }}
           onMouseLeave={() => setHoverIdx(null)}
         >
           {/* Zero line */}
