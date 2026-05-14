@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BarChart3, Bell, FileText, GripVertical, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, FileText, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './views/StockDetailView';
 import SectorDetailView from './views/SectorDetailView';
 import IndexDetailModal from './views/IndexDetailModal';
@@ -39,12 +39,13 @@ import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/ris
 import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
 import type {
   PageTab, ThemeMode, IndexDetailTarget, SearchStock,
-  RowContextMenuState, SortingMode, StockDetailTarget, FundDetailTarget,
+  RowContextMenuState, StockDetailTarget, FundDetailTarget,
   TradeHistoryTarget, StockRow, FundRow, NotificationRecord, PortfolioConfig,
   IntradayDataPoint, MarketStats as MarketStatsType,
+  StockSortKey, FundSortKey, SortDir, ColumnSort,
 } from './types';
 import { formatNumber, formatLooseNumber, formatMarketAmount, formatPercent, formatRatioPercent, toneClass, formatRelativeTime, getShanghaiDateKey, resolvePrevTurnover, deriveMarketStats } from './utils/format';
-import { applyPinnedOrder, insertAfterPinned, reorderCodes, moveCodeAfterPinned, sortRowsByCodes } from './utils/sorting';
+import { applyPinnedOrder, insertAfterPinned, reorderCodes, sortStockRows, sortFundRows } from './utils/sorting';
 import { STORAGE_KEYS, EMPTY_PORTFOLIO, parseStockHoldings, parseFundHoldings, loadPortfolioConfig, savePortfolioConfig } from './utils/portfolio-io';
 import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/search-suggestions';
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
@@ -262,10 +263,9 @@ export default function App() {
   const [fundDetailTarget, setFundDetailTarget] = useState<FundDetailTarget | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<{ code: string; kind: 'stock' | 'fund'; message: string } | null>(null);
-  const [sortingMode, setSortingMode] = useState<SortingMode>(null);
-  const [stockSortDraft, setStockSortDraft] = useState<string[] | null>(null);
-  const [fundSortDraft, setFundSortDraft] = useState<string[] | null>(null);
   const [draggingCode, setDraggingCode] = useState<string | null>(null);
+  const [stockSort, setStockSort] = useState<ColumnSort<StockSortKey>>({ key: null, dir: null });
+  const [fundSort, setFundSort] = useState<ColumnSort<FundSortKey>>({ key: null, dir: null });
 
   // 交易记录缓存（用于修正当日盈亏）
   const [tradeHistoryForPnl, setTradeHistoryForPnl] = useState<Record<string, StockTradeRecord[]>>({});
@@ -294,8 +294,8 @@ export default function App() {
     return stockPositions.reduce((sum, item) => {
       const trades = tradeHistoryForPnl[item.code];
       if (trades && trades.length > 0) {
-        const corrected = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
-        if (Number.isFinite(corrected)) return sum + corrected;
+        const result = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
+        if (Number.isFinite(result.pnl)) return sum + result.pnl;
       }
       if (!Number.isFinite(item.dailyPnl)) return sum;
       return sum + item.dailyPnl;
@@ -317,6 +317,14 @@ export default function App() {
     }, 0);
   }, [stockPositions, stockHoldings, tradeHistoryForPnl]);
 
+  const totalRealizedPnl = useMemo(() => {
+    let sum = 0;
+    for (const trades of Object.values(tradeHistoryForPnl)) {
+      sum += computePositionFromTrades(trades).realizedPnl;
+    }
+    return sum;
+  }, [tradeHistoryForPnl]);
+
   const stockMetrics = useMemo(() => {
     const totalMarketValue = stockPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
@@ -325,10 +333,10 @@ export default function App() {
 
     return [
       { label: '总市值', value: formatNumber(totalMarketValue, 2), tone: 'neutral' },
-      { label: '总盈亏', value: formatNumber(correctedStockFloating, 1), tone: toneClass(correctedStockFloating) },
+      { label: '总盈亏', value: formatNumber(correctedStockFloating + totalRealizedPnl, 1), tone: toneClass(correctedStockFloating + totalRealizedPnl) },
       { label: '当日盈亏', value: formatNumber(correctedStockDaily, 1), tone: toneClass(correctedStockDaily) },
     ] as const;
-  }, [stockPositions, correctedStockFloating, correctedStockDaily]);
+  }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -359,7 +367,7 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    const stockTotalPnl = correctedStockFloating;
+    const stockTotalPnl = correctedStockFloating + totalRealizedPnl;
     const stockDaily = correctedStockDaily;
     const fundHoldingAmount = fundPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.holdingAmount)) return sum;
@@ -384,7 +392,7 @@ export default function App() {
       { label: '综合预估收益', value: formatNumber(previewProfit, 2), tone: toneClass(previewProfit) },
       { label: '股票当日盈亏', value: formatNumber(stockDaily, 2), tone: toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily]);
+  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
 
   const metrics = activeTab === 'stocks'
     ? stockMetrics
@@ -409,7 +417,7 @@ export default function App() {
     const stockMarketValue = stockPositions.reduce((sum, item) => (
       Number.isFinite(item.price) && item.shares > 0 ? sum + item.price * item.shares : sum
     ), 0);
-    const stockFloating = correctedStockFloating;
+    const stockFloating = correctedStockFloating + totalRealizedPnl;
     const stockDaily = correctedStockDaily;
 
     const fundHoldingAmount = fundPositions.reduce((sum, item) => (
@@ -474,7 +482,7 @@ export default function App() {
       fundSinceAddedRate,
       totalSinceAddedRate,
     };
-  }, [fundHoldings, fundPositions, stockHoldings, stockPositions, correctedStockFloating, correctedStockDaily]);
+  }, [fundHoldings, fundPositions, stockHoldings, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
   const stockPinnedCode = stockHoldings.find((item) => item.pinned)?.code ?? null;
   const fundPinnedCode = fundHoldings.find((item) => item.pinned)?.code ?? null;
   const stockRows = useMemo<StockRow[]>(() => {
@@ -497,22 +505,31 @@ export default function App() {
         next.addedAt = holding.addedAt;
       }
 
-      // 用交易记录修正浮动盈亏和当日盈亏
+      // 用交易记录修正当日盈亏
       const trades = tradeHistoryForPnl[holding.code];
       if (trades && trades.length > 0) {
-        const correctedDaily = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
-        if (Number.isFinite(correctedDaily)) {
-          next.dailyPnl = correctedDaily;
-          const prevValue = row.shares > 0 && Number.isFinite(row.prevClose) && row.prevClose > 0
-            ? row.shares * row.prevClose : Number.NaN;
-          if (Number.isFinite(prevValue) && prevValue > 0) {
-            next.dailyChangePct = (correctedDaily / prevValue) * 100;
+        const result = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
+        if (Number.isFinite(result.pnl)) {
+          next.dailyPnl = result.pnl;
+          // 当日盈亏百分比 = 当日盈亏 / 持仓总成本（考虑清仓情况）
+          const pos = computePositionFromTrades(trades);
+          let costBasis = pos.totalCost;
+          if (costBasis <= 0) {
+            // 当天清仓了 → 用开盘前的持仓成本
+            const beforeToday = computePositionFromTrades(trades.filter((t) => t.date < today));
+            costBasis = beforeToday.totalCost;
+          }
+          if (costBasis > 0) {
+            next.dailyChangePct = (result.pnl / costBasis) * 100;
           }
         }
         // 同步修正浮动盈亏 = (现价 - 持仓成本) × 持仓股数
         if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
           next.floatingPnl = (row.price - holding.cost) * holding.shares;
         }
+      } else if (holding.cost > 0 && Number.isFinite(next.dailyPnl)) {
+        // 无交易记录：当日盈亏百分比 = 当日盈亏 / 持仓成本
+        next.dailyChangePct = (next.dailyPnl / (holding.cost * Math.max(1, holding.shares))) * 100;
       }
 
       rows.push(next);
@@ -568,25 +585,25 @@ export default function App() {
   }, [fundPositions, fundHoldings]);
 
   const stockDisplayRows = useMemo(() => {
-    let rows = sortingMode === 'stocks' && stockSortDraft
-      ? sortRowsByCodes(stockRows, stockSortDraft)
-      : stockRows;
+    let rows = stockSort.key
+      ? sortStockRows(stockRows, stockSort.key, stockSort.dir)
+      : stockRows; // default: use holdings order (pinned first)
     if (tagFilter.length > 0) {
       rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
     }
     return rows;
-  }, [sortingMode, stockRows, stockSortDraft, tagFilter]);
+  }, [stockRows, stockSort, tagFilter]);
 
 
   const fundDisplayRows = useMemo(() => {
-    let rows = sortingMode === 'funds' && fundSortDraft
-      ? sortRowsByCodes(fundRows, fundSortDraft)
+    let rows = fundSort.key
+      ? sortFundRows(fundRows, fundSort.key, fundSort.dir)
       : fundRows;
     if (tagFilter.length > 0) {
       rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
     }
     return rows;
-  }, [fundRows, fundSortDraft, sortingMode, tagFilter]);
+  }, [fundRows, fundSort, tagFilter]);
 
   const stockTotalHoldingAmount = useMemo(() => (
     stockDisplayRows.reduce((sum, item) => {
@@ -1309,16 +1326,10 @@ function clearIntradayIfStale(
   }, [stockDetailTarget, fundDetailTarget]);
 
   useEffect(() => {
-    if (
-      (sortingMode === 'stocks' && activeTab !== 'stocks') ||
-      (sortingMode === 'funds' && activeTab !== 'funds')
-    ) {
-      setSortingMode(null);
-    }
     setIsSearchOpen(false);
     setKeyword('');
     setSuggestions([]);
-  }, [activeTab, sortingMode]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!rowContextMenu) return;
@@ -1340,16 +1351,9 @@ function clearIntradayIfStale(
   }, [activeTab, stockDetailTarget]);
 
   useEffect(() => {
-    if (sortingMode === 'stocks') {
-      setStockSortDraft((prev) => prev ?? stockHoldings.map((item) => item.code));
-    } else if (sortingMode === 'funds') {
-      setFundSortDraft((prev) => prev ?? fundHoldings.map((item) => item.code));
-    } else {
-      setStockSortDraft(null);
-      setFundSortDraft(null);
-      setDraggingCode(null);
-    }
-  }, [sortingMode, stockHoldings, fundHoldings]);
+    if (!draggingCode) return;
+    setDraggingCode(null);
+  }, [activeTab]);
 
   const addStockToPortfolio = useCallback(async (stock: SearchStock) => {
     const normalizedCode = normalizeStockCode(stock.code);
@@ -1428,7 +1432,6 @@ function clearIntradayIfStale(
   }, [fundPositions]);
 
   const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string) => {
-    if (sortingMode) return;
     event.preventDefault();
     event.stopPropagation();
     const rootRect = popupRootRef.current?.getBoundingClientRect();
@@ -1516,24 +1519,20 @@ function clearIntradayIfStale(
     }
   };
 
-  const beginSorting = (mode: Exclude<SortingMode, null>) => {
-    setSortingMode(mode);
-    setRowContextMenu(null);
+  const toggleStockSort = (key: StockSortKey) => {
+    setStockSort((prev) => {
+      if (prev.key !== key) return { key, dir: 'asc' as SortDir };
+      if (prev.dir === 'asc') return { key, dir: 'desc' as SortDir };
+      return { key: null, dir: null };
+    });
   };
 
-  const cancelSorting = () => {
-    setSortingMode(null);
-  };
-
-  const completeSorting = () => {
-    if (sortingMode === 'stocks' && stockSortDraft) {
-      const map = new Map(stockHoldings.map((item) => [item.code, item]));
-      setStockHoldings(stockSortDraft.map((code) => map.get(code)).filter((item): item is StockHoldingConfig => Boolean(item)));
-    } else if (sortingMode === 'funds' && fundSortDraft) {
-      const map = new Map(fundHoldings.map((item) => [item.code, item]));
-      setFundHoldings(fundSortDraft.map((code) => map.get(code)).filter((item): item is FundHoldingConfig => Boolean(item)));
-    }
-    setSortingMode(null);
+  const toggleFundSort = (key: FundSortKey) => {
+    setFundSort((prev) => {
+      if (prev.key !== key) return { key, dir: 'asc' as SortDir };
+      if (prev.dir === 'asc') return { key, dir: 'desc' as SortDir };
+      return { key: null, dir: null };
+    });
   };
 
   const handleDragStart = (code: string) => {
@@ -1544,29 +1543,25 @@ function clearIntradayIfStale(
     setDraggingCode(null);
   };
 
+  /** 拖拽后直接修改 holdings 顺序（自动保存） */
   const handleStockDrop = (targetCode: string) => {
-    if (!draggingCode || !stockSortDraft) return;
-    setStockSortDraft(reorderCodes(stockSortDraft, draggingCode, targetCode, stockPinnedCode ?? undefined));
+    if (!draggingCode) return;
+    const codes = stockHoldings.map((h) => h.code);
+    const reordered = reorderCodes(codes, draggingCode, targetCode, stockPinnedCode ?? undefined);
+    const map = new Map(stockHoldings.map((h) => [h.code, h]));
+    setStockHoldings(reordered.map((c) => map.get(c)!).filter(Boolean));
     setDraggingCode(null);
   };
 
   const handleFundDrop = (targetCode: string) => {
-    if (!draggingCode || !fundSortDraft) return;
-    setFundSortDraft(reorderCodes(fundSortDraft, draggingCode, targetCode, fundPinnedCode ?? undefined));
+    if (!draggingCode) return;
+    const codes = fundHoldings.map((h) => h.code);
+    const reordered = reorderCodes(codes, draggingCode, targetCode, fundPinnedCode ?? undefined);
+    const map = new Map(fundHoldings.map((h) => [h.code, h]));
+    setFundHoldings(reordered.map((c) => map.get(c)!).filter(Boolean));
     setDraggingCode(null);
   };
 
-  const handleStockDropAfterPinned = () => {
-    if (!draggingCode || !stockSortDraft || !stockPinnedCode) return;
-    setStockSortDraft(moveCodeAfterPinned(stockSortDraft, draggingCode, stockPinnedCode));
-    setDraggingCode(null);
-  };
-
-  const handleFundDropAfterPinned = () => {
-    if (!draggingCode || !fundSortDraft || !fundPinnedCode) return;
-    setFundSortDraft(moveCodeAfterPinned(fundSortDraft, draggingCode, fundPinnedCode));
-    setDraggingCode(null);
-  };
 
   const onSelectSuggestion = (item: SearchStock) => {
     if (activeTab === 'funds') {
@@ -1920,16 +1915,6 @@ function clearIntradayIfStale(
               />
             ) : null}
 
-            {sortingMode ? (
-              <div className="sort-mode-bar">
-                <span>正在排序，拖拽条目调整顺序</span>
-                <div className="sort-mode-actions">
-                  <button type="button" onClick={cancelSorting}>取消</button>
-                  <button type="button" className="primary" onClick={completeSorting}>完成排序</button>
-                </div>
-              </div>
-            ) : null}
-
             {/* ---- Notification Panel ---- */}
             {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget ? (
               <NotificationPanel
@@ -1966,7 +1951,8 @@ function clearIntradayIfStale(
               <StockTable
                 rows={stockDisplayRows}
                 stockPinnedCode={stockPinnedCode}
-                sortingMode={sortingMode}
+                sort={stockSort}
+                onToggleSort={toggleStockSort}
                 draggingCode={draggingCode}
                 editingCell={editingCell}
                 signalStocks={signalStocks}
@@ -1982,7 +1968,6 @@ function clearIntradayIfStale(
                 handleDragStart={handleDragStart}
                 handleDragEnd={handleDragEnd}
                 handleStockDrop={handleStockDrop}
-                handleStockDropAfterPinned={handleStockDropAfterPinned}
                 onRemoveStock={removeStockFromPortfolio}
                 getStockBadge={getStockBadge}
                 onRefresh={handleRefresh}
@@ -1994,7 +1979,8 @@ function clearIntradayIfStale(
               <FundTable
                 rows={fundDisplayRows}
                 fundPinnedCode={fundPinnedCode}
-                sortingMode={sortingMode}
+                sort={fundSort}
+                onToggleSort={toggleFundSort}
                 draggingCode={draggingCode}
                 editingCell={editingCell}
                 fundsLoading={fundsLoading}
@@ -2009,7 +1995,6 @@ function clearIntradayIfStale(
                 handleDragStart={handleDragStart}
                 handleDragEnd={handleDragEnd}
                 handleFundDrop={handleFundDrop}
-                handleFundDropAfterPinned={handleFundDropAfterPinned}
                 onRemoveFund={removeFundFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
@@ -2089,9 +2074,6 @@ function clearIntradayIfStale(
                 <button type="button" onClick={() => handleOpenTagEditor('stock', rowContextMenu.code)}>
                   管理标签
                 </button>
-                <button type="button" onClick={() => beginSorting('stocks')}>
-                  指定排序
-                </button>
                 <button type="button" className="danger" onClick={() => removeStockFromPortfolio(rowContextMenu.code)}>
                   移出自选
                 </button>
@@ -2106,9 +2088,6 @@ function clearIntradayIfStale(
                 </button>
                 <button type="button" onClick={() => handleOpenTagEditor('fund', rowContextMenu.code)}>
                   管理标签
-                </button>
-                <button type="button" onClick={() => beginSorting('funds')}>
-                  指定排序
                 </button>
                 <button type="button" className="danger" onClick={() => removeFundFromPortfolio(rowContextMenu.code)}>
                   移出自选

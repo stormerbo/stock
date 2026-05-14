@@ -4,6 +4,7 @@ import {
   fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
+  getShanghaiYesterday,
   isTradingHours,
   normalizeStockCode,
   pMap,
@@ -49,8 +50,11 @@ import {
   type SpikeGlobalConfig,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
-import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, computePositionFromTrades, type StockTradeRecord } from '../shared/trade-history';
+import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, computePositionFromTrades, migrateTradeHistoryToLocal, type StockTradeRecord } from '../shared/trade-history';
 import { detectAllSignals, fetchDayFqKline } from '../shared/technical-analysis';
+import { recalcSnapshotsInRange, type RecalcContext } from '../shared/recalc-snapshot';
+import { diffHoldings, appendHoldingHistory, loadHoldingHistory, getHoldingsAtDate } from '../shared/holding-history';
+import { getKlineMap } from '../shared/kline-cache';
 
 export type BadgeMode =
   | 'off'
@@ -1333,24 +1337,24 @@ async function saveDailyAssetSnapshot(options?: { forceDate?: string; overwrite?
     fundPnl: Math.round(fundPnl * 100) / 100,
   };
   await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
-}
 
-/** 构建股票代码→日期→收盘价 的映射，用于回溯浮动盈亏 */
-async function buildPriceMap(codes: string[]): Promise<Map<string, Map<string, number>>> {
-  const map = new Map<string, Map<string, number>>();
-  const results = await pMap(codes, async (code) => {
-    try {
-      const kline = await fetchDayFqKline(code, 240);
-      const dateMap = new Map<string, number>();
-      for (const k of kline) {
-        dateMap.set(k.date, k.close);
-      }
-      map.set(code, dateMap);
-    } catch {
-      // 无法获取K线数据，跳过
+  // 记录每日持仓 checkpoint（用于无交易记录期间的兜底）
+  if (stockPositions.length > 0) {
+    const today = getShanghaiToday();
+    const checkpointEvents = stockPositions
+      .filter((p) => p.shares > 0)
+      .map((p) => ({
+        code: p.code,
+        date: today,
+        shares: p.shares,
+        cost: p.cost,
+        changeType: 'snapshot' as const,
+        timestamp: Date.now(),
+      }));
+    if (checkpointEvents.length > 0) {
+      void appendHoldingHistory(checkpointEvents);
     }
-  }, 4);
-  return map;
+  }
 }
 
 /** 构建基金代码→日期→单位净值 的映射 */
@@ -1378,94 +1382,56 @@ async function buildFundNavMap(codes: string[]): Promise<Map<string, Map<string,
   return map;
 }
 
-/** 根据指定日期范围重新计算累计收益快照 */
+/** 根据指定日期范围重新计算累计收益快照（使用共享函数） */
 async function recalcSnapshotRange(startDate: string) {
-  const today = getShanghaiToday();
-  if (startDate > today) return;
+  const yesterday = getShanghaiYesterday();
+  if (startDate > yesterday) return;
 
-  const [posResult, tradeResult] = await Promise.all([
+  const [posResult, tradeResult, holdingResult] = await Promise.all([
     chrome.storage.local.get(['stockPositions', 'fundPositions']),
-    chrome.storage.local.get('stockTradeHistory'),
+    chrome.storage.local.get(TRADE_HISTORY_KEY),
+    loadHoldingHistory(),
   ]);
   const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
   const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
-  const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
+  const allTrades = (tradeResult[TRADE_HISTORY_KEY] ?? {}) as Record<string, StockTradeRecord[]>;
+  const holdingHistory = holdingResult;
 
-  // 预加载历史价格数据
-  const stockCodes = new Set<string>([...Object.keys(allTrades), ...stockPositions.map((s) => s.code)]);
+  // 预加载 K 线数据（缓存优先）
+  const stockCodes = [...new Set([...Object.keys(allTrades), ...stockPositions.map((s) => s.code)])];
   const fundCodes = fundPositions.filter((f) => f.units > 0).map((f) => f.code);
-  const [priceMap, fundNavMap] = await Promise.all([
-    buildPriceMap([...stockCodes]),
-    buildFundNavMap(fundCodes),
-  ]);
+  const klinePriceMap = new Map<string, Map<string, number>>();
+  const fundNavMap = new Map<string, Map<string, number>>();
 
-  // 获取现有快照
+  await pMap(stockCodes, async (code) => {
+    const map = await getKlineMap(code, 240);
+    if (map.size > 0) klinePriceMap.set(code, map);
+  }, 4);
+
+  await pMap(fundCodes, async (code) => {
+    const map = await buildFundNavMap([code]);
+    const navMap = map.get(code);
+    if (navMap) fundNavMap.set(code, navMap);
+  }, 4);
+
+  // 使用共享函数计算
+  const ctx: RecalcContext = {
+    tradeHistory: allTrades,
+    holdingHistory,
+    stockPositions,
+    fundPositions,
+    klinePriceMap,
+    fundNavMap,
+  };
+
+  const result = recalcSnapshotsInRange(startDate, yesterday, ctx);
+
+  // 写入存储
   const snapResult = await chrome.storage.local.get(DAILY_SNAPSHOT_KEY);
   const snapshots = (snapResult[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
-
-  // 遍历日期范围
-  const cursor = new Date(startDate);
-  const endDate = new Date(today);
-  while (cursor <= endDate) {
-    const dateStr = cursor.toISOString().slice(0, 10);
-    const dow = cursor.getDay();
-    if (dow !== 0 && dow !== 6) {
-      let stockRealizedPnl = 0;
-      let stockFloatingAtDate = 0;
-      let fundPnlAtDate = 0;
-
-      // 有交易记录的股票
-      for (const [code, trades] of Object.entries(allTrades)) {
-        const allUpToDate = trades.filter((t) => t.date <= dateStr);
-        if (allUpToDate.length > 0) {
-          stockRealizedPnl += computePositionFromTrades(allUpToDate).realizedPnl;
-        }
-        const closePrice = priceMap.get(code)?.get(dateStr);
-        const filtered = trades.filter((t) => t.date <= dateStr);
-        if (Number.isFinite(closePrice) && filtered.length > 0) {
-          const pos = computePositionFromTrades(filtered);
-          if (pos.shares > 0) {
-            stockFloatingAtDate += (closePrice! - pos.avgCost) * pos.shares;
-          }
-        }
-      }
-      // 无交易记录的股票
-      const tradedCodes = new Set(Object.keys(allTrades));
-      for (const sp of stockPositions) {
-        if (tradedCodes.has(sp.code)) continue;
-        const closePrice = priceMap.get(sp.code)?.get(dateStr);
-        if (Number.isFinite(closePrice) && sp.shares > 0 && sp.cost > 0) {
-          stockFloatingAtDate += (closePrice! - sp.cost) * sp.shares;
-        } else if (Number.isFinite(sp.floatingPnl)) {
-          stockFloatingAtDate += sp.floatingPnl;
-        }
-      }
-
-      // 基金：用当日单位净值算持有收益
-      for (const fp of fundPositions) {
-        const nav = fundNavMap.get(fp.code)?.get(dateStr);
-        if (Number.isFinite(nav) && fp.units > 0 && fp.cost > 0) {
-          fundPnlAtDate += (nav! - fp.cost) * fp.units;
-        } else if (Number.isFinite(fp.holdingProfit)) {
-          fundPnlAtDate += fp.holdingProfit;
-        }
-      }
-
-      const floatingPnl = stockFloatingAtDate + fundPnlAtDate;
-      const stockPnl = stockFloatingAtDate + stockRealizedPnl;
-
-      snapshots[dateStr] = {
-        date: dateStr,
-        totalPnl: Math.round((stockPnl + fundPnlAtDate) * 100) / 100,
-        floatingPnl: Math.round(floatingPnl * 100) / 100,
-        realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
-        stockPnl: Math.round(stockPnl * 100) / 100,
-        fundPnl: Math.round(fundPnlAtDate * 100) / 100,
-      };
-    }
-    cursor.setDate(cursor.getDate() + 1);
+  for (const s of result) {
+    snapshots[s.date] = s;
   }
-
   await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
 }
 
@@ -1527,7 +1493,7 @@ async function refreshIndexes() {
 
 async function loadTradeHistoryForBadge(): Promise<Record<string, StockTradeRecord[]>> {
   try {
-    const result = await chrome.storage.sync.get(TRADE_HISTORY_KEY);
+    const result = await chrome.storage.local.get(TRADE_HISTORY_KEY);
     const raw = result[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
     if (!raw || typeof raw !== 'object') return {};
     return raw;
@@ -1566,8 +1532,8 @@ function computeMetrics(
   const daily = stockPositions.reduce((sum, item) => {
     const trades = tradeHistory[item.code];
     if (trades && trades.length > 0) {
-      const corrected = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
-      if (Number.isFinite(corrected)) return sum + corrected;
+      const result = computeDailyPnlFromTrades(trades, item.price, item.prevClose, today);
+      if (Number.isFinite(result.pnl)) return sum + result.pnl;
     }
     if (!Number.isFinite(item.dailyPnl)) return sum;
     return sum + item.dailyPnl;
@@ -1786,7 +1752,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // 首次安装：初始化默认配置
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
   } else if (details.reason === 'update') {
-    // 版本升级
+    // 版本升级：迁移交易记录到 local storage
+    void migrateTradeHistoryToLocal();
     console.log(`[bg] updated from ${details.previousVersion} to ${chrome.runtime.getManifest().version}`);
   } else {
     // chrome_update / shared_module_update：确保角标配置存在
@@ -1816,10 +1783,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes[REFRESH_STORAGE_KEY]) {
     startRefreshLoop();
   }
-  // holdings 变化 → 立即刷新
-  if (area === 'sync' && (changes.stockHoldings || changes.fundHoldings)) {
-    void refreshStocks();
-    void refreshFunds();
+  // holdings 变化 → 立即刷新 + 记录持仓变更历史
+  if (area === 'sync') {
+    if (changes.stockHoldings) {
+      void refreshStocks();
+      const oldVal = (changes.stockHoldings.oldValue ?? []) as StockHoldingConfig[];
+      const newVal = (changes.stockHoldings.newValue ?? []) as StockHoldingConfig[];
+      const events = diffHoldings(oldVal, newVal);
+      if (events.length > 0) {
+        void appendHoldingHistory(events);
+      }
+    }
+    if (changes.fundHoldings) {
+      void refreshFunds();
+    }
   }
   // 角标配置变化 → 更新角标
   if (area === 'sync' && changes[BADGE_STORAGE_KEY]) {

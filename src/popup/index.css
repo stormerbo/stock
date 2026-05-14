@@ -1034,43 +1034,29 @@ body.theme-light .index-tooltip {
   border-radius: 10px;
 }
 
-.sort-mode-bar {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  margin-bottom: 6px;
-  border: 1px solid color-mix(in srgb, var(--glass-border) 42%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg-1) 95%, white 5%);
-  backdrop-filter: blur(10px) saturate(118%);
-  -webkit-backdrop-filter: blur(10px) saturate(118%);
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12px;
-}
-
-.sort-mode-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sort-mode-actions button {
-  border: 1px solid color-mix(in srgb, var(--glass-border) 52%, transparent);
-  background: transparent;
-  color: var(--text-0);
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
+/* Sortable column headers */
+.sortable-th {
   cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  gap: 3px;
+  transition: color 0.12s;
 }
-
-.sort-mode-actions button.primary {
-  background: color-mix(in srgb, var(--brand-soft) 72%, transparent);
-  border-color: color-mix(in srgb, var(--brand) 36%, transparent);
+.sortable-th:hover {
+  color: var(--text-0);
+}
+.sortable-th.active {
+  color: var(--brand);
+}
+.sort-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 2px;
+  opacity: 0.28;
+}
+.sortable-th:hover .sort-icon,
+.sortable-th.active .sort-icon {
+  opacity: 0.68;
 }
 
 .table-panel {
@@ -1173,10 +1159,6 @@ body.theme-light .data-table thead th {
 /* 整行悬停高亮 */
 .data-table tbody tr:not(.editing-row):hover td {
   background: color-mix(in srgb, var(--brand-soft) 22%, transparent);
-}
-
-.sorting-row td {
-  user-select: none;
 }
 
 .dragging-row td {

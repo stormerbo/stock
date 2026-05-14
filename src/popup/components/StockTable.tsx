@@ -1,10 +1,10 @@
 import { Fragment } from 'react';
-import { GripVertical, Pin, Star, X } from 'lucide-react';
+import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
-import type { StockRow } from '../types';
+import type { StockRow, StockSortKey, SortDir, ColumnSort } from '../types';
 
 type EditingCell = {
   kind: 'stock' | 'fund';
@@ -16,7 +16,8 @@ type EditingCell = {
 type Props = {
   rows: StockRow[];
   stockPinnedCode: string | null;
-  sortingMode: string | null;
+  sort: ColumnSort<StockSortKey>;
+  onToggleSort: (key: StockSortKey) => void;
   draggingCode: string | null;
   editingCell: EditingCell;
   signalStocks: Record<string, { name: string; signalCount: number }> | null;
@@ -33,18 +34,38 @@ type Props = {
   handleDragStart: (code: string) => void;
   handleDragEnd: () => void;
   handleStockDrop: (code: string) => void;
-  handleStockDropAfterPinned: () => void;
   onRemoveStock: (code: string) => void;
   getStockBadge: (code: string) => { label: string; tone: 'growth' | 'tech' | 'beijing' } | null;
   onRefresh: () => void;
   refreshing: boolean;
 };
 
+/** Sortable header cell */
+function SortTh({
+  children, sortKey, currentSort, onToggle, className,
+}: {
+  children: React.ReactNode;
+  sortKey: StockSortKey;
+  currentSort: ColumnSort<StockSortKey>;
+  onToggle: (k: StockSortKey) => void;
+  className?: string;
+}) {
+  const active = currentSort.key === sortKey;
+  const dir = active ? currentSort.dir : null;
+  const Icon = active && dir === 'asc' ? ArrowUp : active && dir === 'desc' ? ArrowDown : ArrowUpDown;
+  return (
+    <th className={`sortable-th ${className ?? ''}${active ? ' active' : ''}`} onClick={() => onToggle(sortKey)}>
+      {children}
+      <Icon size={11} className="sort-icon" />
+    </th>
+  );
+}
+
 export default function StockTable({
-  rows, stockPinnedCode, sortingMode, draggingCode, editingCell,
+  rows, stockPinnedCode, sort, onToggleSort, draggingCode, editingCell,
   signalStocks, stocksLoading, stocksError, stockTotalHoldingAmount,
   openStockDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
-  handleDragStart, handleDragEnd, handleStockDrop, handleStockDropAfterPinned,
+  handleDragStart, handleDragEnd, handleStockDrop,
   onRemoveStock, getStockBadge, onRefresh, refreshing,
 }: Props) {
   return (
@@ -52,13 +73,13 @@ export default function StockTable({
       <table className="data-table stock-table">
         <thead>
           <tr>
-            <th>股票</th>
+            <SortTh sortKey="name" currentSort={sort} onToggle={onToggleSort}>股票</SortTh>
             <th>分时图</th>
-            <th>盈亏</th>
-            <th>当日盈亏</th>
-            <th>成本/现价</th>
-            <th>持仓股数</th>
-            <th>仓位比</th>
+            <SortTh sortKey="floatingPnl" currentSort={sort} onToggle={onToggleSort}>盈亏</SortTh>
+            <SortTh sortKey="dailyPnl" currentSort={sort} onToggle={onToggleSort}>当日盈亏</SortTh>
+            <SortTh sortKey="cost" currentSort={sort} onToggle={onToggleSort}>成本/现价</SortTh>
+            <SortTh sortKey="shares" currentSort={sort} onToggle={onToggleSort}>持仓股数</SortTh>
+            <SortTh sortKey="positionRatio" currentSort={sort} onToggle={onToggleSort}>仓位比</SortTh>
           </tr>
         </thead>
         <tbody>
@@ -66,8 +87,8 @@ export default function StockTable({
             const hasShares = item.shares > 0;
             const hasCost = item.cost > 0;
             const hasPosition = hasShares && hasCost;
+            const isPinned = item.code === stockPinnedCode;
             const badge = getStockBadge(item.code);
-            const isLockedPinned = sortingMode === 'stocks' && item.code === stockPinnedCode;
             const holdingAmount = hasPosition && Number.isFinite(item.price)
               ? item.price * item.shares
               : Number.NaN;
@@ -79,30 +100,25 @@ export default function StockTable({
               : Number.NaN;
 
             return (
-              <Fragment key={item.code}>
               <tr
                 className={[
                   editingCell?.code === item.code ? 'editing-row' : '',
-                  sortingMode === 'stocks' ? 'sorting-row' : '',
                   draggingCode === item.code ? 'dragging-row' : '',
-                  isLockedPinned ? 'locked-row' : '',
+                  isPinned ? 'locked-row' : '',
                 ].filter(Boolean).join(' ')}
                 onContextMenu={(event) => openRowContextMenu(event, 'stock', item.code)}
-                draggable={sortingMode === 'stocks' && !isLockedPinned}
+                draggable={!isPinned}
                 onDragStart={() => handleDragStart(item.code)}
                 onDragEnd={handleDragEnd}
-                onDragOver={(event) => {
-                  if (sortingMode === 'stocks') event.preventDefault();
-                }}
+                onDragOver={(event) => event.preventDefault()}
                 onDrop={() => handleStockDrop(item.code)}
               >
                 <td
                   className={`name-col stock-detail-trigger ${item.special ? 'special-row' : ''}`}
-                  onClick={() => { if (sortingMode === 'stocks') return; openStockDetail(item); }}
+                  onClick={() => openStockDetail(item)}
                   role="button"
-                  tabIndex={sortingMode === 'stocks' ? -1 : 0}
+                  tabIndex={0}
                   onKeyDown={(e) => {
-                    if (sortingMode === 'stocks') return;
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStockDetail(item); }
                   }}
                 >
@@ -111,11 +127,6 @@ export default function StockTable({
                   ><X size={10} strokeWidth={1} /></button>
                   <span className="primary">
                     <span className="name-inline">
-                      {sortingMode === 'stocks' ? (
-                        <span className={`drag-handle ${isLockedPinned ? 'disabled' : ''}`}>
-                          <GripVertical size={12} />
-                        </span>
-                      ) : null}
                       {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
                       <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                       {badge ? <span className={`stock-badge ${badge.tone}`}>{badge.label}</span> : null}
@@ -135,11 +146,10 @@ export default function StockTable({
                 </td>
                 <td
                   className="stock-detail-trigger stock-detail-chart"
-                  onClick={() => { if (sortingMode === 'stocks') return; openStockDetail(item); }}
+                  onClick={() => openStockDetail(item)}
                   role="button"
-                  tabIndex={sortingMode === 'stocks' ? -1 : 0}
+                  tabIndex={0}
                   onKeyDown={(e) => {
-                    if (sortingMode === 'stocks') return;
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStockDetail(item); }
                   }}
                 >
@@ -201,15 +211,6 @@ export default function StockTable({
                 </td>
                 <td>{formatRatioPercent(positionRatio)}</td>
               </tr>
-              {sortingMode === 'stocks' && isLockedPinned ? (
-                <tr className={`sort-insert-row ${draggingCode ? 'active' : ''}`}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={handleStockDropAfterPinned}
-                >
-                  <td colSpan={7}>拖到这里可排到置顶后</td>
-                </tr>
-              ) : null}
-              </Fragment>
             );
           })}
 

@@ -31,7 +31,17 @@ export type RowContextMenuState =
   | { kind: 'stock'; code: string; x: number; y: number }
   | { kind: 'fund'; code: string; x: number; y: number };
 
-export type SortingMode = 'stocks' | 'funds' | null;
+/** 股票列排序 key */
+export type StockSortKey = 'name' | 'floatingPnl' | 'holdingRate' | 'dailyPnl' | 'dailyChangePct' | 'cost' | 'price' | 'shares' | 'positionRatio';
+/** 基金列排序 key */
+export type FundSortKey = 'name' | 'holdingProfit' | 'holdingProfitRate' | 'estimatedProfit' | 'holdingAmount' | 'estimatedNav' | 'changePct';
+/** 排序方向 */
+export type SortDir = 'asc' | 'desc';
+
+export type ColumnSort<T extends string> = {
+  key: T;
+  dir: SortDir;
+} | { key: null; dir: null };
 
 export type StockDetailTarget = {
   code: string;

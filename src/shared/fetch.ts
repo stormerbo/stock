@@ -161,6 +161,22 @@ export function getShanghaiToday(): string {
   return `${year}-${month}-${day}`;
 }
 
+/** 获取上海时区的昨天日期 YYYY-MM-DD */
+export function getShanghaiYesterday(): string {
+  const now = new Date();
+  // 用上海时区的当前时间构造日期，减一天
+  const shanghaiStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const y = shanghaiStr.find((p) => p.type === 'year')?.value ?? '0000';
+  const m = shanghaiStr.find((p) => p.type === 'month')?.value ?? '00';
+  const d = shanghaiStr.find((p) => p.type === 'day')?.value ?? '00';
+  const shanghaiDate = new Date(`${y}-${m}-${d}T00:00:00+08:00`);
+  shanghaiDate.setDate(shanghaiDate.getDate() - 1);
+  return shanghaiDate.toISOString().slice(0, 10);
+}
+
 /**
  * 判断当前时间是否在 A 股交易时段内（上海时区 09:00 - 15:00）。
  */

@@ -7,8 +7,10 @@ import {
 import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
 import { formatNumber, formatPercent, toneClass } from '../utils/format';
 import type { DailyAssetSnapshot, StockPosition, FundPosition } from '../../shared/fetch';
-import { pMap } from '../../shared/fetch';
-import { fetchDayFqKline } from '../../shared/technical-analysis';
+import { pMap, getShanghaiYesterday } from '../../shared/fetch';
+import { recalcSnapshotsInRange, type RecalcContext, type RecalcProgress } from '../../shared/recalc-snapshot';
+import { getKlineMap } from '../../shared/kline-cache';
+import { loadHoldingHistory } from '../../shared/holding-history';
 import AssetCurveChart from '../components/AssetCurveChart';
 
 type Props = {
@@ -102,97 +104,57 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   useEffect(() => { void loadAll(); }, []);
 
   const [recalcError, setRecalcError] = useState('');
+  const [recalcProgress, setRecalcProgress] = useState<RecalcProgress | null>(null);
   const handleRecalcSnapshot = async () => {
     setRecalcLoading(true);
     setRecalcError('');
+    setRecalcProgress(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      if (recalcDate > today) throw new Error('起始日期不能晚于今天');
+      const yesterday = getShanghaiYesterday();
+      if (recalcDate > yesterday) throw new Error('起始日期不能晚于昨天');
 
       // 读取数据
-      const [posResult, tradeResult] = await Promise.all([
+      const [posResult, tradeResult, holdingResult] = await Promise.all([
         chrome.storage.local.get(['stockPositions', 'fundPositions']),
         chrome.storage.local.get('stockTradeHistory'),
+        loadHoldingHistory(),
       ]);
       const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
       const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
       const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
+      const holdingHistory = holdingResult;
 
-      // 构建当前价格映射（K线数据缺失时的降级）
-      const currentPriceMap = new Map<string, number>();
-      for (const sp of stockPositions) {
-        if (Number.isFinite(sp.price)) currentPriceMap.set(sp.code, sp.price);
-      }
-      // 历史回算不包含基金收益（基金无交易记录无法回溯日期），基金收益由自动快照保存时计算
-      const currentFundPnl = 0;
-
-      // 预加载历史K线 → date→closePrice 映射
+      // 预加载 K 线数据（缓存优先）
       const allStockCodes = [...new Set([...Object.keys(allTrades), ...stockPositions.map((s) => s.code)])];
       const klinePriceMap = new Map<string, Map<string, number>>();
       await pMap(allStockCodes, async (code) => {
-        try {
-          const kline = await fetchDayFqKline(code, 240);
-          const m = new Map<string, number>();
-          for (const k of kline) m.set(k.date, k.close);
-          klinePriceMap.set(code, m);
-        } catch { /* skip */ }
+        const map = await getKlineMap(code, 240);
+        if (map.size > 0) klinePriceMap.set(code, map);
       }, 4);
 
-      // 获取现有快照
+      // 基金暂不回溯
+      const fundNavMap = new Map<string, Map<string, number>>();
+
+      // 使用共享函数计算
+      const ctx: RecalcContext = {
+        tradeHistory: allTrades,
+        holdingHistory,
+        stockPositions,
+        fundPositions,
+        klinePriceMap,
+        fundNavMap,
+      };
+
+      const result = recalcSnapshotsInRange(recalcDate, yesterday, ctx, (p) => {
+        setRecalcProgress(p);
+      });
+
+      // 写入存储
       const snapResult = await chrome.storage.local.get('dailyAssetSnapshots');
       const snapshots = (snapResult.dailyAssetSnapshots ?? {}) as Record<string, DailyAssetSnapshot>;
-      const tradedCodes = new Set(Object.keys(allTrades));
-
-      // 遍历日期范围
-      const cursor = new Date(recalcDate);
-      const endDate = new Date(today);
-      while (cursor <= endDate) {
-        const dateStr = cursor.toISOString().slice(0, 10);
-        const dow = cursor.getDay();
-        if (dow !== 0 && dow !== 6) {
-          let stockRealizedPnl = 0;
-          let stockFloatingAtDate = 0;
-
-          // 有交易记录的股票
-          for (const [code, trades] of Object.entries(allTrades)) {
-            const upToDate = trades.filter((t) => t.date <= dateStr);
-            if (upToDate.length > 0) {
-              stockRealizedPnl += computePositionFromTrades(upToDate).realizedPnl;
-              // 用该日收盘价算浮动盈亏
-              const pos = computePositionFromTrades(upToDate);
-              if (pos.shares > 0) {
-                const price = klinePriceMap.get(code)?.get(dateStr) ?? currentPriceMap.get(code);
-                if (Number.isFinite(price)) {
-                  stockFloatingAtDate += (price! - pos.avgCost) * pos.shares;
-                }
-              }
-            }
-          }
-          // 无交易记录的股票：用K线收盘价或当前价
-          for (const sp of stockPositions) {
-            if (tradedCodes.has(sp.code)) continue;
-            const price = klinePriceMap.get(sp.code)?.get(dateStr) ?? sp.price;
-            if (Number.isFinite(price) && sp.shares > 0 && sp.cost > 0) {
-              stockFloatingAtDate += (price! - sp.cost) * sp.shares;
-            } else if (Number.isFinite(sp.floatingPnl)) {
-              stockFloatingAtDate += sp.floatingPnl;
-            }
-          }
-
-          const stockPnl = stockFloatingAtDate + stockRealizedPnl;
-
-          snapshots[dateStr] = {
-            date: dateStr,
-            totalPnl: Math.round((stockPnl + currentFundPnl) * 100) / 100,
-            floatingPnl: Math.round((stockFloatingAtDate + currentFundPnl) * 100) / 100,
-            realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
-            stockPnl: Math.round(stockPnl * 100) / 100,
-            fundPnl: Math.round(currentFundPnl * 100) / 100,
-          };
-        }
-        cursor.setDate(cursor.getDate() + 1);
+      for (const s of result) {
+        snapshots[s.date] = s;
       }
-
       await chrome.storage.local.set({ dailyAssetSnapshots: snapshots });
       setAssetSnapshots(snapshots);
       setShowRecalcModal(false);
@@ -200,6 +162,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
       setRecalcError(err instanceof Error ? err.message : '计算失败');
     } finally {
       setRecalcLoading(false);
+      setRecalcProgress(null);
     }
   };
 
@@ -501,7 +464,9 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
               <>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>正在计算...</span>
                 <div style={{ fontSize: 11, color: "var(--text-1)", lineHeight: 1.5 }}>
-                  正在获取历史K线数据并重新计算，请稍候...
+                  {recalcProgress
+                    ? `正在计算第 ${recalcProgress.processedDates}/${recalcProgress.totalDates} 个交易日...`
+                    : '正在获取历史K线数据并重新计算，请稍候...'}
                 </div>
                 <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
                   <span className="recalc-spinner" />

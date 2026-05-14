@@ -3,6 +3,7 @@
 // -----------------------------------------------------------
 
 export const TRADE_HISTORY_KEY = 'stockTradeHistory';
+export const TRADE_HISTORY_SYNC_KEY = 'stockTradeHistory_sync'; // old sync key for migration
 
 export type TradeType = 'buy' | 'sell' | 'dividend';
 
@@ -96,65 +97,70 @@ export function computePositionFromTrades(
   };
 }
 
-/** 计算当日盈亏，区分隔夜持仓和当日买入 */
+/** 当日盈亏计算结果 */
+export type DailyPnlResult = {
+  pnl: number;       // 当日盈亏金额
+};
+
+/** 计算当日盈亏，区分隔夜持仓、今日卖出和今日买入 */
 export function computeDailyPnlFromTrades(
   trades: StockTradeRecord[],
   currentPrice: number,
   prevClose: number,
   today: string,
-): number {
-  if (!Array.isArray(trades) || trades.length === 0) return Number.NaN;
-  if (!Number.isFinite(currentPrice) || !Number.isFinite(prevClose)) return Number.NaN;
+): DailyPnlResult {
+  const nan = { pnl: Number.NaN };
+  if (!Array.isArray(trades) || trades.length === 0) return nan;
+  if (!Number.isFinite(currentPrice) || !Number.isFinite(prevClose)) return nan;
 
   const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
 
   let yesterdayShares = 0;
-  let yesterdayTotalCost = 0;
   let todayBuyShares = 0;
   let todayBuyAmount = 0;
+  let soldTodayPnl = 0;
 
   for (const t of sorted) {
     if (t.date < today) {
       if (t.type === 'buy') {
         yesterdayShares += t.shares;
-        yesterdayTotalCost += t.shares * t.price + totalFees(t);
       } else if (t.type === 'sell') {
         if (yesterdayShares <= 0) continue;
         const sellShares = Math.min(t.shares, yesterdayShares);
-        yesterdayTotalCost *= (yesterdayShares - sellShares) / yesterdayShares;
         yesterdayShares -= sellShares;
       }
-    } else if (t.date === today) {
+    }
+  }
+
+  // 处理今天交易，计算当日盈亏
+  for (const t of sorted) {
+    if (t.date === today) {
       if (t.type === 'buy') {
         todayBuyShares += t.shares;
         todayBuyAmount += t.shares * t.price + totalFees(t);
       } else if (t.type === 'sell') {
+        let remaining = t.shares;
         if (todayBuyShares > 0) {
-          // 优先从当日买入中扣减
-          const fromToday = Math.min(t.shares, todayBuyShares);
+          const fromToday = Math.min(remaining, todayBuyShares);
           todayBuyShares -= fromToday;
           todayBuyAmount *= (todayBuyShares + fromToday > 0 ? todayBuyShares / (todayBuyShares + fromToday) : 0);
+          remaining -= fromToday;
         }
-        if (t.shares > (todayBuyShares > 0 ? 0 : 0)) {
-          const remaining = t.shares - Math.min(t.shares, todayBuyShares);
-          if (yesterdayShares > 0) {
-            const fromYesterday = Math.min(remaining, yesterdayShares);
-            yesterdayTotalCost *= (yesterdayShares - fromYesterday) / yesterdayShares;
-            yesterdayShares -= fromYesterday;
-          }
+        if (remaining > 0 && yesterdayShares > 0) {
+          const sellFromYesterday = Math.min(remaining, yesterdayShares);
+          soldTodayPnl += (t.price - prevClose) * sellFromYesterday;
+          yesterdayShares -= sellFromYesterday;
         }
       }
     }
   }
 
-  const overnightPnl = yesterdayShares > 0
-    ? (currentPrice - prevClose) * yesterdayShares
-    : 0;
+  const overnightPnl = (currentPrice - prevClose) * yesterdayShares;
   const intradayPnl = todayBuyShares > 0
     ? (currentPrice - todayBuyAmount / todayBuyShares) * todayBuyShares
     : 0;
 
-  return Math.round((overnightPnl + intradayPnl) * 100) / 100;
+  return { pnl: Math.round((overnightPnl + soldTodayPnl + intradayPnl) * 100) / 100 };
 }
 
 // -----------------------------------------------------------
@@ -163,7 +169,7 @@ export function computeDailyPnlFromTrades(
 
 export async function loadTradeHistory(): Promise<Record<string, StockTradeRecord[]>> {
   try {
-    const result = await chrome.storage.sync.get(TRADE_HISTORY_KEY);
+    const result = await chrome.storage.local.get(TRADE_HISTORY_KEY);
     const raw = result[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
     if (!raw || typeof raw !== 'object') return {};
     // Basic sanitization
@@ -179,7 +185,27 @@ export async function loadTradeHistory(): Promise<Record<string, StockTradeRecor
 }
 
 export async function saveTradeHistory(history: Record<string, StockTradeRecord[]>): Promise<void> {
-  await chrome.storage.sync.set({ [TRADE_HISTORY_KEY]: history });
+  await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: history });
+}
+
+/** Migrate trade history from chrome.storage.sync → local (once). */
+export async function migrateTradeHistoryToLocal(): Promise<void> {
+  try {
+    // Check if data already exists in local
+    const localResult = await chrome.storage.local.get(TRADE_HISTORY_KEY);
+    if (localResult[TRADE_HISTORY_KEY]) return; // already migrated
+
+    // Try reading from sync (old key or same key)
+    const syncResult = await chrome.storage.sync.get(TRADE_HISTORY_KEY);
+    const raw = syncResult[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
+    if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
+      await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: raw });
+      // Clear from sync after successful migration
+      await chrome.storage.sync.remove(TRADE_HISTORY_KEY);
+    }
+  } catch {
+    // best effort
+  }
 }
 
 export async function getTradesForStock(code: string): Promise<StockTradeRecord[]> {

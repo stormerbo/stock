@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { getShanghaiToday } from '../../shared/fetch';
 import type { DailyAssetSnapshot } from '../../shared/fetch';
 import { toneClass } from '../utils/format';
 
@@ -46,8 +47,9 @@ export default function AssetCurveChart({ snapshots }: Props) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const entries = useMemo(() => {
+    const today = getShanghaiToday();
     const sorted = Object.values(snapshots)
-      .filter((s) => Number.isFinite(s.totalPnl))
+      .filter((s) => Number.isFinite(s.totalPnl) && s.date < today)
       .sort((a, b) => a.date.localeCompare(b.date));
     return sorted;
   }, [snapshots]);

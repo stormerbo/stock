@@ -1,9 +1,8 @@
-import { Fragment } from 'react';
-import { GripVertical, Pin, Star, X } from 'lucide-react';
+import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatLooseNumber, formatPercent, toneClass } from '../utils/format';
-import type { FundRow } from '../types';
+import type { FundRow, FundSortKey, ColumnSort } from '../types';
 
 type EditingCell = {
   kind: 'stock' | 'fund';
@@ -15,7 +14,8 @@ type EditingCell = {
 type Props = {
   rows: FundRow[];
   fundPinnedCode: string | null;
-  sortingMode: string | null;
+  sort: ColumnSort<FundSortKey>;
+  onToggleSort: (key: FundSortKey) => void;
   draggingCode: string | null;
   editingCell: EditingCell;
   fundsLoading: boolean;
@@ -31,17 +31,35 @@ type Props = {
   handleDragStart: (code: string) => void;
   handleDragEnd: () => void;
   handleFundDrop: (code: string) => void;
-  handleFundDropAfterPinned: () => void;
   onRemoveFund: (code: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
 };
 
+function SortTh({
+  children, sortKey, currentSort, onToggle,
+}: {
+  children: React.ReactNode;
+  sortKey: FundSortKey;
+  currentSort: ColumnSort<FundSortKey>;
+  onToggle: (k: FundSortKey) => void;
+}) {
+  const active = currentSort.key === sortKey;
+  const dir = active ? currentSort.dir : null;
+  const Icon = active && dir === 'asc' ? ArrowUp : active && dir === 'desc' ? ArrowDown : ArrowUpDown;
+  return (
+    <th className={`sortable-th${active ? ' active' : ''}`} onClick={() => onToggle(sortKey)}>
+      {children}
+      <Icon size={11} className="sort-icon" />
+    </th>
+  );
+}
+
 export default function FundTable({
-  rows, fundPinnedCode, sortingMode, draggingCode, editingCell,
+  rows, fundPinnedCode, sort, onToggleSort, draggingCode, editingCell,
   fundsLoading, fundsError, fundPositionsLength,
   openFundDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
-  handleDragStart, handleDragEnd, handleFundDrop, handleFundDropAfterPinned,
+  handleDragStart, handleDragEnd, handleFundDrop,
   onRemoveFund, onRefresh, refreshing,
 }: Props) {
   return (
@@ -49,43 +67,40 @@ export default function FundTable({
       <table className="data-table fund-table">
         <thead>
           <tr>
-            <th>基金名称</th>
-            <th><span className="stacked-th"><span>持仓净值</span><span>估算净值</span></span></th>
-            <th>持有额</th>
-            <th>持有收益</th>
-            <th>持有收益率</th>
-            <th>涨跌幅</th>
-            <th>估算收益</th>
+            <SortTh sortKey="name" currentSort={sort} onToggle={onToggleSort}>基金名称</SortTh>
+            <SortTh sortKey="estimatedNav" currentSort={sort} onToggle={onToggleSort}><span className="stacked-th"><span>持仓净值</span><span>估算净值</span></span></SortTh>
+            <SortTh sortKey="holdingAmount" currentSort={sort} onToggle={onToggleSort}>持有额</SortTh>
+            <SortTh sortKey="holdingProfit" currentSort={sort} onToggle={onToggleSort}>持有收益</SortTh>
+            <SortTh sortKey="holdingProfitRate" currentSort={sort} onToggle={onToggleSort}>持有收益率</SortTh>
+            <SortTh sortKey="changePct" currentSort={sort} onToggle={onToggleSort}>涨跌幅</SortTh>
+            <SortTh sortKey="estimatedProfit" currentSort={sort} onToggle={onToggleSort}>估算收益</SortTh>
             <th>更新时间</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((item) => {
-            const isLockedPinned = sortingMode === 'funds' && item.code === fundPinnedCode;
+            const isPinned = item.code === fundPinnedCode;
             const hasFundCost = item.cost > 0;
             const hasFundUnits = item.units > 0;
             return (
-            <Fragment key={item.code}>
             <tr
               onContextMenu={(event) => openRowContextMenu(event, 'fund', item.code)}
               className={[
-                sortingMode === 'funds' ? 'sorting-row' : '',
                 draggingCode === item.code ? 'dragging-row' : '',
-                isLockedPinned ? 'locked-row' : '',
+                isPinned ? 'locked-row' : '',
               ].filter(Boolean).join(' ')}
-              draggable={sortingMode === 'funds' && !isLockedPinned}
+              draggable={!isPinned}
               onDragStart={() => handleDragStart(item.code)}
               onDragEnd={handleDragEnd}
-              onDragOver={(event) => { if (sortingMode === 'funds') event.preventDefault(); }}
+              onDragOver={(event) => event.preventDefault()}
               onDrop={() => handleFundDrop(item.code)}
             >
               <td
                 className={`name-col fund-detail-trigger ${item.special ? 'special-row' : ''}`}
-                onClick={() => { if (sortingMode === 'funds') return; openFundDetail(item); }}
+                onClick={() => openFundDetail(item)}
                 role="button"
-                tabIndex={sortingMode === 'funds' ? -1 : 0}
+                tabIndex={0}
                 onKeyDown={(e) => {
-                  if (sortingMode === 'funds') return;
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFundDetail(item); }
                 }}
               >
@@ -94,9 +109,6 @@ export default function FundTable({
                 ><X size={10} strokeWidth={1} /></button>
                 <span className="primary" title={item.name}>
                   <span className="name-inline">
-                    {sortingMode === 'funds' ? (
-                      <span className={`drag-handle ${isLockedPinned ? 'disabled' : ''}`}><GripVertical size={12} /></span>
-                    ) : null}
                     {item.navDisclosedToday ? (
                       <span className="fund-disclosed-check" aria-label="当日净值已披露" title={`当日净值已披露${item.navDate ? `：${item.navDate}` : ''}`}>✓</span>
                     ) : null}
@@ -145,11 +157,18 @@ export default function FundTable({
                     onKeyDown={(e) => { if (e.key === 'Enter') finishEditing(); else if (e.key === 'Escape') cancelEditing(); }}
                   />
                 ) : (
-                  <span className={hasFundUnits ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
-                    onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'units'); }}
-                  >
-                    {hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额'}
-                  </span>
+                  <>
+                    <span className={hasFundUnits ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
+                      onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'units'); }}
+                    >
+                      {hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额'}
+                    </span>
+                    {hasFundUnits && Number.isFinite(item.holdingAmount) ? (
+                      <div style={{ fontSize: 10, color: 'var(--text-2)', lineHeight: 1.4, marginTop: 1 }}>
+                        ≈{formatNumber(item.holdingAmount, 2)}
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </td>
               <td className={toneClass(item.holdingProfit)}>{formatNumber(item.holdingProfit, 2)}</td>
@@ -158,16 +177,8 @@ export default function FundTable({
               <td className={toneClass(item.estimatedProfit)}>{formatNumber(item.estimatedProfit, 2)}</td>
               <td>{item.updatedAt}</td>
             </tr>
-            {sortingMode === 'funds' && isLockedPinned ? (
-              <tr className={`sort-insert-row ${draggingCode ? 'active' : ''}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={handleFundDropAfterPinned}
-              >
-                <td colSpan={8}>拖到这里可排到置顶后</td>
-              </tr>
-            ) : null}
-            </Fragment>
-          )})}
+          );
+          })}
 
           {fundsLoading && fundPositionsLength === 0 ? (
             <>
