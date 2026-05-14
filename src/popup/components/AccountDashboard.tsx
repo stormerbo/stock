@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react';
-import DiagnosticPanel from '../views/DiagnosticPanel';
-import type { StockPosition, FundPosition, DailyAssetSnapshot } from '../../shared/fetch';
+import type { StockPosition, FundPosition } from '../../shared/fetch';
 import { formatNumber, toneClass } from '../utils/format';
-import AssetCurveChart from './AssetCurveChart';
 
 type AccountSnapshot = {
   totalAssets: number;
@@ -28,26 +25,6 @@ type Props = {
 };
 
 export default function AccountDashboard({ snapshot, stockPositions, fundPositions }: Props) {
-  const [assetSnapshots, setAssetSnapshots] = useState<Record<string, DailyAssetSnapshot>>({});
-
-  useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get('dailyAssetSnapshots', (result: Record<string, unknown>) => {
-        const snapshots = (result.dailyAssetSnapshots ?? {}) as Record<string, DailyAssetSnapshot>;
-        setAssetSnapshots(snapshots);
-      });
-    }
-    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area === 'local' && changes.dailyAssetSnapshots) {
-        setAssetSnapshots(changes.dailyAssetSnapshots.newValue as Record<string, DailyAssetSnapshot>);
-      }
-    };
-    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-      chrome.storage.onChanged.addListener(listener);
-      return () => chrome.storage.onChanged.removeListener(listener);
-    }
-  }, []);
-
   return (
     <div className="account-dashboard">
       <section className="account-hero-card">
@@ -79,8 +56,6 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
           </div>
         </div>
       </section>
-
-      <AssetCurveChart snapshots={assetSnapshots} />
 
       <div className="account-grid">
         <article className="account-card">
@@ -177,11 +152,6 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
           </div>
         </article>
       </div>
-
-      <DiagnosticPanel
-        stockPositions={stockPositions}
-        fundPositions={fundPositions}
-      />
     </div>
   );
 }

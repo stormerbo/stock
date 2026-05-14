@@ -6,6 +6,8 @@ import {
 } from '../../shared/trade-history';
 import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
 import { formatNumber, formatPercent, toneClass } from '../utils/format';
+import type { DailyAssetSnapshot } from '../../shared/fetch';
+import AssetCurveChart from '../components/AssetCurveChart';
 
 type Props = {
   stockNames: Record<string, string>;
@@ -62,8 +64,26 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   const [modal, setModal] = useState<ModalState>(() => emptyModal(allStockCodes));
   const [feeCfg, setFeeCfg] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
   const [stockSearch, setStockSearch] = useState('');
+  const [assetSnapshots, setAssetSnapshots] = useState<Record<string, DailyAssetSnapshot>>({});
 
   useEffect(() => { loadFeeConfig().then(setFeeCfg); }, []);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get('dailyAssetSnapshots', (result: Record<string, unknown>) => {
+        setAssetSnapshots((result.dailyAssetSnapshots ?? {}) as Record<string, DailyAssetSnapshot>);
+      });
+    }
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && changes.dailyAssetSnapshots) {
+        setAssetSnapshots(changes.dailyAssetSnapshots.newValue as Record<string, DailyAssetSnapshot>);
+      }
+    };
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
 
   const loadAll = async () => {
     const h = await loadTradeHistory();
@@ -179,6 +199,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
   return (
     <div className="table-panel" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <AssetCurveChart snapshots={assetSnapshots} />
       {/* 概况栏 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 12px', fontSize: 12, color: 'var(--text-1)' }}>
         <span>股票 <b style={{ color: 'var(--text-0)' }}>{summary.totalStocks}</b> 只</span>

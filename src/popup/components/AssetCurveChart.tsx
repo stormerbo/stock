@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DailyAssetSnapshot } from '../../shared/fetch';
+import { toneClass } from '../utils/format';
 
 type Props = {
   snapshots: Record<string, DailyAssetSnapshot>;
@@ -13,6 +14,12 @@ const PAD_T = 16;
 const PAD_B = 36;
 const INNER_W = SVG_W - PAD_L - PAD_R;
 const INNER_H = SVG_H - PAD_T - PAD_B;
+
+const LINE_CONFIG = [
+  { key: 'totalPnl' as const, label: '汇总', className: 'asset-curve-line-total' },
+  { key: 'stockPnl' as const, label: '股票', className: 'asset-curve-line-stock' },
+  { key: 'fundPnl' as const, label: '基金', className: 'asset-curve-line-fund' },
+];
 
 function formatNum(v: number): string {
   if (!Number.isFinite(v)) return '-';
@@ -28,11 +35,11 @@ function formatAxis(v: number): string {
 }
 
 function formatDateLabel(d: string): string {
-  return d.slice(5); // "MM-DD"
+  return d.slice(5);
 }
 
 function formatDateFull(d: string): string {
-  return d; // "YYYY-MM-DD"
+  return d;
 }
 
 export default function AssetCurveChart({ snapshots }: Props) {
@@ -40,7 +47,7 @@ export default function AssetCurveChart({ snapshots }: Props) {
 
   const entries = useMemo(() => {
     const sorted = Object.values(snapshots)
-      .filter((s) => Number.isFinite(s.totalAssets))
+      .filter((s) => Number.isFinite(s.totalPnl))
       .sort((a, b) => a.date.localeCompare(b.date));
     return sorted;
   }, [snapshots]);
@@ -49,7 +56,7 @@ export default function AssetCurveChart({ snapshots }: Props) {
     return (
       <div className="asset-curve-card">
         <div className="asset-curve-header">
-          <span className="account-section-label">资产走势</span>
+          <span className="account-section-label">累计收益</span>
         </div>
         <div className="asset-curve-empty">
           暂无历史数据，持续运行后将自动生成
@@ -58,8 +65,20 @@ export default function AssetCurveChart({ snapshots }: Props) {
     );
   }
 
-  const minVal = entries.reduce((m, e) => Math.min(m, e.totalAssets), Infinity);
-  const maxVal = entries.reduce((m, e) => Math.max(m, e.totalAssets), -Infinity);
+  const latest = entries[entries.length - 1];
+
+  // 找到三条线的全局最大最小值
+  let minVal = Infinity;
+  let maxVal = -Infinity;
+  for (const e of entries) {
+    for (const cfg of LINE_CONFIG) {
+      const v = e[cfg.key];
+      if (Number.isFinite(v)) {
+        minVal = Math.min(minVal, v);
+        maxVal = Math.max(maxVal, v);
+      }
+    }
+  }
   const range = maxVal - minVal || 1;
   const pad = range * 0.08;
   const yMin = minVal - pad;
@@ -68,10 +87,14 @@ export default function AssetCurveChart({ snapshots }: Props) {
 
   const toX = (i: number) => PAD_L + (i / (entries.length - 1)) * INNER_W;
   const toY = (v: number) => PAD_T + INNER_H - ((v - yMin) / yRange) * INNER_H;
+  const zeroY = toY(0);
 
-  const linePath = entries.map((e, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(e.totalAssets).toFixed(1)}`).join('');
-
-  const areaPath = `${linePath}L${toX(entries.length - 1).toFixed(1)},${SVG_H - PAD_B}L${toX(0).toFixed(1)},${SVG_H - PAD_B}Z`;
+  const buildPath = (key: 'totalPnl' | 'stockPnl' | 'fundPnl') =>
+    entries.map((e, i) => {
+      const v = e[key];
+      if (!Number.isFinite(v)) return '';
+      return `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`;
+    }).filter(Boolean).join('');
 
   // Y axis ticks
   const yTicks = 5;
@@ -81,12 +104,23 @@ export default function AssetCurveChart({ snapshots }: Props) {
   const xLabelCount = Math.min(entries.length, 6);
   const xStep = Math.max(1, Math.floor((entries.length - 1) / (xLabelCount - 1)));
 
+  const hoverEntry = hoverIdx !== null ? entries[hoverIdx] : null;
+  const hoverKey = hoverEntry ? ('totalPnl' as const) : null;
+
   return (
     <div className="asset-curve-card">
       <div className="asset-curve-header">
-        <span className="account-section-label">资产走势</span>
-        <span className="asset-curve-summary">
-          最新：<strong>{formatNum(entries[entries.length - 1].totalAssets)}</strong>
+        <span className="account-section-label">累计收益</span>
+        <span className="asset-curve-legend">
+          {LINE_CONFIG.map((cfg) => (
+            <span key={cfg.key} className="asset-curve-legend-item">
+              <span className={`asset-curve-legend-dot ${cfg.className}`} />
+              {cfg.label}
+            </span>
+          ))}
+          <span className="asset-curve-summary">
+            汇总 <strong className={toneClass(latest.totalPnl)}>{formatNum(latest.totalPnl)}</strong>
+          </span>
         </span>
       </div>
       <div className="asset-curve-chart-wrap">
@@ -96,6 +130,11 @@ export default function AssetCurveChart({ snapshots }: Props) {
           preserveAspectRatio="none"
           onMouseLeave={() => setHoverIdx(null)}
         >
+          {/* Zero line */}
+          {yMin < 0 && yMax > 0 && (
+            <line x1={PAD_L} y1={zeroY} x2={SVG_W - PAD_R} y2={zeroY} className="asset-curve-baseline" />
+          )}
+
           {/* Grid lines */}
           {Array.from({ length: yTicks + 1 }).map((_, i) => {
             const y = PAD_T + (i / yTicks) * INNER_H;
@@ -120,38 +159,49 @@ export default function AssetCurveChart({ snapshots }: Props) {
             );
           })}
 
-          {/* Area fill */}
+          {/* Area fill behind total line */}
           <defs>
             <linearGradient id="asset-curve-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.01" />
             </linearGradient>
           </defs>
-          <path d={areaPath} fill="url(#asset-curve-gradient)" />
+          {(() => {
+            const p = buildPath('totalPnl');
+            if (!p) return null;
+            const area = `${p}L${toX(entries.length - 1).toFixed(1)},${SVG_H - PAD_B}L${toX(0).toFixed(1)},${SVG_H - PAD_B}Z`;
+            return <path d={area} fill="url(#asset-curve-gradient)" />;
+          })()}
 
-          {/* Line */}
-          <path d={linePath} fill="none" className="asset-curve-line" />
+          {/* Lines */}
+          {LINE_CONFIG.map((cfg) => {
+            const p = buildPath(cfg.key);
+            if (!p) return null;
+            return <path key={cfg.key} d={p} fill="none" className={cfg.className} />;
+          })}
 
-          {/* Data points */}
-          {entries.map((e, i) => (
-            <circle
-              key={e.date}
-              cx={toX(i)}
-              cy={toY(e.totalAssets)}
-              r={hoverIdx === i ? 4 : 2}
-              className={`asset-curve-dot ${hoverIdx === i ? 'active' : ''}`}
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseMove={() => setHoverIdx(i)}
-            />
-          ))}
+          {/* Hover data points for all lines */}
+          {hoverIdx !== null && LINE_CONFIG.map((cfg) => {
+            const v = entries[hoverIdx][cfg.key];
+            if (!Number.isFinite(v)) return null;
+            return (
+              <circle
+                key={cfg.key}
+                cx={toX(hoverIdx)}
+                cy={toY(v)}
+                r={3}
+                className={`asset-curve-dot ${cfg.className}`}
+              />
+            );
+          })}
 
           {/* Tooltip */}
           {hoverIdx !== null && entries[hoverIdx] && (() => {
             const d = entries[hoverIdx];
             const cx = toX(hoverIdx);
-            const cy = toY(d.totalAssets);
-            const tooltipW = 140;
-            const tooltipH = 56;
+            const cy = toY(d.totalPnl);
+            const tooltipW = 160;
+            const tooltipH = 72 + LINE_CONFIG.length * 14;
             let tx = cx + 10;
             let ty = cy - tooltipH - 8;
             if (tx + tooltipW > SVG_W - PAD_R) tx = cx - tooltipW - 10;
@@ -160,12 +210,15 @@ export default function AssetCurveChart({ snapshots }: Props) {
               <g>
                 <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} className="asset-curve-tooltip-bg" />
                 <text x={tx + 8} y={ty + 14} className="asset-curve-tooltip-date">{formatDateFull(d.date)}</text>
-                <text x={tx + 8} y={ty + 30} className="asset-curve-tooltip-val">
-                  总资产：{formatNum(d.totalAssets)}
-                </text>
-                <text x={tx + 8} y={ty + 44} className="asset-curve-tooltip-detail">
-                  股票 {formatNum(d.stockMarketValue)} / 基金 {formatNum(d.fundHoldingAmount)}
-                </text>
+                {LINE_CONFIG.map((cfg, i) => {
+                  const v = d[cfg.key];
+                  if (!Number.isFinite(v)) return null;
+                  return (
+                    <text key={cfg.key} x={tx + 8} y={ty + 30 + i * 14} className={`asset-curve-tooltip-val ${toneClass(v)}`}>
+                      {cfg.label}：{formatNum(v)}
+                    </text>
+                  );
+                })}
                 {/* Crosshair */}
                 <line x1={PAD_L} y1={cy} x2={SVG_W - PAD_R} y2={cy} className="asset-curve-crosshair" />
                 <line x1={cx} y1={PAD_T} x2={cx} y2={SVG_H - PAD_B} className="asset-curve-crosshair" />

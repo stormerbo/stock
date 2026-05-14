@@ -61,9 +61,11 @@ export type FundPosition = {
 
 export type DailyAssetSnapshot = {
   date: string;
-  totalAssets: number;
-  stockMarketValue: number;
-  fundHoldingAmount: number;
+  totalPnl: number;      // 累计收益（股票+基金）
+  floatingPnl: number;   // 当前浮动盈亏
+  realizedPnl: number;   // 已实现盈亏
+  stockPnl: number;      // 股票累计收益
+  fundPnl: number;       // 基金累计收益
 };
 
 export type MarketIndexQuote = {

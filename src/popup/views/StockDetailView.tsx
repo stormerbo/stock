@@ -10,6 +10,7 @@ import KlineChart from '../components/KlineChart';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../../shared/risk-metrics";
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
 import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
+import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../shared/technical-analysis";
 import TradeHistoryView from "./TradeHistoryView";
 
 type Props = {
@@ -37,7 +38,7 @@ function toneClass(value: number): string {
   return value >= 0 ? "up" : "down";
 }
 
-type TabValue = StockPeriod | "fundamental" | "trades";
+type TabValue = StockPeriod | "fundamental" | "trades" | "analysis";
 
 const PERIOD_TABS: Array<{ label: string; value: TabValue }> = [
   { label: "分时", value: "minute" },
@@ -52,6 +53,7 @@ const PERIOD_TABS: Array<{ label: string; value: TabValue }> = [
   { label: "15分", value: "m15" },
   { label: "5分", value: "m5" },
   { label: "基本面", value: "fundamental" },
+  { label: "分析", value: "analysis" },
 ];
 
 // ─── Main Detail Panel ───
@@ -65,6 +67,9 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [fundamentals, setFundamentals] = useState<FundamentalData | null>(null);
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false);
   const [trades, setTrades] = useState<StockTradeRecord[]>([]);
+  const [analysisSignals, setAnalysisSignals] = useState<TechnicalSignal[]>([]);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
 
   const hasTrades = trades.length > 0;
 
@@ -93,6 +98,23 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         return;
       }
       if (period === "trades") return;
+      if (period === "analysis") {
+        setAnalysisLoading(true);
+        setAnalysisError("");
+        try {
+          const kline = await fetchDayFqKline(code, 120);
+          if (cancelled) return;
+          const signals = detectAllSignals(kline);
+          setAnalysisSignals(signals);
+        } catch (err) {
+          if (cancelled) return;
+          setAnalysisError(err instanceof Error ? err.message : "分析失败");
+          setAnalysisSignals([]);
+        } finally {
+          if (!cancelled) setAnalysisLoading(false);
+        }
+        return;
+      }
 
       setLoading(true);
       try {
@@ -137,7 +159,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         <div className="detail-loading">详情加载中...</div>
       ) : null}
 
-      {error && !detail && period !== "fundamental" && period !== "trades" ? (
+      {error && !detail && period !== "fundamental" && period !== "trades" && period !== "analysis" ? (
         <div className="detail-error">详情获取失败：{error}</div>
       ) : null}
 
@@ -168,7 +190,33 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         </div>
       ) : null}
 
-      {detail && period !== "fundamental" && period !== "trades" ? (
+      {period === "analysis" ? (
+        <div className="detail-body">
+          <div className="detail-quote-header">
+            <div className="quote-title-row">
+              <div className="quote-title-left">
+                <strong>{detail?.name || fallbackName}</strong>
+                <span className="quote-code">{code}</span>
+              </div>
+            </div>
+          </div>
+          <TechnicalAnalysisPanel signals={analysisSignals} loading={analysisLoading} error={analysisError} />
+          <div className="period-tabs" style={{ marginTop: 8 }}>
+            {PERIOD_TABS.map((tab) => (
+              <button key={tab.value} type="button"
+                className={`period-tab ${period === tab.value ? "active" : ""}`}
+                onClick={() => setPeriod(tab.value)}>{tab.label}</button>
+            ))}
+            {hasTrades && (
+              <button type="button"
+                className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
+                onClick={() => setPeriod("trades")}>交易</button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {detail && period !== "fundamental" && period !== "trades" && period !== "analysis" ? (
         <div className="detail-body">
           {/* ─── Quote Header ─── */}
           <div className="detail-quote-header">
@@ -335,6 +383,68 @@ function RiskMetrics({ kline }: { kline: Array<{ date: string; close: number }> 
       {!drawdown && !volatility ? (
         <span className="risk-metric-label">数据不足，无法计算风险指标</span>
       ) : null}
+    </div>
+  );
+}
+
+/* ─── Technical Analysis Panel ─── */
+function TechnicalAnalysisPanel({ signals, loading, error }: { signals: TechnicalSignal[]; loading: boolean; error: string }) {
+  if (loading) {
+    return <div className="detail-loading">技术分析中...</div>;
+  }
+
+  if (error) {
+    return <div className="detail-error">{error}</div>;
+  }
+
+  if (signals.length === 0) {
+    return (
+      <div className="detail-empty" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-2)' }}>
+        <div style={{ fontSize: 13, marginBottom: 4 }}>未检测到技术信号</div>
+        <div style={{ fontSize: 11 }}>K 线数据不足（需至少 30 个交易日）或无显著信号</div>
+      </div>
+    );
+  }
+
+  const positive = signals.filter((s) => s.severity === 'positive');
+  const negative = signals.filter((s) => s.severity === 'negative');
+  const info = signals.filter((s) => s.severity === 'info');
+
+  return (
+    <div className="analysis-panel">
+      {positive.length > 0 && (
+        <div className="analysis-group">
+          <div className="analysis-group-label positive">看多信号</div>
+          {positive.map((s, i) => (
+            <div key={i} className="analysis-signal positive">
+              <span className="analysis-signal-label">{s.label}</span>
+              <span className="analysis-signal-desc">{s.guidance}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {negative.length > 0 && (
+        <div className="analysis-group">
+          <div className="analysis-group-label negative">看空信号</div>
+          {negative.map((s, i) => (
+            <div key={i} className="analysis-signal negative">
+              <span className="analysis-signal-label">{s.label}</span>
+              <span className="analysis-signal-desc">{s.guidance}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {info.length > 0 && (
+        <div className="analysis-group">
+          <div className="analysis-group-label info">其他</div>
+          {info.map((s, i) => (
+            <div key={i} className="analysis-signal info">
+              <span className="analysis-signal-label">{s.label}</span>
+              <span className="analysis-signal-desc">{s.guidance}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -121,7 +121,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
   const showRangeControls = detail.period !== 'minute';
   const MIN_WINDOW_SIZE = 24;
 
-  const [windowSize, setWindowSize] = useState<number>(detail.period === 'minute' ? 0 : 240);
+  const [windowSize, setWindowSize] = useState<number>(detail.period === 'minute' ? 0 : 60);
   const [viewOffset, setViewOffset] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hoverSvgX, setHoverSvgX] = useState<number | null>(null);
@@ -161,7 +161,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
 
   useEffect(() => {
     setViewOffset(0);
-    setWindowSize(detail.period === 'minute' ? 0 : 240);
+    setWindowSize(detail.period === 'minute' ? 0 : 60);
     setHoverIndex(null);
     setHoverSvgX(null);
     dragRef.current = null;

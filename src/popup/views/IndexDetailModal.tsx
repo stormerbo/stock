@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import { isTradingHours } from '../stockDetail';
+import { X, Loader2, RefreshCw } from 'lucide-react';
+import { isTradingHours, fetchIndexKlineDetail, type StockDetailData, type StockPeriod } from '../stockDetail';
+import KlineChart from '../components/KlineChart';
 
 const UP_COLOR = '#e45555';
 const DN_COLOR = '#2aa568';
@@ -136,16 +137,26 @@ async function fetchIndexMinuteDetail(code: string, fallbackLabel: string): Prom
   };
 }
 
+const PERIOD_TABS: Array<{ label: string; value: StockPeriod }> = [
+  { label: '分时', value: 'minute' },
+  { label: '日K', value: 'day' },
+  { label: '周K', value: 'week' },
+  { label: '月K', value: 'month' },
+];
+
 export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props) {
   const [detail, setDetail] = useState<IndexMinuteDetail | null>(null);
+  const [klineDetail, setKlineDetail] = useState<StockDetailData | null>(null);
+  const [period, setPeriod] = useState<StockPeriod>('minute');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshAt, setRefreshAt] = useState(0);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    const load = async () => {
+    const loadMinute = async () => {
       setLoading(true);
       try {
         const next = await fetchIndexMinuteDetail(code, fallbackLabel);
@@ -160,10 +171,33 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
       }
     };
 
-    void load();
+    const loadKline = async () => {
+      setLoading(true);
+      try {
+        const next = await fetchIndexKlineDetail(code, fallbackLabel, period);
+        if (cancelled) return;
+        setKlineDetail(next);
+        setError('');
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'K线数据获取失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    if (period === 'minute') {
+      void loadMinute();
+    } else {
+      void loadKline();
+    }
+
     const timer = window.setInterval(() => {
-      if (isTradingHours()) void load();
-    }, 20_000);
+      if (isTradingHours()) {
+        if (period === 'minute') void loadMinute();
+        else void loadKline();
+      }
+    }, period === 'minute' ? 20_000 : 40_000);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
@@ -174,7 +208,7 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
       window.clearInterval(timer);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [code, fallbackLabel, onClose]);
+  }, [code, fallbackLabel, period, refreshAt, onClose]);
 
   const chartModel = useMemo(() => {
     if (!detail || detail.points.length === 0 || !Number.isFinite(detail.prevClose)) return null;
@@ -302,15 +336,33 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
             <strong>{detail?.name || fallbackLabel}</strong>
             <span>{code}</span>
           </div>
+          {period !== 'minute' && (
+            <button type="button" style={{ background: 'none', border: 'none', color: 'var(--text-1)', cursor: 'pointer', padding: '2px 6px', marginRight: 'auto', display: 'flex' }}
+              onClick={() => setRefreshAt((prev) => prev + 1)} aria-label="刷新">
+              <RefreshCw size={12} />
+            </button>
+          )}
           <button type="button" className="index-modal-close" onClick={onClose} aria-label="关闭指数详情">
             <X size={14} />
           </button>
         </header>
 
-        {loading && !detail ? <div className="index-modal-state">指数分时加载中...</div> : null}
-        {error && !detail ? <div className="index-modal-state">加载失败：{error}</div> : null}
+        {loading && ((period === 'minute' && !detail) || (period !== 'minute' && !klineDetail)) ? (
+          <div className="index-modal-state">加载中...</div>
+        ) : null}
+        {error && ((period === 'minute' && !detail) || (period !== 'minute' && !klineDetail)) ? (
+          <div className="index-modal-state">加载失败：{error}</div>
+        ) : null}
 
-        {detail && chartModel ? (
+        {period !== 'minute' ? (
+          klineDetail ? (
+          <div className="index-modal-body kline">
+            <KlineChart detail={klineDetail} />
+          </div>
+          ) : loading ? <div className="index-modal-state">K线加载中...</div> : error ? <div className="index-modal-state">加载失败：{error}</div> : null
+        ) : null}
+
+        {period === 'minute' && detail && chartModel ? (
           <div className="index-modal-body">
             <div className="index-modal-summary">
               <strong className={toneClass(detail.changePct)}>{formatNumber(detail.price, 2)}</strong>
@@ -495,6 +547,14 @@ export default function IndexDetailModal({ code, fallbackLabel, onClose }: Props
             </div>
           </div>
         ) : null}
+
+        <div className="period-tabs" style={period !== 'minute' ? { marginTop: 2 } : undefined}>
+          {PERIOD_TABS.map((tab) => (
+            <button key={tab.value} type="button"
+              className={`period-tab ${period === tab.value ? 'active' : ''}`}
+              onClick={() => setPeriod(tab.value)}>{tab.label}</button>
+          ))}
+        </div>
       </section>
     </div>
   );

@@ -49,7 +49,7 @@ import {
   type SpikeGlobalConfig,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
-import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
+import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, computePositionFromTrades, type StockTradeRecord } from '../shared/trade-history';
 import { detectAllSignals, fetchDayFqKline } from '../shared/technical-analysis';
 
 export type BadgeMode =
@@ -615,7 +615,6 @@ async function refreshStocks() {
         await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });
       }
     }
-    void saveDailyAssetSnapshot();
   } catch (e) {
     console.warn('[Portfolio Pulse] stock refresh failed:', e);
     void notifyApiError('股票行情', 'stockQuoteErrorAt');
@@ -1220,8 +1219,10 @@ async function generateDailyTechnicalReport() {
     const detailMessage = detailLines.join('\n').trim();
 
     // 系统通知（简短）
+    const firstEntry = newSignalsByStock[stockCodes[0]]?.[0];
+    const firstName = firstEntry?.name || stockCodes[0];
     const summaryLine = stockCount === 1
-      ? `${stockCodes[0]} 出现 ${totalNewSignals} 个技术信号`
+      ? `${firstName} 出现 ${totalNewSignals} 个技术信号`
       : `${stockCount} 只股票出现 ${totalNewSignals} 个技术信号`;
 
     // 写入通知历史
@@ -1289,29 +1290,47 @@ async function generateDailyTechnicalReport() {
   }
 }
 
-/** 每天保存一次总资产快照 */
+/** 收盘后保存累计收益快照 */
 const DAILY_SNAPSHOT_KEY = 'dailyAssetSnapshots';
 
 async function saveDailyAssetSnapshot() {
-  if (!isTradingHours()) return;
+  if (isTradingHours() || isWeekendInShanghai()) return;
   const today = getShanghaiToday();
-  const result = await chrome.storage.local.get(['stockPositions', 'fundPositions', DAILY_SNAPSHOT_KEY]);
-  const snapshots = (result[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
+  const [posResult, snapResult, tradeResult] = await Promise.all([
+    chrome.storage.local.get(['stockPositions', 'fundPositions']),
+    chrome.storage.local.get(DAILY_SNAPSHOT_KEY),
+    chrome.storage.local.get('stockTradeHistory'),
+  ]);
+  const snapshots = (snapResult[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
   if (snapshots[today]) return;
 
-  const stockPositions = (result.stockPositions ?? []) as StockPosition[];
-  const fundPositions = (result.fundPositions ?? []) as FundPosition[];
+  const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
+  const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
 
-  const stockMarketValue = stockPositions.reduce((s, p) =>
-    Number.isFinite(p.price) && p.shares > 0 ? s + p.price * p.shares : s, 0);
-  const fundHoldingAmount = fundPositions.reduce((s, p) =>
-    Number.isFinite(p.holdingAmount) ? s + p.holdingAmount : s, 0);
+  // 浮动盈亏
+  const stockFloating = stockPositions.reduce((s, p) =>
+    Number.isFinite(p.floatingPnl) ? s + p.floatingPnl : s, 0);
+  const fundHoldingProfit = fundPositions.reduce((s, p) =>
+    Number.isFinite(p.holdingProfit) ? s + p.holdingProfit : s, 0);
+  const floatingPnl = stockFloating + fundHoldingProfit;
+
+  // 已实现盈亏（从交易记录计算，只有股票）
+  const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
+  let stockRealizedPnl = 0;
+  for (const trades of Object.values(allTrades)) {
+    stockRealizedPnl += computePositionFromTrades(trades).realizedPnl;
+  }
+
+  const stockPnl = stockFloating + stockRealizedPnl;
+  const fundPnl = fundHoldingProfit;
 
   snapshots[today] = {
     date: today,
-    totalAssets: Math.round((stockMarketValue + fundHoldingAmount) * 100) / 100,
-    stockMarketValue: Math.round(stockMarketValue * 100) / 100,
-    fundHoldingAmount: Math.round(fundHoldingAmount * 100) / 100,
+    totalPnl: Math.round((stockPnl + fundPnl) * 100) / 100,
+    floatingPnl: Math.round(floatingPnl * 100) / 100,
+    realizedPnl: Math.round(stockRealizedPnl * 100) / 100,
+    stockPnl: Math.round(stockPnl * 100) / 100,
+    fundPnl: Math.round(fundPnl * 100) / 100,
   };
   await chrome.storage.local.set({ [DAILY_SNAPSHOT_KEY]: snapshots });
 }
@@ -1339,7 +1358,6 @@ async function refreshFunds() {
     }
     await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
     void updateHoverTitleFromStorage();
-    void saveDailyAssetSnapshot();
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
     void notifyApiError('基金净值', 'fundErrorAt');
@@ -1654,6 +1672,9 @@ startRefreshLoop();
 setTimeout(() => void updateHoverTitleFromStorage(), 2000);
 // 初始更新角标（从缓存数据）
 setTimeout(() => scheduleBadgeUpdate(), 1000);
+// 交易时段内每 60s 保存一次资产快照（内部按天去重）
+setTimeout(() => void saveDailyAssetSnapshot(), 5_000);
+setInterval(() => void saveDailyAssetSnapshot(), 60_000);
 
 // 监听配置变化
 chrome.storage.onChanged.addListener((changes, area) => {

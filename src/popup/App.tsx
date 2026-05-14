@@ -4,7 +4,6 @@ import StockDetailView from './views/StockDetailView';
 import SectorDetailView from './views/SectorDetailView';
 import IndexDetailModal from './views/IndexDetailModal';
 import FundDetailView from './views/FundDetailView';
-import DiagnosticPanel from './views/DiagnosticPanel';
 import TagBadge from './tags/TagBadge';
 import TagFilterBar from './tags/TagFilterBar';
 import TagEditor from './tags/TagEditor';
@@ -504,10 +503,10 @@ export default function App() {
         const correctedDaily = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
         if (Number.isFinite(correctedDaily)) {
           next.dailyPnl = correctedDaily;
-          const positionCost = holding.cost > 0 && holding.shares > 0
-            ? holding.cost * holding.shares : Number.NaN;
-          if (Number.isFinite(positionCost) && positionCost > 0) {
-            next.dailyChangePct = (correctedDaily / positionCost) * 100;
+          const prevValue = row.shares > 0 && Number.isFinite(row.prevClose) && row.prevClose > 0
+            ? row.shares * row.prevClose : Number.NaN;
+          if (Number.isFinite(prevValue) && prevValue > 0) {
+            next.dailyChangePct = (correctedDaily / prevValue) * 100;
           }
         }
         // 同步修正浮动盈亏 = (现价 - 持仓成本) × 持仓股数

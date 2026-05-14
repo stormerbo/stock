@@ -343,3 +343,33 @@ export async function fetchTencentStockDetail(code: string, fallbackName = "", p
   }
   throw new Error("unsupported period");
 }
+
+/** 指数 K 线数据专用获取（指数 qfq 数据不存在，用 day/week/month 键） */
+async function fetchIndexFqPeriod(tencentCode: string, period: "day" | "week" | "month", count: number): Promise<{ quote: string[]; kline: StockDetailKlinePoint[] }> {
+  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tencentCode},${period},,,${count},qfq`);
+  const json = await response.json() as Record<string, unknown>;
+  const payload = (json.data as Record<string, unknown>)?.[tencentCode] as Record<string, unknown> | undefined;
+  const qt = payload?.qt as Record<string, string[]> | undefined;
+  const quote = qt?.[tencentCode];
+  const key = period === "day" ? "day" : period === "week" ? "week" : "month";
+  const rows = (payload?.[key] ?? payload?.[`qfq${key}`] ?? []) as string[][] | undefined;
+  if (!quote) throw new Error("missing quote payload");
+  return { quote, kline: parseKlineRows(rows) };
+}
+
+export async function fetchIndexKlineDetail(tencentCode: string, fallbackLabel = "", period: StockPeriod = "day"): Promise<StockDetailData> {
+  if (period === "minute") {
+    const { quote, kline } = await fetchMinutePeriod(tencentCode);
+    return buildDetail(tencentCode, tencentCode, fallbackLabel, quote, period, kline);
+  }
+  if (period === "fiveDay") {
+    const { quote, kline } = await fetchFiveDayPeriod(tencentCode);
+    return buildDetail(tencentCode, tencentCode, fallbackLabel, quote, period, kline);
+  }
+  if (period === "day" || period === "week" || period === "month") {
+    const count = period === "day" ? 800 : 240;
+    const { quote, kline } = await fetchIndexFqPeriod(tencentCode, period, count);
+    return buildDetail(tencentCode, tencentCode, fallbackLabel, quote, period, kline);
+  }
+  throw new Error("unsupported index period");
+}
