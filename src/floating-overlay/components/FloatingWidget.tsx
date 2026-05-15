@@ -44,16 +44,13 @@ export default function FloatingWidget({
   const dragOrigin = useRef({ x: 0, y: 0 });
   const posOrigin = useRef({ x: 0, y: 0 });
   const [showOpacity, setShowOpacity] = useState(false);
+  const isRightEdge = useRef(initialPosition.x >= 9999 || initialPosition.x < 100);
 
-  // Snap to right edge unless user has explicitly positioned it
+  // On first render, use right-edge positioning
   useEffect(() => {
-    setPos((prev) => {
-      const rightEdge = window.innerWidth - 320 - 8;
-      // 9999 = default, < 100 = old default → snap to right
-      const isDefault = initialPosition.x >= 9999 || initialPosition.x < 100;
-      const x = isDefault ? rightEdge : initialPosition.x;
-      return { x, y: initialPosition.y };
-    });
+    if (isRightEdge.current) {
+      setPos({ x: 0, y: initialPosition.y }); // x unused when right-edge
+    }
   }, [initialPosition]);
 
   // Shared drag start — skip if clicking a button or the opacity popup
@@ -61,8 +58,14 @@ export default function FloatingWidget({
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('.float-opacity-popup') || target.closest('.float-opacity-slider')) return;
     dragging.current = true;
+    // Convert from right-edge to left-edge on first drag
+    const el = panelRef.current;
+    const startX = isRightEdge.current && el
+      ? window.innerWidth - el.offsetWidth - 8
+      : currentPos.x;
+    isRightEdge.current = false;
     dragOrigin.current = { x: e.clientX, y: e.clientY };
-    posOrigin.current = { ...currentPos };
+    posOrigin.current = { x: startX, y: currentPos.y };
     e.preventDefault();
   }, []);
 
@@ -154,7 +157,7 @@ export default function FloatingWidget({
     <div
       ref={panelRef}
       className="float-panel"
-      style={{ left: pos.x, top: pos.y, opacity }}
+      style={isRightEdge.current ? { right: 8, top: pos.y, opacity } : { left: pos.x, top: pos.y, opacity }}
     >
       {/* Header */}
       <div className="float-header" onMouseDown={(e) => startDrag(e, pos)}>
