@@ -54,7 +54,6 @@ export default function FloatingWidget({
     const panelEstW = (panelWidth && panelWidth >= MIN_W) ? panelWidth : 320;
     // If saved Y is near the bottom third of viewport, reset to a sensible position
     const reasonableY = initialPosition.y > vh * 0.6 ? 80 : initialPosition.y;
-    console.log('[悬浮窗] 位置修正:', { initY: initialPosition.y, vh, reasonableY, isRightEdge: isRightEdge.current });
     if (isRightEdge.current) {
       setPos({ x: 0, y: Math.max(8, Math.min(reasonableY, vh - 80)) });
     } else {
@@ -200,7 +199,6 @@ export default function FloatingWidget({
   // ---- Collapsed state ----
   if (collapsed) {
     const tc = toneClass(totalChangePct);
-    console.log('[悬浮窗] 折叠态 pos:', pos.y, 'opacity:', opacity);
     return (
       <div
         className="float-collapsed-tab"
@@ -219,13 +217,7 @@ export default function FloatingWidget({
   }
 
   // ---- Expanded state ----
-  setTimeout(() => {
-    if (panelRef.current) {
-      const r = panelRef.current.getBoundingClientRect();
-      console.log('[悬浮窗] 实际位置:', JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height, vw: window.innerWidth, vh: window.innerHeight }));
-    }
-  }, 100);
-  console.log('[悬浮窗] 展开态', isRightEdge.current ? '(右侧)' : '(固定位置)', 'pos:', pos, 'w:', panelWidth, 'h:', panelHeight);
+  // ---- Expanded state ----
   const tc = toneClass(totalChangePct);
   const panelStyle: React.CSSProperties = isRightEdge.current
     ? { right: 8, top: pos.y, opacity }
