@@ -44,6 +44,7 @@ export default function FloatingWidget({
   const dragOrigin = useRef({ x: 0, y: 0 });
   const posOrigin = useRef({ x: 0, y: 0 });
   const [showOpacity, setShowOpacity] = useState(false);
+  const opacityRef = useRef<HTMLDivElement>(null);
   const isRightEdge = useRef(initialPosition.x >= 9999 || initialPosition.x < 100);
 
   // On first render, use right-edge positioning
@@ -52,6 +53,18 @@ export default function FloatingWidget({
       setPos({ x: 0, y: initialPosition.y }); // x unused when right-edge
     }
   }, [initialPosition]);
+
+  // Close opacity slider on outside click
+  useEffect(() => {
+    if (!showOpacity) return;
+    const handler = (e: MouseEvent) => {
+      if (opacityRef.current && !opacityRef.current.contains(e.target as Node)) {
+        setShowOpacity(false);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showOpacity]);
 
   // Shared drag start — skip if clicking a button or the opacity popup
   const startDrag = useCallback((e: React.MouseEvent, currentPos: Position) => {
@@ -167,10 +180,10 @@ export default function FloatingWidget({
           {lastUpdated && <span className="float-header-time">{lastUpdated}</span>}
         </div>
         <div className="float-header-actions">
-          <div className="float-opacity-wrap">
+          <div className="float-opacity-wrap" ref={opacityRef}>
             <button
               className="float-btn"
-              onClick={() => setShowOpacity((v) => !v)}
+              onClick={(e) => { e.stopPropagation(); setShowOpacity((v) => !v); }}
               title="透明度"
               type="button"
               style={{ opacity: opacity < 0.8 ? opacity + 0.2 : 1 }}

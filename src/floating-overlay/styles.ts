@@ -148,8 +148,8 @@ export const OVERLAY_CSS = `
   gap: 6px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(18, 22, 33, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
