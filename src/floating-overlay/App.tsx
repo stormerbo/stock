@@ -223,7 +223,7 @@ export default function App() {
         ) : displayList.length === 0 ? (
           <div className="float-empty">
             <div className="float-empty-icon">○</div>
-            <div className="float-empty-text">暂无自选股数据</div>
+            <div className="float-empty-text">暂无股票数据</div>
             <div className="float-empty-hint">请在扩展设置中添加股票</div>
           </div>
         ) : (

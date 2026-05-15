@@ -163,7 +163,7 @@ export default function FloatingWidget({
       <div className="float-header" onMouseDown={(e) => startDrag(e, pos)}>
         <div className="float-header-title">
           <span className={`float-header-indicator ${tc}`} />
-          <span>自选股</span>
+          <span>Mini股票</span>
           {lastUpdated && <span className="float-header-time">{lastUpdated}</span>}
         </div>
         <div className="float-header-actions">
