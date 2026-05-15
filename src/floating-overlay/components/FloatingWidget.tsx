@@ -47,8 +47,10 @@ export default function FloatingWidget({
     setPos(initialPosition);
   }, [initialPosition]);
 
-  // Shared drag start
+  // Shared drag start — skip if clicking a button
   const startDrag = useCallback((e: React.MouseEvent, currentPos: Position) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
     dragging.current = true;
     dragOrigin.current = { x: e.clientX, y: e.clientY };
     posOrigin.current = { ...currentPos };
@@ -85,7 +87,7 @@ export default function FloatingWidget({
       };
     } else {
       // Collapsed: vertical-only drag — snap X to right edge
-      const rightPanelW = 320; // approximate panel width
+      const rightPanelW = 320;
       const targetX = window.innerWidth - rightPanelW - 8;
       const onMouseMove = (e: MouseEvent) => {
         if (!dragging.current) return;
@@ -94,16 +96,21 @@ export default function FloatingWidget({
           y: posOrigin.current.y + (e.clientY - dragOrigin.current.y),
         });
       };
-      const onMouseUp = () => {
+      const onMouseUp = (e: MouseEvent) => {
         if (!dragging.current) return;
         dragging.current = false;
-        setPos((prev) => {
-          const vh = window.innerHeight;
-          const clampedY = Math.max(8, Math.min(prev.y, vh - 80));
-          const newPos = { x: targetX, y: clampedY };
-          onPositionChange(newPos);
-          return newPos;
-        });
+        const dx = Math.abs(e.clientX - dragOrigin.current.x);
+        const dy = Math.abs(e.clientY - dragOrigin.current.y);
+        if (dx < 3 && dy < 3) {
+          // Click, not drag — toggle expand
+          onToggleCollapse();
+          return;
+        }
+        // Was a drag — save Y position near right edge
+        const vh = window.innerHeight;
+        const clampedY = Math.max(8, Math.min(posOrigin.current.y + (e.clientY - dragOrigin.current.y), vh - 80));
+        const newPos = { x: targetX, y: clampedY };
+        onPositionChange(newPos);
       };
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
@@ -121,8 +128,11 @@ export default function FloatingWidget({
       <div
         className="float-collapsed-tab"
         style={{ top: pos.y, right: COLLAPSED_RIGHT }}
-        onMouseDown={(e) => startDrag(e, pos)}
-        onClick={onToggleCollapse}
+        onMouseDown={(e) => {
+          dragging.current = true;
+          dragOrigin.current = { x: e.clientX, y: e.clientY };
+          posOrigin.current = { ...pos };
+        }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter') onToggleCollapse(); }}
