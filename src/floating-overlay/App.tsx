@@ -18,14 +18,16 @@ type StockDisplay = {
 
 export default function App() {
   const [config, setConfig] = useState<FloatingOverlayConfig>(DEFAULT_CONFIG);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [uiState, setUiState] = useState<FloatingOverlayState>(DEFAULT_STATE);
   const [positions, setPositions] = useState<StockPosition[]>([]);
   const [ready, setReady] = useState(false);
 
   // ---- Load initial data ----
   useEffect(() => {
-    chrome.storage.sync.get(CONFIG_KEY, (result) => {
+    chrome.storage.sync.get([CONFIG_KEY, 'popup-theme'], (result) => {
       setConfig((result[CONFIG_KEY] as FloatingOverlayConfig) ?? DEFAULT_CONFIG);
+      setTheme((result['popup-theme'] as 'dark' | 'light') ?? 'dark');
     });
     chrome.storage.local.get([STATE_KEY, 'stockPositions'], (result) => {
       setUiState((result[STATE_KEY] as FloatingOverlayState) ?? DEFAULT_STATE);
@@ -51,6 +53,9 @@ export default function App() {
       if (area === 'sync') {
         if (changes[CONFIG_KEY]) {
           setConfig(changes[CONFIG_KEY].newValue as FloatingOverlayConfig);
+        }
+        if (changes['popup-theme']) {
+          setTheme(changes['popup-theme'].newValue as 'dark' | 'light');
         }
       }
     };
@@ -104,35 +109,38 @@ export default function App() {
   if (!ready) return null;
 
   // ---- Not enabled or hidden ----
-  if (!config.enabled || uiState.hidden) return null;
+  if (!config.enabled) return null;
+  if (uiState.hidden) return null;
 
   return (
-    <FloatingWidget
-      initialPosition={uiState.position}
-      collapsed={uiState.collapsed}
-      onPositionChange={handlePositionChange}
-      onToggleCollapse={handleToggleCollapse}
-      onClose={handleClose}
-    >
-      {displayList.length === 0 ? (
-        <div className="float-empty">
-          暂无自选股数据
-          <div className="float-empty-hint">请在扩展设置中添加股票</div>
-        </div>
-      ) : (
-        displayList.map((s) => (
-          <StockCard
-            key={s.code}
-            name={s.name}
-            code={s.code}
-            price={s.price}
-            changePct={s.changePct}
-            prevClose={s.prevClose}
-            intradayData={s.intraday?.data ?? []}
-            intradayPrevClose={s.intraday?.prevClose}
-          />
-        ))
-      )}
-    </FloatingWidget>
+    <div className={theme === 'light' ? 'theme-light' : ''}>
+      <FloatingWidget
+        initialPosition={uiState.position}
+        collapsed={uiState.collapsed}
+        onPositionChange={handlePositionChange}
+        onToggleCollapse={handleToggleCollapse}
+        onClose={handleClose}
+      >
+        {displayList.length === 0 ? (
+          <div className="float-empty">
+            暂无自选股数据
+            <div className="float-empty-hint">请在扩展设置中添加股票</div>
+          </div>
+        ) : (
+          displayList.map((s) => (
+            <StockCard
+              key={s.code}
+              name={s.name}
+              code={s.code}
+              price={s.price}
+              changePct={s.changePct}
+              prevClose={s.prevClose}
+              intradayData={s.intraday?.data ?? []}
+              intradayPrevClose={s.intraday?.prevClose}
+            />
+          ))
+        )}
+      </FloatingWidget>
+    </div>
   );
 }

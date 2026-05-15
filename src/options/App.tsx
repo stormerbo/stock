@@ -531,6 +531,8 @@ export default function App() {
       const next = prev === 'dark' ? 'light' : 'dark';
       localStorage.setItem('popup-theme', next);
       document.body.classList.toggle('theme-light', next === 'light');
+      // 同步到 storage，供 content script 读取
+      try { chrome.storage.sync.set({ 'popup-theme': next }); } catch { /* best effort */ }
       return next;
     });
   }, []);
@@ -691,30 +693,16 @@ export default function App() {
   }, [displayConfig, refreshConfig, workModeConfig, techReportConfig]);
 
   // ---- Floating Panel Config ----
-  const [overlayConfig, setOverlayConfig] = useState<FloatingOverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [overlayDraft, setOverlayDraft] = useState<FloatingOverlayConfig>(DEFAULT_OVERLAY_CONFIG);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
       chrome.storage.sync.get(OVERLAY_CONFIG_KEY, (result: Record<string, unknown>) => {
         const config = result[OVERLAY_CONFIG_KEY] as FloatingOverlayConfig | undefined;
-        const resolved = config || DEFAULT_OVERLAY_CONFIG;
-        setOverlayConfig(resolved);
-        setOverlayDraft(resolved);
+        setOverlayDraft(config || DEFAULT_OVERLAY_CONFIG);
       });
     }
   }, []);
-
-  const overlayDirty = JSON.stringify(overlayDraft) !== JSON.stringify(overlayConfig);
-
-  const saveOverlayConfig = async () => {
-    await chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: overlayDraft });
-    setOverlayConfig({ ...overlayDraft });
-  };
-
-  const resetOverlayDraft = () => {
-    setOverlayDraft({ ...overlayConfig });
-  };
 
   // ---- Load stock holdings (all stocks, with name + position data) ----
   const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
@@ -1521,54 +1509,58 @@ export default function App() {
               <span className="config-label">启用悬浮窗</span>
               <label className="toggle-switch">
                 <input type="checkbox" checked={overlayDraft.enabled}
-                  onChange={(e) => setOverlayDraft({ ...overlayDraft, enabled: e.target.checked })} />
+                  onChange={(e) => {
+                    const next = { ...overlayDraft, enabled: e.target.checked };
+                    setOverlayDraft(next);
+                    chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                  }} />
                 <span className="toggle-slider" />
               </label>
             </div>
+
             {overlayDraft.enabled && (
-              <>
-                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-                  <span className="config-label">持仓中选择显示股票</span>
-                  <div className="overlay-stock-grid">
-                    {allStocks.length === 0 ? (
-                      <span className="config-hint">暂无持仓，请在扩展弹窗中添加股票</span>
-                    ) : allStocks.map((s) => {
+              <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 4 }}>
+                <span className="config-label">选择显示股票</span>
+                {allStocks.length === 0 ? (
+                  <span className="config-hint" style={{ padding: '12px 0' }}>暂无持仓，请在扩展弹窗中添加股票</span>
+                ) : (
+                  <>
+                    {allStocks.map((s) => {
                       const checked = overlayDraft.stockCodes.includes(s.code);
+                      const pos = stockPositions.get(s.code);
+                      const change = pos?.dailyChangePct;
+                      const changeStr = change != null && Number.isFinite(change)
+                        ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%`
+                        : '--';
+                      const changeCls = change != null && Number.isFinite(change)
+                        ? (change > 0 ? 'text-up' : change < 0 ? 'text-down' : '')
+                        : '';
                       return (
-                        <label key={s.code} className="overlay-stock-label">
-                          <input type="checkbox" checked={checked}
+                        <label
+                          key={s.code}
+                          className={`overlay-stock-item ${checked ? 'overlay-stock-item-checked' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
                             onChange={() => {
-                              const next = checked
+                              const codes = checked
                                 ? overlayDraft.stockCodes.filter((c) => c !== s.code)
                                 : [...overlayDraft.stockCodes, s.code];
-                              setOverlayDraft({ ...overlayDraft, stockCodes: next });
-                            }} />
-                          <span>{s.name}</span>
-                          <span className="config-hint">({s.code})</span>
+                              const next = { ...overlayDraft, stockCodes: codes };
+                              setOverlayDraft(next);
+                              chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                            }}
+                          />
+                          <span className="overlay-stock-name">{s.name}</span>
+                          <span className="overlay-stock-code">{s.code}</span>
+                          <span className={`overlay-stock-change ${changeCls}`}>{changeStr}</span>
                         </label>
                       );
                     })}
-                  </div>
-                </div>
-                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-                  <span className="config-label">或手动添加股票代码</span>
-                  <input type="text" className="config-input" placeholder="如 000001,600519"
-                    value={overlayDraft.stockCodes.join(',')}
-                    onChange={(e) => {
-                      const codes = e.target.value.split(',').map((c) => c.trim()).filter(Boolean);
-                      setOverlayDraft({ ...overlayDraft, stockCodes: codes });
-                    }} />
-                  <span className="config-hint">多个代码用英文逗号分隔</span>
-                </div>
-                <div className="config-row" style={{ gap: 12 }}>
-                  {overlayDirty && (
-                    <>
-                      <button type="button" className="btn-primary" onClick={saveOverlayConfig}>保存</button>
-                      <button type="button" className="btn-secondary" onClick={resetOverlayDraft}>取消</button>
-                    </>
-                  )}
-                </div>
-              </>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </section>)}

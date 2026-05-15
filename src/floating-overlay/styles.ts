@@ -220,4 +220,37 @@ export const OVERLAY_CSS = `
 .color-down {
   color: var(--down);
 }
+
+/* ========== Light theme ========== */
+.theme-light {
+  --bg-0: #f5f6fa;
+  --bg-1: #ffffff;
+  --bg-2: #e8ecf4;
+  --text-0: #1a1d2e;
+  --text-1: #4a4f6a;
+  --text-2: #8e94aa;
+  --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --overlay-bg: rgba(245, 246, 250, 0.95);
+}
+
+.theme-light .stock-card {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.theme-light .stock-card:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.theme-light .float-glass {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .float-panel-body::-webkit-scrollbar-thumb {
+  background: var(--bg-2);
+}
+
+.theme-light .float-panel-btn:hover {
+  color: var(--text-0);
+  background: var(--bg-2);
+}
 `;

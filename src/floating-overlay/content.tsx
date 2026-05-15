@@ -5,7 +5,7 @@ import { OVERLAY_CSS } from './styles';
 let root: Root | null = null;
 
 function mount() {
-  if (root) return; // already mounted
+  if (root) return;
 
   const host = document.createElement('div');
   host.id = 'money-helper-float-root';

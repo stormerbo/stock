@@ -711,6 +711,7 @@ export default function App() {
   useEffect(() => {
     document.body.classList.toggle('theme-light', theme === 'light');
     window.localStorage.setItem('popup-theme', theme);
+    try { chrome.storage.sync.set({ 'popup-theme': theme }); } catch { /* best effort */ }
   }, [theme]);
 
   // 读取设置页的涨跌色配置

@@ -1178,3 +1178,69 @@ body.theme-light .color-scheme-item.active {
   text-align: center;
   font-style: italic;
 }
+
+/* ---- Overlay Stock Selector ---- */
+
+.overlay-stock-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--option-bg);
+  cursor: pointer;
+  transition: all 0.12s;
+  user-select: none;
+}
+
+.overlay-stock-item:hover {
+  background: var(--option-hover);
+}
+
+.overlay-stock-item-checked {
+  border-color: var(--brand);
+  background: rgba(107, 92, 246, 0.1);
+}
+
+.overlay-stock-item input[type="checkbox"] {
+  accent-color: var(--brand);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.overlay-stock-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-0);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-stock-code {
+  font-size: 11px;
+  color: var(--text-1);
+  flex-shrink: 0;
+}
+
+.overlay-stock-change {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 60px;
+  text-align: right;
+}
+
+.text-up {
+  color: #ff5e57;
+}
+
+.text-down {
+  color: #1fc66d;
+}
