@@ -160,7 +160,7 @@ export const OVERLAY_CSS = `
 
 .float-opacity-popup {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
