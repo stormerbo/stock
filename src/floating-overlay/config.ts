@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG: FloatingOverlayConfig = {
 
 export const DEFAULT_STATE: FloatingOverlayState = {
   position: { x: 9999, y: 80 },
-  collapsed: false,
+  collapsed: true,
   hidden: false,
   opacity: 1,
 };

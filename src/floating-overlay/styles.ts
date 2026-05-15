@@ -47,6 +47,8 @@ export const OVERLAY_CSS = `
   line-height: 1.4;
   color: var(--text-primary);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* =================================================================
@@ -221,7 +223,8 @@ export const OVERLAY_CSS = `
    Body / Scroll
    ================================================================= */
 .float-body {
-  max-height: 65vh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
