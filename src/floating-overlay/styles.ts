@@ -272,32 +272,37 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
-   Collapsed Pill
+   Collapsed Tab (right-edge vertical pill)
    ================================================================= */
-.float-collapsed {
+.float-collapsed-tab {
+  position: fixed;
+  z-index: 2147483646;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 12px;
-  border-radius: var(--radius);
-  transition: all 0.15s;
+  gap: 6px;
+  width: 34px;
+  padding: 10px 0;
+  border-radius: 8px 0 0 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border-right: none;
+  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   font-family: var(--font);
   color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
+  transition: opacity 0.12s;
 }
 
-.float-collapsed:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+.float-collapsed-tab:hover {
+  opacity: 0.85;
 }
 
-.float-collapsed-dot {
+.float-collapsed-tab-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -305,40 +310,16 @@ export const OVERLAY_CSS = `
   box-shadow: 0 0 6px currentColor;
 }
 
-.float-collapsed-dot.up { color: var(--up); background: var(--up); }
-.float-collapsed-dot.down { color: var(--down); background: var(--down); }
-.float-collapsed-dot.neutral { color: var(--text-tertiary); background: var(--text-tertiary); }
+.float-collapsed-tab-dot.up { color: var(--up); background: var(--up); }
+.float-collapsed-tab-dot.down { color: var(--down); background: var(--down); }
+.float-collapsed-tab-dot.neutral { color: var(--text-tertiary); background: var(--text-tertiary); }
 
-.float-collapsed-info {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-.float-collapsed-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.float-collapsed-count {
-  font-size: 10px;
-  color: var(--text-tertiary);
-}
-
-.float-collapsed-change {
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.float-collapsed-arrow {
+.float-collapsed-tab-count {
   font-size: 11px;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 /* =================================================================
@@ -580,7 +561,8 @@ export const OVERLAY_CSS = `
   background: rgba(0, 0, 0, 0.06);
 }
 
-.theme-light .float-collapsed:hover {
-  border-color: rgba(0, 0, 0, 0.15);
+.theme-light .float-collapsed-tab {
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.1);
 }
 `;
