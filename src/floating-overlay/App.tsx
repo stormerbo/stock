@@ -116,6 +116,23 @@ export default function App() {
   // Sort by the order in config.stockCodes
   displayList.sort((a, b) => config.stockCodes.indexOf(a.code) - config.stockCodes.indexOf(b.code));
 
+  // ---- Compute aggregate values ----
+  const totalChangePct = displayList.reduce((sum, s) => sum + (Number.isFinite(s.changePct) ? s.changePct : 0), 0);
+  const lastUpdated = positions.length > 0
+    ? positions.reduce((latest, p) => {
+        if (p.updatedAt && p.updatedAt > latest) return p.updatedAt;
+        return latest;
+      }, '')
+    : null;
+
+  // ---- Refresh ----
+  const handleRefresh = useCallback(() => {
+    // Force re-read positions from storage
+    chrome.storage.local.get('stockPositions', (result) => {
+      setPositions((result.stockPositions as StockPosition[]) ?? []);
+    });
+  }, []);
+
   // ---- Prevents rendering before storage data loaded ----
   if (!ready) return null;
 
@@ -128,13 +145,18 @@ export default function App() {
       <FloatingWidget
         initialPosition={uiState.position}
         collapsed={uiState.collapsed}
+        stockCount={displayList.length}
+        totalChangePct={totalChangePct}
+        lastUpdated={lastUpdated}
         onPositionChange={handlePositionChange}
         onToggleCollapse={handleToggleCollapse}
         onClose={handleClose}
+        onRefresh={handleRefresh}
       >
         {displayList.length === 0 ? (
           <div className="float-empty">
-            暂无自选股数据
+            <div className="float-empty-icon">○</div>
+            <div className="float-empty-text">暂无自选股数据</div>
             <div className="float-empty-hint">请在扩展设置中添加股票</div>
           </div>
         ) : (

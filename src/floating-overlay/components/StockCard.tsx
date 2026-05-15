@@ -11,37 +11,32 @@ type Props = {
   prevClose: number;
 };
 
-function toneClass(value: number): string {
-  if (value > 0) return 'color-up';
-  if (value < 0) return 'color-down';
+function tone(value: number): string {
+  if (value > 0) return 'up';
+  if (value < 0) return 'down';
   return '';
 }
 
-function formatPrice(value: number): string {
-  if (!Number.isFinite(value)) return '--';
-  return value.toFixed(2);
+function formatPrice(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(2) : '--';
 }
 
-function formatChangePct(value: number): string {
-  if (!Number.isFinite(value)) return '--';
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)}%`;
+function formatChangePct(v: number): string {
+  if (!Number.isFinite(v)) return '--';
+  const sign = v > 0 ? '+' : '';
+  return `${sign}${v.toFixed(2)}%`;
 }
 
 const StockCard = memo(function StockCard({
   name, code, price, changePct, intradayData, intradayPrevClose, prevClose,
 }: Props) {
+  const t = tone(changePct);
   return (
     <div className="stock-card">
+      <span className={`stock-card-accent ${t}`} />
       <div className="stock-card-info">
-        <div className="stock-card-name">{name}</div>
-        <div className="stock-card-code">{code}</div>
-      </div>
-      <div className="stock-card-price">
-        <div className="stock-card-price-value">{formatPrice(price)}</div>
-        <div className={`stock-card-price-change ${toneClass(changePct)}`}>
-          {formatChangePct(changePct)}
-        </div>
+        <span className="stock-card-name">{name}</span>
+        <span className="stock-card-code">{code}</span>
       </div>
       <div className="stock-card-chart">
         <IntradayChart
@@ -49,9 +44,13 @@ const StockCard = memo(function StockCard({
           prevClose={prevClose}
           intradayPrevClose={intradayPrevClose}
           changePct={changePct}
-          width={100}
+          width={88}
           height={28}
         />
+      </div>
+      <div className="stock-card-price">
+        <div className="stock-card-price-value">{formatPrice(price)}</div>
+        <div className={`stock-card-price-change color-${t}`}>{formatChangePct(changePct)}</div>
       </div>
     </div>
   );
