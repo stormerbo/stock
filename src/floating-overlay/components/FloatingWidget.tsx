@@ -35,7 +35,7 @@ function toneClass(value: number): string {
 }
 
 export default function FloatingWidget({
-  initialPosition, collapsed, opacity, stockCount, totalChangePct, lastUpdated,
+  initialPosition, collapsed, opacity = 1, stockCount, totalChangePct, lastUpdated,
   onPositionChange, onToggleCollapse, onClose, onRefresh, onOpacityChange, children,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);

@@ -47,7 +47,8 @@ export default function App() {
       }
     });
     chrome.storage.local.get([STATE_KEY, 'stockPositions'], (result) => {
-      setUiState((result[STATE_KEY] as FloatingOverlayState) ?? DEFAULT_STATE);
+      const rawState = result[STATE_KEY] as Partial<FloatingOverlayState> | undefined;
+      setUiState(rawState ? { ...DEFAULT_STATE, ...rawState } : DEFAULT_STATE);
       setPositions((result.stockPositions as StockPosition[]) ?? []);
       setReady(true);
     });
