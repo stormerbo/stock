@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type DragEvent } from 'react';
+import { useEffect, useState, useCallback, useRef, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import type { StockPosition } from '../shared/fetch';
 import {
   CONFIG_KEY, STATE_KEY, DEFAULT_CONFIG, DEFAULT_STATE,
@@ -173,6 +173,15 @@ export default function App() {
       setPositions((result.stockPositions as StockPosition[]) ?? []);
     });
   }, []);
+
+  // ---- Auto-collapse: expanded → collapsed after timeout ----
+  useEffect(() => {
+    if (!config.enabled || config.autoCollapseSeconds <= 0 || uiState.collapsed || uiState.hidden) return;
+    const timer = setTimeout(() => {
+      persistState({ collapsed: true });
+    }, config.autoCollapseSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [config.enabled, config.autoCollapseSeconds, uiState.collapsed, uiState.hidden, persistState]);
 
   // ---- Prevents rendering before storage data loaded ----
   if (!ready) return null;

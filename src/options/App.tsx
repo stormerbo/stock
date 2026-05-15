@@ -1571,6 +1571,25 @@ export default function App() {
                 )}
               </div>
             )}
+            <div className="config-row" style={{ marginTop: 4 }}>
+              <span className="config-label">自动收起</span>
+              <select
+                className="config-select"
+                value={overlayDraft.autoCollapseSeconds ?? 0}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  const next = { ...overlayDraft, autoCollapseSeconds: val };
+                  setOverlayDraft(next);
+                  chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                }}
+              >
+                <option value={0}>永不</option>
+                <option value={30}>30 秒</option>
+                <option value={60}>1 分钟</option>
+                <option value={120}>2 分钟</option>
+                <option value={300}>5 分钟</option>
+              </select>
+            </div>
           </div>
         </section>)}
 

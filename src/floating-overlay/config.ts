@@ -1,6 +1,7 @@
 export type FloatingOverlayConfig = {
   enabled: boolean;
   stockCodes: string[];        // 自选股代码列表（纯数字，如 ['000001', '600519']）
+  autoCollapseSeconds: number; // 0=不自动收起 >0=秒数后自动收起
 };
 
 export type FloatingOverlayState = {
@@ -13,6 +14,7 @@ export type FloatingOverlayState = {
 export const DEFAULT_CONFIG: FloatingOverlayConfig = {
   enabled: false,
   stockCodes: [],
+  autoCollapseSeconds: 0,
 };
 
 export const DEFAULT_STATE: FloatingOverlayState = {
