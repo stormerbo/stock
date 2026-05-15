@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: FloatingOverlayConfig = {
 };
 
 export const DEFAULT_STATE: FloatingOverlayState = {
-  position: { x: 20, y: 80 },
+  position: { x: 9999, y: 80 }, // x=9999 → clamp 到右侧边缘
   collapsed: false,
   hidden: false,
 };

@@ -43,8 +43,13 @@ export default function FloatingWidget({
   const dragOrigin = useRef({ x: 0, y: 0 });
   const posOrigin = useRef({ x: 0, y: 0 });
 
+  // Clamp initial position to viewport (9999 → right edge)
   useEffect(() => {
-    setPos(initialPosition);
+    setPos((prev) => {
+      const rightEdge = window.innerWidth - 320 - 8;
+      const x = initialPosition.x > window.innerWidth * 0.8 ? rightEdge : initialPosition.x;
+      return { x, y: initialPosition.y };
+    });
   }, [initialPosition]);
 
   // Shared drag start — skip if clicking a button
