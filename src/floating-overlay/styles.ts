@@ -163,6 +163,7 @@ export const OVERLAY_CSS = `
   top: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 6px;
