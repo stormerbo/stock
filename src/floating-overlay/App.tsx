@@ -26,8 +26,19 @@ export default function App() {
   // ---- Load initial data ----
   useEffect(() => {
     chrome.storage.sync.get([CONFIG_KEY, 'popup-theme'], (result) => {
-      setConfig((result[CONFIG_KEY] as FloatingOverlayConfig) ?? DEFAULT_CONFIG);
+      const savedConfig = (result[CONFIG_KEY] as FloatingOverlayConfig) ?? DEFAULT_CONFIG;
+      setConfig(savedConfig);
       setTheme((result['popup-theme'] as 'dark' | 'light') ?? 'dark');
+      // 如果开启了但被隐藏了，复位 hidden
+      if (savedConfig.enabled) {
+        chrome.storage.local.get(STATE_KEY, (sr) => {
+          const savedState = sr[STATE_KEY] as FloatingOverlayState | undefined;
+          if (savedState?.hidden) {
+            const resetState = { ...savedState, hidden: false };
+            chrome.storage.local.set({ [STATE_KEY]: resetState }).catch(() => {});
+          }
+        });
+      }
     });
     chrome.storage.local.get([STATE_KEY, 'stockPositions'], (result) => {
       setUiState((result[STATE_KEY] as FloatingOverlayState) ?? DEFAULT_STATE);

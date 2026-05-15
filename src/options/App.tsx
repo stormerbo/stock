@@ -23,7 +23,7 @@ import {
   type TagDefinition,
 } from '../shared/tags';
 import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
-import { CONFIG_KEY as OVERLAY_CONFIG_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
+import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const DISPLAY_STORAGE_KEY = 'displayConfig';
@@ -1513,6 +1513,15 @@ export default function App() {
                     const next = { ...overlayDraft, enabled: e.target.checked };
                     setOverlayDraft(next);
                     chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                    // 开启时复位隐藏状态
+                    if (e.target.checked) {
+                      chrome.storage.local.get(OVERLAY_STATE_KEY, (r) => {
+                        const state = r[OVERLAY_STATE_KEY] as { hidden?: boolean } | undefined;
+                        if (state?.hidden) {
+                          chrome.storage.local.set({ [OVERLAY_STATE_KEY]: { ...state, hidden: false } }).catch(() => {});
+                        }
+                      });
+                    }
                   }} />
                 <span className="toggle-slider" />
               </label>
