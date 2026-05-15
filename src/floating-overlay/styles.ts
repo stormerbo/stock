@@ -1,7 +1,7 @@
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: rgba(18, 22, 33, 0.75);
+  --bg-surface: rgba(18, 22, 33, 0.55);
   --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
@@ -38,10 +38,10 @@ export const OVERLAY_CSS = `
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   background: var(--bg-surface);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(40px) saturate(1.6);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
   font-family: var(--font);
   font-size: 12px;
   line-height: 1.4;
@@ -49,6 +49,23 @@ export const OVERLAY_CSS = `
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* Glass inner glow overlay */
+.float-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.float-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* =================================================================
@@ -350,11 +367,11 @@ export const OVERLAY_CSS = `
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(18, 22, 33, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 22, 33, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
   font-family: var(--font);
   user-select: none;
   -webkit-user-select: none;
@@ -583,7 +600,7 @@ export const OVERLAY_CSS = `
    Light theme overrides
    ================================================================= */
 .theme-light {
-  --bg-surface: rgba(248, 250, 252, 0.78);
+  --bg-surface: rgba(248, 250, 252, 0.6);
   --bg-header: linear-gradient(135deg, rgba(129, 140, 248, 0.10), rgba(99, 102, 241, 0.04));
   --bg-card: rgba(0, 0, 0, 0.02);
   --bg-card-hover: rgba(0, 0, 0, 0.04);
