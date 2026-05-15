@@ -167,6 +167,7 @@ export default function FloatingWidget({
   // ---- Collapsed state ----
   if (collapsed) {
     const tc = toneClass(totalChangePct);
+    console.log('[悬浮窗] 折叠态 pos:', pos.y, 'opacity:', opacity);
     return (
       <div
         className="float-collapsed-tab"
@@ -185,6 +186,7 @@ export default function FloatingWidget({
   }
 
   // ---- Expanded state ----
+  console.log('[悬浮窗] 展开态', isRightEdge.current ? '(右侧)' : '(固定位置)', 'pos:', pos, 'w:', panelWidth, 'h:', panelHeight);
   const tc = toneClass(totalChangePct);
   const panelStyle: React.CSSProperties = isRightEdge.current
     ? { right: 8, top: pos.y, opacity }

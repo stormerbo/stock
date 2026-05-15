@@ -193,7 +193,7 @@ export default function App() {
   if (!config.enabled) { console.log('[悬浮窗] disabled → null'); return null; }
   if (uiState.hidden) { console.log('[悬浮窗] hidden → null'); return null; }
 
-  console.log('[悬浮窗] render panel');
+  console.log('[悬浮窗] render panel, pos:', uiState.position, 'collapsed:', uiState.collapsed);
 
   return (
     <div className={theme === 'light' ? 'theme-light' : ''}>
