@@ -184,12 +184,16 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [config.enabled, config.autoCollapseSeconds, uiState.collapsed, uiState.hidden, persistState]);
 
+  console.log('[悬浮窗] state:', JSON.stringify({ ready, enabled: config.enabled, hidden: uiState.hidden, collapsed: uiState.collapsed, stockCount: displayList.length }));
+
   // ---- Prevents rendering before storage data loaded ----
-  if (!ready) return null;
+  if (!ready) { console.log('[悬浮窗] !ready → null'); return null; }
 
   // ---- Not enabled or hidden ----
-  if (!config.enabled) return null;
-  if (uiState.hidden) return null;
+  if (!config.enabled) { console.log('[悬浮窗] disabled → null'); return null; }
+  if (uiState.hidden) { console.log('[悬浮窗] hidden → null'); return null; }
+
+  console.log('[悬浮窗] render panel');
 
   return (
     <div className={theme === 'light' ? 'theme-light' : ''}>
