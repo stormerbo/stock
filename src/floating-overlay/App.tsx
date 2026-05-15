@@ -48,7 +48,8 @@ export default function App() {
     });
     chrome.storage.local.get([STATE_KEY, 'stockPositions'], (result) => {
       const rawState = result[STATE_KEY] as Partial<FloatingOverlayState> | undefined;
-      setUiState(rawState ? { ...DEFAULT_STATE, ...rawState } : DEFAULT_STATE);
+      // 每次刷新都默认收起，不管上次是什么状态
+      setUiState(rawState ? { ...DEFAULT_STATE, ...rawState, collapsed: true } : DEFAULT_STATE);
       setPositions((result.stockPositions as StockPosition[]) ?? []);
       setReady(true);
     });
