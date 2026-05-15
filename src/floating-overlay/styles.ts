@@ -1,7 +1,7 @@
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: rgba(18, 22, 33, 0.92);
+  --bg-surface: rgba(18, 22, 33, 0.75);
   --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
@@ -38,9 +38,10 @@ export const OVERLAY_CSS = `
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   font-family: var(--font);
   font-size: 12px;
   line-height: 1.4;
@@ -169,11 +170,11 @@ export const OVERLAY_CSS = `
   gap: 6px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+  background: rgba(18, 22, 33, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   white-space: nowrap;
 }
 
@@ -336,11 +337,11 @@ export const OVERLAY_CSS = `
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--bg-surface);
-  border: 1.5px solid var(--border-color);
+  background: rgba(18, 22, 33, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
   font-family: var(--font);
   user-select: none;
   -webkit-user-select: none;
@@ -585,7 +586,7 @@ export const OVERLAY_CSS = `
    Light theme overrides
    ================================================================= */
 .theme-light {
-  --bg-surface: rgba(248, 250, 252, 0.95);
+  --bg-surface: rgba(248, 250, 252, 0.78);
   --bg-header: linear-gradient(135deg, rgba(129, 140, 248, 0.10), rgba(99, 102, 241, 0.04));
   --bg-card: rgba(0, 0, 0, 0.02);
   --bg-card-hover: rgba(0, 0, 0, 0.04);
@@ -611,7 +612,8 @@ export const OVERLAY_CSS = `
 }
 
 .theme-light .float-collapsed-tab {
-  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(248, 250, 252, 0.78);
+  border-color: rgba(0, 0, 0, 0.12);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
 }
 `;
