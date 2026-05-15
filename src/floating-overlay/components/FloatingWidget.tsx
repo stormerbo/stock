@@ -44,8 +44,8 @@ export default function FloatingWidget({
   // Only treat as right-edge if position is the exact default sentinel value
   const isRightEdge = useRef(initialPosition.x >= 9999);
   const resizing = useRef(false);
-  const resizeOrigin = useRef({ x: 0, y: 0 });
-  const sizeOrigin = useRef({ w: 0, h: 0 });
+  const resizeOrigin = useRef({ x: 0, y: 0, fromLeft: false });
+  const sizeOrigin = useRef({ w: 0, h: 0, px: 0 });
 
   // On first render, clamp position to viewport
   useEffect(() => {
@@ -151,27 +151,45 @@ export default function FloatingWidget({
     e.stopPropagation();
     resizing.current = true;
     const el = panelRef.current;
-    sizeOrigin.current = { w: el?.offsetWidth ?? 320, h: el?.offsetHeight ?? 400 };
-    resizeOrigin.current = { x: e.clientX, y: e.clientY };
-  }, []);
+    const target = e.target as HTMLElement;
+    // Track which corner was grabbed
+    const fromLeft = target.closest('.float-resize-corner.left') !== null;
+    sizeOrigin.current = { w: el?.offsetWidth ?? 320, h: el?.offsetHeight ?? 400, px: pos.x };
+    resizeOrigin.current = { x: e.clientX, y: e.clientY, fromLeft };
+  }, [pos.x]);
 
   useEffect(() => {
     const MIN_H = 150;
     const MAX_H = 800;
     const onMouseMove = (e: MouseEvent) => {
       if (!resizing.current) return;
-      const newW = Math.max(MIN_W, Math.min(MAX_W, sizeOrigin.current.w + (e.clientX - resizeOrigin.current.x)));
+      const dx = e.clientX - resizeOrigin.current.x;
+      let newW = sizeOrigin.current.w + (resizeOrigin.current.fromLeft ? -dx : dx);
+      newW = Math.max(MIN_W, Math.min(MAX_W, newW));
       const newH = Math.max(MIN_H, Math.min(MAX_H, sizeOrigin.current.h + (e.clientY - resizeOrigin.current.y)));
+      // Update position if resizing from left corner
+      if (resizeOrigin.current.fromLeft) {
+        const deltaX = sizeOrigin.current.w - newW; // positive when shrinking
+        isRightEdge.current = false;
+        setPos((prev) => ({ x: prev.x + deltaX, y: prev.y }));
+      }
       onResize({ w: newW, h: newH });
     };
-    const onMouseUp = () => { resizing.current = false; };
+    const onMouseUp = () => {
+      resizing.current = false;
+      // Save final position (important for left-corner resize)
+      setPos((prev) => {
+        onPositionChange(prev);
+        return prev;
+      });
+    };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [onResize]);
+  }, [onResize, onPositionChange]);
 
   // ---- Collapsed state ----
   if (collapsed) {
@@ -232,8 +250,10 @@ export default function FloatingWidget({
       {/* Body */}
       <div className="float-body" style={bodyStyle}>{children}</div>
 
-      {/* Resize handle */}
-      <div className="float-resize-handle" onMouseDown={startResize} title="拖动调整宽度" />
+      {/* Resize handles: bottom-left corner, bottom-right corner, bottom edge */}
+      <div className="float-resize-corner left" onMouseDown={startResize} />
+      <div className="float-resize-edge" onMouseDown={startResize} />
+      <div className="float-resize-corner right" onMouseDown={startResize} />
     </div>
   );
 }

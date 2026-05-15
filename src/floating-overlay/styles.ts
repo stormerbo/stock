@@ -33,7 +33,7 @@ export const OVERLAY_CSS = `
   position: fixed;
   z-index: 2147483646;
   user-select: none;
-  min-width: 300px;
+  min-width: 200px;
   max-width: min(380px, calc(100vw - 24px));
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -64,6 +64,7 @@ export const OVERLAY_CSS = `
   border-bottom: 1px solid var(--border-color);
   user-select: none;
   -webkit-user-select: none;
+  flex-shrink: 0;
 }
 
 .float-header:active {
@@ -190,33 +191,35 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
-   Resize handle
+   Resize handles (no visible indicator, just hit areas)
    ================================================================= */
-.float-resize-handle {
+.float-resize-corner {
   position: absolute;
   bottom: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
+  width: 20px;
+  height: 20px;
   z-index: 5;
+  cursor: nwse-resize;
 }
 
-.float-resize-handle::after {
-  content: '';
+.float-resize-corner.left {
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.float-resize-corner.right {
+  right: 0;
+  cursor: nwse-resize;
+}
+
+.float-resize-edge {
   position: absolute;
-  bottom: 3px;
-  right: 3px;
-  width: 6px;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
   height: 6px;
-  border-right: 2px solid var(--text-tertiary);
-  border-bottom: 2px solid var(--text-tertiary);
-  opacity: 0.4;
-  transition: opacity 0.15s;
-}
-
-.float-resize-handle:hover::after {
-  opacity: 0.8;
+  z-index: 5;
+  cursor: ns-resize;
 }
 
 /* =================================================================
@@ -263,7 +266,6 @@ export const OVERLAY_CSS = `
   background: var(--bg-card-hover);
 }
 
-/* Color accent bar on the left */
 .stock-card-accent {
   width: 3px;
   height: 32px;
@@ -339,7 +341,7 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
-   Collapsed Tab (small right-edge circle)
+   Collapsed Tab (right-edge circle)
    ================================================================= */
 .float-collapsed-tab {
   position: fixed;
@@ -379,12 +381,8 @@ export const OVERLAY_CSS = `
 .float-collapsed-tab-dot.down { color: var(--down); background: var(--down); }
 .float-collapsed-tab-dot.neutral { color: var(--text-tertiary); background: var(--text-tertiary); }
 
-.float-collapsed-tab-count {
-  display: none;
-}
-
 /* =================================================================
-   Empty / Error States
+   Empty State
    ================================================================= */
 .float-empty {
   padding: 32px 20px;
@@ -416,27 +414,6 @@ export const OVERLAY_CSS = `
 .float-empty-hint {
   font-size: 11px;
   color: var(--text-tertiary);
-}
-
-/* =================================================================
-   Loading shimmer
-   ================================================================= */
-.float-loading {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-
-/* =================================================================
-   Drag & drop
-   ================================================================= */
-.stock-card.dragging {
-  opacity: 0.4;
-}
-
-.stock-card.drag-over {
-  border-top: 2px solid var(--brand);
 }
 
 /* =================================================================
@@ -499,7 +476,6 @@ export const OVERLAY_CSS = `
   font-weight: 600;
 }
 
-/* Chart area */
 .stock-detail-chart-area {
   display: flex;
   padding: 10px 8px 10px 4px;
@@ -556,7 +532,6 @@ export const OVERLAY_CSS = `
   display: block;
 }
 
-/* Stats strip */
 .stock-detail-stats {
   display: flex;
   gap: 0;
@@ -585,6 +560,17 @@ export const OVERLAY_CSS = `
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* =================================================================
+   Drag & drop
+   ================================================================= */
+.stock-card.dragging {
+  opacity: 0.4;
+}
+
+.stock-card.drag-over {
+  border-top: 2px solid var(--brand);
 }
 
 /* =================================================================
