@@ -511,25 +511,26 @@ export default function App() {
         const result = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
         if (Number.isFinite(result.pnl)) {
           next.dailyPnl = result.pnl;
-          // 当日盈亏百分比 = 当日盈亏 / 持仓总成本（考虑清仓情况）
-          const pos = computePositionFromTrades(trades);
-          let costBasis = pos.totalCost;
-          if (costBasis <= 0) {
-            // 当天清仓了 → 用开盘前的持仓成本
-            const beforeToday = computePositionFromTrades(trades.filter((t) => t.date < today));
-            costBasis = beforeToday.totalCost;
-          }
-          if (costBasis > 0) {
-            next.dailyChangePct = (result.pnl / costBasis) * 100;
-          }
         }
         // 同步修正浮动盈亏 = (现价 - 持仓成本) × 持仓股数
         if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
           next.floatingPnl = (row.price - holding.cost) * holding.shares;
         }
-      } else if (holding.cost > 0 && Number.isFinite(next.dailyPnl)) {
-        // 无交易记录：当日盈亏百分比 = 当日盈亏 / 持仓成本
-        next.dailyChangePct = (next.dailyPnl / (holding.cost * Math.max(1, holding.shares))) * 100;
+      }
+
+      // 当日盈亏百分比 = 当日盈亏 / (昨收 × 隔夜持仓股数)
+      // 使用统一的公式：无交易时 = 股票今日涨跌幅；有交易时 = 考虑买卖后的真实日收益率
+      if (Number.isFinite(next.dailyPnl) && Number.isFinite(row.prevClose) && row.prevClose > 0) {
+        let sharesAtOpen = holding.shares;
+        if (trades && trades.length > 0) {
+          const beforeToday = computePositionFromTrades(trades.filter((t) => t.date < today));
+          if (beforeToday.shares > 0) {
+            sharesAtOpen = beforeToday.shares;
+          }
+        }
+        if (sharesAtOpen > 0) {
+          next.dailyChangePct = (next.dailyPnl / (row.prevClose * sharesAtOpen)) * 100;
+        }
       }
 
       rows.push(next);
