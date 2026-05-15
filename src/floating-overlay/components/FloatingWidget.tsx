@@ -15,8 +15,7 @@ type Props = {
   children: ReactNode;
 };
 
-const COLLAPSED_W = 34;
-const COLLAPSED_RIGHT = 8;
+const COLLAPSED_RIGHT = 4;
 
 function clamp(pos: Position, w: number, h: number): Position {
   const vw = window.innerWidth;

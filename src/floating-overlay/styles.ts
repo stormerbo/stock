@@ -272,42 +272,40 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
-   Collapsed Tab (right-edge vertical pill)
+   Collapsed Tab (small right-edge circle)
    ================================================================= */
 .float-collapsed-tab {
   position: fixed;
   z-index: 2147483646;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 34px;
-  padding: 10px 0;
-  border-radius: 8px 0 0 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-right: none;
-  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid var(--border-color);
+  box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   font-family: var(--font);
-  color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: opacity 0.12s;
+  overflow: hidden;
 }
 
 .float-collapsed-tab:hover {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 .float-collapsed-tab-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .float-collapsed-tab-dot.up { color: var(--up); background: var(--up); }
@@ -315,11 +313,7 @@ export const OVERLAY_CSS = `
 .float-collapsed-tab-dot.neutral { color: var(--text-tertiary); background: var(--text-tertiary); }
 
 .float-collapsed-tab-count {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+  display: none;
 }
 
 /* =================================================================
@@ -562,7 +556,7 @@ export const OVERLAY_CSS = `
 }
 
 .theme-light .float-collapsed-tab {
-  border-color: rgba(0, 0, 0, 0.12);
-  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
 }
 `;
