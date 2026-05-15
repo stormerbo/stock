@@ -55,8 +55,8 @@ export const OVERLAY_CSS = `
 .float-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 10px 8px 6px;
+  gap: 4px;
+  padding: 6px 8px 6px 4px;
   cursor: grab;
   background: var(--bg-header);
   border-bottom: 1px solid var(--border-color);
@@ -71,8 +71,8 @@ export const OVERLAY_CSS = `
 .float-drag-handle {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 6px;
+  gap: 1.5px;
+  padding: 2px 5px;
   cursor: grab;
   flex-shrink: 0;
   opacity: 0.4;
@@ -92,7 +92,7 @@ export const OVERLAY_CSS = `
 
 .float-header-title {
   flex: 1;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.5px;
@@ -135,9 +135,9 @@ export const OVERLAY_CSS = `
   background: none;
   border: none;
   cursor: pointer;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -238,7 +238,7 @@ export const OVERLAY_CSS = `
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 9px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: background 0.1s;
   position: relative;
