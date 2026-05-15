@@ -387,6 +387,87 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
+   Drag & drop
+   ================================================================= */
+.stock-card.dragging {
+  opacity: 0.4;
+}
+
+.stock-card.drag-over {
+  border-top: 2px solid var(--brand);
+}
+
+/* =================================================================
+   Detail View
+   ================================================================= */
+.stock-detail {
+  padding: 0;
+}
+
+.stock-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stock-detail-back {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.stock-detail-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.stock-detail-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stock-detail-code {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.stock-detail-price-section {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stock-detail-price {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+.stock-detail-change {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stock-detail-chart-wrap {
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.stock-detail-chart-wrap svg {
+  display: block;
+}
+
+/* =================================================================
    Up / Down color classes
    ================================================================= */
 .color-up { color: var(--up); }

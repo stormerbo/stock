@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, type DragEvent } from 'react';
 import type { StockPosition } from '../shared/fetch';
 import {
   CONFIG_KEY, STATE_KEY, DEFAULT_CONFIG, DEFAULT_STATE,
@@ -6,6 +6,7 @@ import {
 } from './config';
 import FloatingWidget from './components/FloatingWidget';
 import StockCard from './components/StockCard';
+import StockDetail from './components/StockDetail';
 
 type StockDisplay = {
   code: string;
@@ -22,6 +23,8 @@ export default function App() {
   const [uiState, setUiState] = useState<FloatingOverlayState>(DEFAULT_STATE);
   const [positions, setPositions] = useState<StockPosition[]>([]);
   const [ready, setReady] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<StockDisplay | null>(null);
+  const dragIndexRef = useRef<number>(-1);
 
   // ---- Load initial data ----
   useEffect(() => {
@@ -116,6 +119,41 @@ export default function App() {
   // Sort by the order in config.stockCodes
   displayList.sort((a, b) => config.stockCodes.indexOf(a.code) - config.stockCodes.indexOf(b.code));
 
+  // ---- Drag & drop reorder ----
+  const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, index: number) => {
+    dragIndexRef.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>, dropIndex: number) => {
+    e.preventDefault();
+    const from = dragIndexRef.current;
+    if (from === dropIndex || from < 0) return;
+
+    const codes = [...config.stockCodes];
+    const [moved] = codes.splice(from, 1);
+    codes.splice(dropIndex, 0, moved);
+    const next = { ...config, stockCodes: codes };
+    setConfig(next);
+    chrome.storage.sync.set({ [CONFIG_KEY]: next }).catch(() => {});
+    dragIndexRef.current = -1;
+  }, [config]);
+
+  // ---- Stock detail ----
+  const handleSelectStock = useCallback((code: string) => {
+    const stock = displayList.find((s) => s.code === code);
+    if (stock) setSelectedStock(stock);
+  }, [displayList]);
+
+  const handleBackToList = useCallback(() => {
+    setSelectedStock(null);
+  }, []);
+
   // ---- Compute aggregate values ----
   const totalChangePct = displayList.reduce((sum, s) => sum + (Number.isFinite(s.changePct) ? s.changePct : 0), 0);
   const lastUpdated = positions.length > 0
@@ -153,14 +191,25 @@ export default function App() {
         onClose={handleClose}
         onRefresh={handleRefresh}
       >
-        {displayList.length === 0 ? (
+        {selectedStock ? (
+          <StockDetail
+            name={selectedStock.name}
+            code={selectedStock.code}
+            price={selectedStock.price}
+            changePct={selectedStock.changePct}
+            prevClose={selectedStock.prevClose}
+            intradayData={selectedStock.intraday?.data ?? []}
+            intradayPrevClose={selectedStock.intraday?.prevClose}
+            onBack={handleBackToList}
+          />
+        ) : displayList.length === 0 ? (
           <div className="float-empty">
             <div className="float-empty-icon">○</div>
             <div className="float-empty-text">暂无自选股数据</div>
             <div className="float-empty-hint">请在扩展设置中添加股票</div>
           </div>
         ) : (
-          displayList.map((s) => (
+          displayList.map((s, i) => (
             <StockCard
               key={s.code}
               name={s.name}
@@ -170,6 +219,11 @@ export default function App() {
               prevClose={s.prevClose}
               intradayData={s.intraday?.data ?? []}
               intradayPrevClose={s.intraday?.prevClose}
+              index={i}
+              onSelect={handleSelectStock}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             />
           ))
         )}

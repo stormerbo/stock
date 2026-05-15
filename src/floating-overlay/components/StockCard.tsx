@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type DragEvent } from 'react';
 import IntradayChart from '../../popup/components/IntradayChart';
 
 type Props = {
@@ -9,6 +9,11 @@ type Props = {
   intradayData: Array<{ time: string; price: number }>;
   intradayPrevClose?: number;
   prevClose: number;
+  index: number;
+  onSelect: (code: string) => void;
+  onDragStart: (e: DragEvent<HTMLDivElement>, index: number) => void;
+  onDragOver: (e: DragEvent<HTMLDivElement>, index: number) => void;
+  onDrop: (e: DragEvent<HTMLDivElement>, index: number) => void;
 };
 
 function tone(value: number): string {
@@ -29,10 +34,18 @@ function formatChangePct(v: number): string {
 
 const StockCard = memo(function StockCard({
   name, code, price, changePct, intradayData, intradayPrevClose, prevClose,
+  index, onSelect, onDragStart, onDragOver, onDrop,
 }: Props) {
   const t = tone(changePct);
   return (
-    <div className="stock-card">
+    <div
+      className="stock-card"
+      draggable
+      onClick={() => onSelect(code)}
+      onDragStart={(e) => onDragStart(e, index)}
+      onDragOver={(e) => onDragOver(e, index)}
+      onDrop={(e) => onDrop(e, index)}
+    >
       <span className={`stock-card-accent ${t}`} />
       <div className="stock-card-info">
         <span className="stock-card-name">{name}</span>
