@@ -1528,68 +1528,70 @@ export default function App() {
             </div>
 
             {overlayDraft.enabled && (
-              <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 4 }}>
-                <span className="config-label">选择显示股票</span>
-                {allStocks.length === 0 ? (
-                  <span className="config-hint" style={{ padding: '12px 0' }}>暂无持仓，请在扩展弹窗中添加股票</span>
-                ) : (
-                  <>
-                    {allStocks.map((s) => {
-                      const checked = overlayDraft.stockCodes.includes(s.code);
-                      const pos = stockPositions.get(s.code);
-                      const change = pos?.dailyChangePct;
-                      const changeStr = change != null && Number.isFinite(change)
-                        ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%`
-                        : '--';
-                      const changeCls = change != null && Number.isFinite(change)
-                        ? (change > 0 ? 'text-up' : change < 0 ? 'text-down' : '')
-                        : '';
-                      return (
-                        <label
-                          key={s.code}
-                          className={`overlay-stock-item ${checked ? 'overlay-stock-item-checked' : ''}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              const codes = checked
-                                ? overlayDraft.stockCodes.filter((c) => c !== s.code)
-                                : [...overlayDraft.stockCodes, s.code];
-                              const next = { ...overlayDraft, stockCodes: codes };
-                              setOverlayDraft(next);
-                              chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
-                            }}
-                          />
-                          <span className="overlay-stock-name">{s.name}</span>
-                          <span className="overlay-stock-code">{s.code}</span>
-                          <span className={`overlay-stock-change ${changeCls}`}>{changeStr}</span>
-                        </label>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
+              <>
+                <div className="config-row" style={{ marginTop: 4 }}>
+                  <span className="config-label">自动收起</span>
+                  <select
+                    className="config-select"
+                    value={overlayDraft.autoCollapseSeconds ?? 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      const next = { ...overlayDraft, autoCollapseSeconds: val };
+                      setOverlayDraft(next);
+                      chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                    }}
+                  >
+                    <option value={0}>永不</option>
+                    <option value={30}>30 秒</option>
+                    <option value={60}>1 分钟</option>
+                    <option value={120}>2 分钟</option>
+                    <option value={300}>5 分钟</option>
+                  </select>
+                </div>
+                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 4 }}>
+                  <span className="config-label">选择显示股票</span>
+                  {allStocks.length === 0 ? (
+                    <span className="config-hint" style={{ padding: '12px 0' }}>暂无持仓，请在扩展弹窗中添加股票</span>
+                  ) : (
+                    <>
+                      {allStocks.map((s) => {
+                        const checked = overlayDraft.stockCodes.includes(s.code);
+                        const pos = stockPositions.get(s.code);
+                        const change = pos?.dailyChangePct;
+                        const changeStr = change != null && Number.isFinite(change)
+                          ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%`
+                          : '--';
+                        const changeCls = change != null && Number.isFinite(change)
+                          ? (change > 0 ? 'text-up' : change < 0 ? 'text-down' : '')
+                          : '';
+                        return (
+                          <label
+                            key={s.code}
+                            className={`overlay-stock-item ${checked ? 'overlay-stock-item-checked' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const codes = checked
+                                  ? overlayDraft.stockCodes.filter((c) => c !== s.code)
+                                  : [...overlayDraft.stockCodes, s.code];
+                                const next = { ...overlayDraft, stockCodes: codes };
+                                setOverlayDraft(next);
+                                chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                              }}
+                            />
+                            <span className="overlay-stock-name">{s.name}</span>
+                            <span className="overlay-stock-code">{s.code}</span>
+                            <span className={`overlay-stock-change ${changeCls}`}>{changeStr}</span>
+                          </label>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              </>
             )}
-            <div className="config-row" style={{ marginTop: 4 }}>
-              <span className="config-label">自动收起</span>
-              <select
-                className="config-select"
-                value={overlayDraft.autoCollapseSeconds ?? 0}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  const next = { ...overlayDraft, autoCollapseSeconds: val };
-                  setOverlayDraft(next);
-                  chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
-                }}
-              >
-                <option value={0}>永不</option>
-                <option value={30}>30 秒</option>
-                <option value={60}>1 分钟</option>
-                <option value={120}>2 分钟</option>
-                <option value={300}>5 分钟</option>
-              </select>
-            </div>
           </div>
         </section>)}
 
