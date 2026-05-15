@@ -54,6 +54,7 @@ export default function FloatingWidget({
     const panelEstW = (panelWidth && panelWidth >= MIN_W) ? panelWidth : 320;
     // If saved Y is near the bottom third of viewport, reset to a sensible position
     const reasonableY = initialPosition.y > vh * 0.6 ? 80 : initialPosition.y;
+    console.log('[悬浮窗] 位置修正:', { initY: initialPosition.y, vh, reasonableY, isRightEdge: isRightEdge.current });
     if (isRightEdge.current) {
       setPos({ x: 0, y: Math.max(8, Math.min(reasonableY, vh - 80)) });
     } else {
