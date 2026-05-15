@@ -1,7 +1,7 @@
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: rgba(18, 22, 33, 0.55);
+  --bg-surface: rgba(18, 22, 33, 0.35);
   --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
@@ -53,13 +53,15 @@ export const OVERLAY_CSS = `
   position: relative;
 }
 
-/* Glass inner glow overlay */
+/* Glass inner glow overlay — subtle gradient keeps text readable */
 .float-panel::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 50%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 40%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.3) 0%, transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
@@ -369,7 +371,7 @@ export const OVERLAY_CSS = `
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(18, 22, 33, 0.55);
+  background: rgba(18, 22, 33, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(30px) saturate(1.6);
