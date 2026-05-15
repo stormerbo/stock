@@ -45,19 +45,21 @@ export default function FloatingWidget({
   const posOrigin = useRef({ x: 0, y: 0 });
   const [showOpacity, setShowOpacity] = useState(false);
 
-  // Clamp initial position to viewport (9999 → right edge)
+  // Snap to right edge unless user has explicitly positioned it
   useEffect(() => {
     setPos((prev) => {
       const rightEdge = window.innerWidth - 320 - 8;
-      const x = initialPosition.x > window.innerWidth * 0.8 ? rightEdge : initialPosition.x;
+      // 9999 = default, < 100 = old default → snap to right
+      const isDefault = initialPosition.x >= 9999 || initialPosition.x < 100;
+      const x = isDefault ? rightEdge : initialPosition.x;
       return { x, y: initialPosition.y };
     });
   }, [initialPosition]);
 
-  // Shared drag start — skip if clicking a button
+  // Shared drag start — skip if clicking a button or the opacity popup
   const startDrag = useCallback((e: React.MouseEvent, currentPos: Position) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button')) return;
+    if (target.closest('button') || target.closest('.float-opacity-popup') || target.closest('.float-opacity-slider')) return;
     dragging.current = true;
     dragOrigin.current = { x: e.clientX, y: e.clientY };
     posOrigin.current = { ...currentPos };
