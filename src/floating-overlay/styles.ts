@@ -176,33 +176,6 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
-   Footer
-   ================================================================= */
-.float-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-color);
-  font-size: 10px;
-  color: var(--text-tertiary);
-}
-
-.float-footer-stock-count {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.float-footer-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text-tertiary);
-}
-
-/* =================================================================
    Stock Card
    ================================================================= */
 .stock-card {

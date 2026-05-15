@@ -151,21 +151,6 @@ export default function FloatingWidget({
       <div className="float-body">
         {children}
       </div>
-
-      {/* Footer */}
-      {stockCount > 0 && (
-        <div className="float-footer">
-          <span className="float-footer-stock-count">
-            <span className="float-footer-dot" />
-            {stockCount} 只股票
-          </span>
-          {Number.isFinite(totalChangePct) && (
-            <span className={`color-${tc === 'neutral' ? '' : tc}`}>
-              合计 {formatChangePct(totalChangePct)}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
