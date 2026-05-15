@@ -6,6 +6,7 @@ type Props = {
   initialPosition: Position;
   collapsed: boolean;
   opacity: number;
+  panelWidth: number | undefined;
   stockCount: number;
   totalChangePct: number;
   lastUpdated: string | null;
@@ -14,19 +15,13 @@ type Props = {
   onClose: () => void;
   onRefresh: () => void;
   onOpacityChange: (opacity: number) => void;
+  onResize: (width: number) => void;
   children: ReactNode;
 };
 
+const MIN_W = 260;
+const MAX_W = 600;
 const COLLAPSED_RIGHT = 4;
-
-function clamp(pos: Position, w: number, h: number): Position {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  return {
-    x: Math.max(8, Math.min(pos.x, vw - w - 8)),
-    y: Math.max(8, Math.min(pos.y, vh - h - 8)),
-  };
-}
 
 function toneClass(value: number): string {
   if (value > 0) return 'up';
@@ -35,8 +30,8 @@ function toneClass(value: number): string {
 }
 
 export default function FloatingWidget({
-  initialPosition, collapsed, opacity = 1, stockCount, totalChangePct, lastUpdated,
-  onPositionChange, onToggleCollapse, onClose, onRefresh, onOpacityChange, children,
+  initialPosition, collapsed, opacity, panelWidth, stockCount, totalChangePct, lastUpdated,
+  onPositionChange, onToggleCollapse, onClose, onRefresh, onOpacityChange, onResize, children,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<Position>(initialPosition);
@@ -46,11 +41,14 @@ export default function FloatingWidget({
   const [showOpacity, setShowOpacity] = useState(false);
   const opacityRef = useRef<HTMLDivElement>(null);
   const isRightEdge = useRef(initialPosition.x >= 9999 || initialPosition.x < 100);
+  const resizing = useRef(false);
+  const resizeOrigin = useRef({ x: 0, y: 0 });
+  const sizeOrigin = useRef(0);
 
   // On first render, use right-edge positioning
   useEffect(() => {
     if (isRightEdge.current) {
-      setPos({ x: 0, y: initialPosition.y }); // x unused when right-edge
+      setPos({ x: 0, y: initialPosition.y });
     }
   }, [initialPosition]);
 
@@ -66,12 +64,11 @@ export default function FloatingWidget({
     return () => document.removeEventListener('click', handler);
   }, [showOpacity]);
 
-  // Shared drag start — skip if clicking a button or the opacity popup
+  // ---- Panel drag ----
   const startDrag = useCallback((e: React.MouseEvent, currentPos: Position) => {
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('.float-opacity-popup') || target.closest('.float-opacity-slider')) return;
     dragging.current = true;
-    // Convert from right-edge to left-edge on first drag
     const el = panelRef.current;
     const startX = isRightEdge.current && el
       ? window.innerWidth - el.offsetWidth - 8
@@ -82,7 +79,6 @@ export default function FloatingWidget({
     e.preventDefault();
   }, []);
 
-  // Mouse move/up effect — differs by collapsed vs expanded
   useEffect(() => {
     if (!collapsed) {
       const onMouseMove = (e: MouseEvent) => {
@@ -98,7 +94,12 @@ export default function FloatingWidget({
         setPos((prev) => {
           const el = panelRef.current;
           if (!el) return prev;
-          const clamped = clamp(prev, el.offsetWidth, el.offsetHeight);
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const clamped = {
+            x: Math.max(8, Math.min(prev.x, vw - el.offsetWidth - 8)),
+            y: Math.max(8, Math.min(prev.y, vh - el.offsetHeight - 8)),
+          };
           onPositionChange(clamped);
           return clamped;
         });
@@ -110,28 +111,20 @@ export default function FloatingWidget({
         window.removeEventListener('mouseup', onMouseUp);
       };
     } else {
-      const rightPanelW = 320;
-      const targetX = window.innerWidth - rightPanelW - 8;
+      const targetX = window.innerWidth - 320 - 8;
       const onMouseMove = (e: MouseEvent) => {
         if (!dragging.current) return;
-        setPos({
-          x: targetX,
-          y: posOrigin.current.y + (e.clientY - dragOrigin.current.y),
-        });
+        setPos({ x: targetX, y: posOrigin.current.y + (e.clientY - dragOrigin.current.y) });
       };
       const onMouseUp = (e: MouseEvent) => {
         if (!dragging.current) return;
         dragging.current = false;
         const dx = Math.abs(e.clientX - dragOrigin.current.x);
         const dy = Math.abs(e.clientY - dragOrigin.current.y);
-        if (dx < 3 && dy < 3) {
-          onToggleCollapse();
-          return;
-        }
+        if (dx < 3 && dy < 3) { onToggleCollapse(); return; }
         const vh = window.innerHeight;
         const clampedY = Math.max(8, Math.min(posOrigin.current.y + (e.clientY - dragOrigin.current.y), vh - 80));
-        const newPos = { x: targetX, y: clampedY };
-        onPositionChange(newPos);
+        onPositionChange({ x: targetX, y: clampedY });
       };
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
@@ -141,6 +134,33 @@ export default function FloatingWidget({
       };
     }
   }, [collapsed, onPositionChange]);
+
+  // ---- Resize ----
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizing.current = true;
+    const el = panelRef.current;
+    sizeOrigin.current = el?.offsetWidth ?? 320;
+    resizeOrigin.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizing.current) return;
+      const newW = Math.max(MIN_W, Math.min(MAX_W, sizeOrigin.current + (e.clientX - resizeOrigin.current.x)));
+      onResize(newW);
+    };
+    const onMouseUp = () => {
+      resizing.current = false;
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [onResize]);
 
   // ---- Collapsed state ----
   if (collapsed) {
@@ -154,8 +174,7 @@ export default function FloatingWidget({
           dragOrigin.current = { x: e.clientX, y: e.clientY };
           posOrigin.current = { ...pos };
         }}
-        role="button"
-        tabIndex={0}
+        role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter') onToggleCollapse(); }}
       >
         <span className={`float-collapsed-tab-dot ${tc}`} />
@@ -165,13 +184,15 @@ export default function FloatingWidget({
 
   // ---- Expanded state ----
   const tc = toneClass(totalChangePct);
+  const panelStyle: React.CSSProperties = isRightEdge.current
+    ? { right: 8, top: pos.y, opacity }
+    : { left: pos.x, top: pos.y, opacity };
+  if (panelWidth && panelWidth > 0) {
+    panelStyle.width = panelWidth;
+  }
 
   return (
-    <div
-      ref={panelRef}
-      className="float-panel"
-      style={isRightEdge.current ? { right: 8, top: pos.y, opacity } : { left: pos.x, top: pos.y, opacity }}
-    >
+    <div ref={panelRef} className="float-panel" style={panelStyle}>
       {/* Header */}
       <div className="float-header" onMouseDown={(e) => startDrag(e, pos)}>
         <div className="float-header-title">
@@ -181,26 +202,10 @@ export default function FloatingWidget({
         </div>
         <div className="float-header-actions">
           <div className="float-opacity-wrap" ref={opacityRef}>
-            <button
-              className="float-btn"
-              onClick={(e) => { e.stopPropagation(); setShowOpacity((v) => !v); }}
-              title="透明度"
-              type="button"
-              style={{ opacity: opacity < 0.8 ? opacity + 0.2 : 1 }}
-            >
-              ◐
-            </button>
+            <button className="float-btn" onClick={(e) => { e.stopPropagation(); setShowOpacity((v) => !v); }} title="透明度" type="button" style={{ opacity: opacity < 0.8 ? opacity + 0.2 : 1 }}>◐</button>
             {showOpacity && (
               <div className="float-opacity-popup">
-                <input
-                  type="range"
-                  min={0.5}
-                  max={1}
-                  step={0.05}
-                  value={opacity}
-                  onChange={(e) => onOpacityChange(parseFloat(e.target.value))}
-                  className="float-opacity-slider"
-                />
+                <input type="range" min={0.5} max={1} step={0.05} value={opacity} onChange={(e) => onOpacityChange(parseFloat(e.target.value))} className="float-opacity-slider" />
                 <span className="float-opacity-label">{Math.round(opacity * 100)}%</span>
               </div>
             )}
@@ -212,9 +217,10 @@ export default function FloatingWidget({
       </div>
 
       {/* Body */}
-      <div className="float-body">
-        {children}
-      </div>
+      <div className="float-body">{children}</div>
+
+      {/* Resize handle */}
+      <div className="float-resize-handle" onMouseDown={startResize} title="拖动调整宽度" />
     </div>
   );
 }

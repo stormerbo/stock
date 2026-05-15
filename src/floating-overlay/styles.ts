@@ -188,6 +188,36 @@ export const OVERLAY_CSS = `
 }
 
 /* =================================================================
+   Resize handle
+   ================================================================= */
+.float-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: ew-resize;
+  z-index: 5;
+}
+
+.float-resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--text-tertiary);
+  border-bottom: 2px solid var(--text-tertiary);
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.float-resize-handle:hover::after {
+  opacity: 0.8;
+}
+
+/* =================================================================
    Body / Scroll
    ================================================================= */
 .float-body {
