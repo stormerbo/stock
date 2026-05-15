@@ -1529,24 +1529,34 @@ export default function App() {
 
             {overlayDraft.enabled && (
               <>
-                <div className="config-row" style={{ marginTop: 4 }}>
+                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
                   <span className="config-label">自动收起</span>
-                  <select
-                    className="config-select"
-                    value={overlayDraft.autoCollapseSeconds ?? 0}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      const next = { ...overlayDraft, autoCollapseSeconds: val };
-                      setOverlayDraft(next);
-                      chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
-                    }}
-                  >
-                    <option value={0}>永不</option>
-                    <option value={30}>30 秒</option>
-                    <option value={60}>1 分钟</option>
-                    <option value={120}>2 分钟</option>
-                    <option value={300}>5 分钟</option>
-                  </select>
+                  <div className="badge-compact-row">
+                    {[
+                      { value: 0, label: '永不' },
+                      { value: 5, label: '5秒' },
+                      { value: 15, label: '15秒' },
+                      { value: 30, label: '30秒' },
+                      { value: 60, label: '1分' },
+                      { value: 120, label: '2分' },
+                      { value: 300, label: '5分' },
+                    ].map((opt) => (
+                      <label key={opt.value} className={`badge-compact-item ${(overlayDraft.autoCollapseSeconds ?? 0) === opt.value ? 'active' : ''}`}>
+                        <input
+                          type="radio"
+                          name="auto-collapse"
+                          value={opt.value}
+                          checked={(overlayDraft.autoCollapseSeconds ?? 0) === opt.value}
+                          onChange={() => {
+                            const next = { ...overlayDraft, autoCollapseSeconds: opt.value };
+                            setOverlayDraft(next);
+                            chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: next }).catch(() => {});
+                          }}
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6, marginTop: 4 }}>
                   <span className="config-label">选择显示股票</span>
