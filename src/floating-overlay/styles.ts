@@ -196,7 +196,7 @@ export const OVERLAY_CSS = `
   right: 0;
   width: 16px;
   height: 16px;
-  cursor: ew-resize;
+  cursor: nwse-resize;
   z-index: 5;
 }
 

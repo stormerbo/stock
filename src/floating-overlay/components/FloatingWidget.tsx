@@ -7,6 +7,7 @@ type Props = {
   collapsed: boolean;
   opacity: number;
   panelWidth: number | undefined;
+  panelHeight: number | undefined;
   stockCount: number;
   totalChangePct: number;
   lastUpdated: string | null;
@@ -15,11 +16,11 @@ type Props = {
   onClose: () => void;
   onRefresh: () => void;
   onOpacityChange: (opacity: number) => void;
-  onResize: (width: number) => void;
+  onResize: (size: { w: number; h: number }) => void;
   children: ReactNode;
 };
 
-const MIN_W = 260;
+const MIN_W = 200;
 const MAX_W = 600;
 const COLLAPSED_RIGHT = 4;
 
@@ -32,6 +33,7 @@ function toneClass(value: number): string {
 export default function FloatingWidget({
   initialPosition, collapsed, opacity, panelWidth, stockCount, totalChangePct, lastUpdated,
   onPositionChange, onToggleCollapse, onClose, onRefresh, onOpacityChange, onResize, children,
+  panelHeight, onResize, children,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<Position>(initialPosition);
@@ -43,7 +45,7 @@ export default function FloatingWidget({
   const isRightEdge = useRef(initialPosition.x >= 9999 || initialPosition.x < 100);
   const resizing = useRef(false);
   const resizeOrigin = useRef({ x: 0, y: 0 });
-  const sizeOrigin = useRef(0);
+  const sizeOrigin = useRef({ w: 0, h: 0 });
 
   // On first render, use right-edge positioning
   useEffect(() => {
@@ -135,25 +137,26 @@ export default function FloatingWidget({
     }
   }, [collapsed, onPositionChange]);
 
-  // ---- Resize ----
+  // ---- Resize (width + height) ----
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     resizing.current = true;
     const el = panelRef.current;
-    sizeOrigin.current = el?.offsetWidth ?? 320;
+    sizeOrigin.current = { w: el?.offsetWidth ?? 320, h: el?.offsetHeight ?? 400 };
     resizeOrigin.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   useEffect(() => {
+    const MIN_H = 150;
+    const MAX_H = 800;
     const onMouseMove = (e: MouseEvent) => {
       if (!resizing.current) return;
-      const newW = Math.max(MIN_W, Math.min(MAX_W, sizeOrigin.current + (e.clientX - resizeOrigin.current.x)));
-      onResize(newW);
+      const newW = Math.max(MIN_W, Math.min(MAX_W, sizeOrigin.current.w + (e.clientX - resizeOrigin.current.x)));
+      const newH = Math.max(MIN_H, Math.min(MAX_H, sizeOrigin.current.h + (e.clientY - resizeOrigin.current.y)));
+      onResize({ w: newW, h: newH });
     };
-    const onMouseUp = () => {
-      resizing.current = false;
-    };
+    const onMouseUp = () => { resizing.current = false; };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => {
@@ -187,9 +190,8 @@ export default function FloatingWidget({
   const panelStyle: React.CSSProperties = isRightEdge.current
     ? { right: 8, top: pos.y, opacity }
     : { left: pos.x, top: pos.y, opacity };
-  if (panelWidth && panelWidth > 0) {
-    panelStyle.width = panelWidth;
-  }
+  if (panelWidth && panelWidth > 0) panelStyle.width = panelWidth;
+  if (panelHeight && panelHeight > 0) panelStyle.height = panelHeight;
 
   return (
     <div ref={panelRef} className="float-panel" style={panelStyle}>

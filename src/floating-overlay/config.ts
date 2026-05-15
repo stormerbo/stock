@@ -9,7 +9,8 @@ export type FloatingOverlayState = {
   collapsed: boolean;
   hidden: boolean;
   opacity: number;
-  panelWidth?: number;        // 用户自定义宽度（px），不设置则用 CSS 默认
+  panelWidth?: number;        // 用户自定义宽度（px）
+  panelHeight?: number;       // 用户自定义高度（px）
 };
 
 export const DEFAULT_CONFIG: FloatingOverlayConfig = {

@@ -198,6 +198,7 @@ export default function App() {
         collapsed={uiState.collapsed}
         opacity={uiState.opacity}
         panelWidth={uiState.panelWidth}
+        panelHeight={uiState.panelHeight}
         stockCount={displayList.length}
         totalChangePct={totalChangePct}
         lastUpdated={lastUpdated}
@@ -206,7 +207,7 @@ export default function App() {
         onClose={handleClose}
         onRefresh={handleRefresh}
         onOpacityChange={(v) => persistState({ opacity: v })}
-        onResize={(w) => persistState({ panelWidth: w })}
+        onResize={({ w, h }) => persistState({ panelWidth: w, panelHeight: h })}
       >
         {selectedStock ? (
           <StockDetail
