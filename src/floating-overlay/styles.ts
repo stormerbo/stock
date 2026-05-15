@@ -1,7 +1,7 @@
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: rgba(18, 22, 33, 0.35);
+  --bg-surface: rgba(18, 22, 33, 0.65);
   --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
@@ -38,7 +38,9 @@ export const OVERLAY_CSS = `
   max-width: min(380px, calc(100vw - 24px));
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  background: rgba(18, 22, 33, 0.25);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(129, 140, 248, 0.06), transparent 60%),
+    var(--bg-surface);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-family: var(--font);
@@ -369,7 +371,7 @@ export const OVERLAY_CSS = `
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(18, 22, 33, 0.25);
+  background: var(--bg-surface);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
   font-family: var(--font);
@@ -600,7 +602,8 @@ export const OVERLAY_CSS = `
    Light theme overrides
    ================================================================= */
 .theme-light {
-  --bg-surface: rgba(248, 250, 252, 0.4);
+  --bg-surface: rgba(248, 250, 252, 0.7);
+  --panel-bg: rgba(248, 250, 252, 0.82);
   --bg-header: linear-gradient(135deg, rgba(129, 140, 248, 0.10), rgba(99, 102, 241, 0.04));
   --bg-card: rgba(0, 0, 0, 0.02);
   --bg-card-hover: rgba(0, 0, 0, 0.04);
@@ -626,7 +629,7 @@ export const OVERLAY_CSS = `
 }
 
 .theme-light .float-collapsed-tab {
-  background: rgba(248, 250, 252, 0.4);
+  background: rgba(248, 250, 252, 0.7);
   border-color: rgba(0, 0, 0, 0.12);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
 }
