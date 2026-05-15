@@ -30,9 +30,10 @@ export const OVERLAY_CSS = `
    Panel Shell
    ================================================================= */
 .float-panel {
-  position: fixed;
-  z-index: 2147483646;
+  position: absolute;
+  z-index: 1;
   user-select: none;
+  pointer-events: all;
   min-width: 200px;
   max-width: min(380px, calc(100vw - 24px));
   border-radius: var(--radius);
@@ -361,9 +362,10 @@ export const OVERLAY_CSS = `
    Collapsed Tab (right-edge circle)
    ================================================================= */
 .float-collapsed-tab {
-  position: fixed;
-  z-index: 2147483646;
+  position: absolute;
+  z-index: 1;
   cursor: pointer;
+  pointer-events: all;
   width: 26px;
   height: 26px;
   border-radius: 50%;

@@ -12,6 +12,8 @@ function mount() {
 
   const host = document.createElement('div');
   host.id = 'money-helper-float-root';
+  // Fixed container at viewport origin — immune to page transforms
+  host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483646;pointer-events:none';
   document.documentElement.appendChild(host);
 
   const shadow = host.attachShadow({ mode: 'closed' });
