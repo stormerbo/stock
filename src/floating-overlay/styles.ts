@@ -1,7 +1,7 @@
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: rgba(18, 22, 33, 0.65);
+  --bg-surface: #111318;
   --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
@@ -16,7 +16,7 @@ export const OVERLAY_CSS = `
   --brand: #818cf8;
   --brand-glow: rgba(129, 140, 248, 0.25);
   --radius: 14px;
-  --shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   --font: 'PingFang SC', -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -37,12 +37,11 @@ export const OVERLAY_CSS = `
   min-width: 200px;
   max-width: min(380px, calc(100vw - 24px));
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(129, 140, 248, 0.06), transparent 60%),
-    var(--bg-surface);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: var(--bg-surface);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-family: var(--font);
   font-size: 12px;
   line-height: 1.4;
@@ -51,24 +50,6 @@ export const OVERLAY_CSS = `
   display: flex;
   flex-direction: column;
   position: relative;
-}
-
-/* Glass inner glow overlay — subtle gradient keeps text readable */
-.float-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 40%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.3) 0%, transparent 40%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.float-panel > * {
-  position: relative;
-  z-index: 1;
 }
 
 /* =================================================================
@@ -602,8 +583,7 @@ export const OVERLAY_CSS = `
    Light theme overrides
    ================================================================= */
 .theme-light {
-  --bg-surface: rgba(248, 250, 252, 0.7);
-  --panel-bg: rgba(248, 250, 252, 0.82);
+  --bg-surface: #f2f5ff;
   --bg-header: linear-gradient(135deg, rgba(129, 140, 248, 0.10), rgba(99, 102, 241, 0.04));
   --bg-card: rgba(0, 0, 0, 0.02);
   --bg-card-hover: rgba(0, 0, 0, 0.04);
