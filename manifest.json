@@ -35,6 +35,19 @@
     "service_worker": "src/background/index.ts"
   },
   "options_page": "src/options/index.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/floating-overlay/content.tsx"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["public/icon16.png", "public/icon32.png", "public/icon48.png", "public/icon128.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "icons": {
     "16": "public/icon16.png",
     "32": "public/icon32.png",

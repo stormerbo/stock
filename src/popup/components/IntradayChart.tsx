@@ -1,14 +1,5 @@
 import { memo, useMemo } from 'react';
 
-const CHART_WIDTH = 280;
-const CHART_HEIGHT = 50;
-const CHART_PAD_TOP = 4;
-const CHART_PAD_RIGHT = 4;
-const CHART_PAD_BOTTOM = 4;
-const CHART_PAD_LEFT = 4;
-const CHART_INNER_W = CHART_WIDTH - CHART_PAD_LEFT - CHART_PAD_RIGHT;
-const CHART_INNER_H = CHART_HEIGHT - CHART_PAD_TOP - CHART_PAD_BOTTOM;
-
 const TRADING_MINUTES = 240;
 const MORNING_START = 9 * 60 + 30;
 const MORNING_END = 11 * 60 + 30;
@@ -40,9 +31,18 @@ type Props = {
   prevClose?: number;
   intradayPrevClose?: number;
   changePct?: number;
+  width?: number;
+  height?: number;
 };
 
-const IntradayChart = memo(function IntradayChart({ data, prevClose, intradayPrevClose, changePct }: Props) {
+const IntradayChart = memo(function IntradayChart({
+  data, prevClose, intradayPrevClose, changePct,
+  width = 280, height = 50,
+}: Props) {
+  const pad = { top: 4, right: 4, bottom: 4, left: 4 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+
   const pathInfo = useMemo(() => {
     if (!data || data.length === 0) return null;
 
@@ -78,10 +78,10 @@ const IntradayChart = memo(function IntradayChart({ data, prevClose, intradayPre
 
     const sorted = [...dataPoints].sort((a, b) => a.minuteIndex - b.minuteIndex);
 
-    const toX = (mi: number) => CHART_PAD_LEFT + (mi / TRADING_MINUTES) * CHART_INNER_W;
+    const toX = (mi: number) => pad.left + (mi / TRADING_MINUTES) * innerW;
     const toY = (price: number) => {
       const normalized = (price - displayMin) / displayRange;
-      return CHART_PAD_TOP + (1 - normalized) * CHART_INNER_H;
+      return pad.top + (1 - normalized) * innerH;
     };
 
     const segments: IntradayDataPoint[][] = [];
@@ -113,16 +113,16 @@ const IntradayChart = memo(function IntradayChart({ data, prevClose, intradayPre
       }
     }
 
-    return { baselineY, subSegments };
-  }, [data, prevClose, intradayPrevClose]);
+    return { baselineY, subSegments, };
+  }, [data, prevClose, intradayPrevClose, width, height]);
 
   if (!pathInfo) {
     if (Number.isFinite(changePct)) {
       const w = Math.min(Math.abs(changePct!) / 10, 1) * 36;
       const fill = changePct! >= 0 ? '#ff5e57' : '#1fc66d';
       return (
-        <svg className="intraday-chart" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none">
-          <rect x={CHART_WIDTH / 2 - w / 2} y={CHART_HEIGHT / 2 - 4} width={Math.max(w, 4)} height={8} rx={2} fill={fill} opacity={0.6} />
+        <svg className="intraday-chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <rect x={width / 2 - w / 2} y={height / 2 - 4} width={Math.max(w, 4)} height={8} rx={2} fill={fill} opacity={0.6} />
         </svg>
       );
     }
@@ -132,12 +132,12 @@ const IntradayChart = memo(function IntradayChart({ data, prevClose, intradayPre
   return (
     <svg
       className="intraday-chart"
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+      viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
     >
       <line
-        x1={CHART_PAD_LEFT}
-        x2={CHART_WIDTH - CHART_PAD_RIGHT}
+        x1={pad.left}
+        x2={width - pad.right}
         y1={pathInfo.baselineY.toFixed(2)}
         y2={pathInfo.baselineY.toFixed(2)}
         className="intraday-open-line"

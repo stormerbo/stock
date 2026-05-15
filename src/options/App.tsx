@@ -23,6 +23,7 @@ import {
   type TagDefinition,
 } from '../shared/tags';
 import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
+import { CONFIG_KEY as OVERLAY_CONFIG_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const DISPLAY_STORAGE_KEY = 'displayConfig';
@@ -538,7 +539,7 @@ export default function App() {
   const [showDonate, setShowDonate] = useState(false);
 
   // ---- Settings Tabs ----
-  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'trading' | 'tech-report' | 'other'>('basic');
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'trading' | 'tech-report' | 'overlay' | 'other'>('basic');
 
   // ---- Work Mode Config ----
   const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
@@ -688,6 +689,32 @@ export default function App() {
     setWorkModeDraft(workModeConfig);
     setTechReportDraft(techReportConfig);
   }, [displayConfig, refreshConfig, workModeConfig, techReportConfig]);
+
+  // ---- Floating Panel Config ----
+  const [overlayConfig, setOverlayConfig] = useState<FloatingOverlayConfig>(DEFAULT_OVERLAY_CONFIG);
+  const [overlayDraft, setOverlayDraft] = useState<FloatingOverlayConfig>(DEFAULT_OVERLAY_CONFIG);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(OVERLAY_CONFIG_KEY, (result: Record<string, unknown>) => {
+        const config = result[OVERLAY_CONFIG_KEY] as FloatingOverlayConfig | undefined;
+        const resolved = config || DEFAULT_OVERLAY_CONFIG;
+        setOverlayConfig(resolved);
+        setOverlayDraft(resolved);
+      });
+    }
+  }, []);
+
+  const overlayDirty = JSON.stringify(overlayDraft) !== JSON.stringify(overlayConfig);
+
+  const saveOverlayConfig = async () => {
+    await chrome.storage.sync.set({ [OVERLAY_CONFIG_KEY]: overlayDraft });
+    setOverlayConfig({ ...overlayDraft });
+  };
+
+  const resetOverlayDraft = () => {
+    setOverlayDraft({ ...overlayConfig });
+  };
 
   // ---- Load stock holdings (all stocks, with name + position data) ----
   const [allStocks, setAllStocks] = useState<Array<{ code: string; name: string; shares: number; special: boolean }>>([]);
@@ -947,6 +974,7 @@ export default function App() {
           <button type="button" className={`settings-tab ${settingsTab === 'alerts' ? 'active' : ''}`} onClick={() => setSettingsTab('alerts')}>告警</button>
           <button type="button" className={`settings-tab ${settingsTab === 'trading' ? 'active' : ''}`} onClick={() => setSettingsTab('trading')}>交易</button>
           <button type="button" className={`settings-tab ${settingsTab === 'tech-report' ? 'active' : ''}`} onClick={() => setSettingsTab('tech-report')}>技术报告</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'overlay' ? 'active' : ''}`} onClick={() => setSettingsTab('overlay')}>悬浮窗</button>
           <button type="button" className={`settings-tab ${settingsTab === 'other' ? 'active' : ''}`} onClick={() => setSettingsTab('other')}>其他</button>
         </div>
 
@@ -1485,6 +1513,66 @@ export default function App() {
         </section>)}
 
         {/* ---- 数据迁移 ---- */}
+        {settingsTab === 'overlay' && (<section className="options-section">
+          <h2>悬浮窗设置</h2>
+          <p className="section-desc">在浏览器页面上展示一个浮动面板，实时查看自选股行情。</p>
+          <div className="config-card">
+            <div className="config-row">
+              <span className="config-label">启用悬浮窗</span>
+              <label className="toggle-switch">
+                <input type="checkbox" checked={overlayDraft.enabled}
+                  onChange={(e) => setOverlayDraft({ ...overlayDraft, enabled: e.target.checked })} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+            {overlayDraft.enabled && (
+              <>
+                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                  <span className="config-label">持仓中选择显示股票</span>
+                  <div className="overlay-stock-grid">
+                    {allStocks.length === 0 ? (
+                      <span className="config-hint">暂无持仓，请在扩展弹窗中添加股票</span>
+                    ) : allStocks.map((s) => {
+                      const checked = overlayDraft.stockCodes.includes(s.code);
+                      return (
+                        <label key={s.code} className="overlay-stock-label">
+                          <input type="checkbox" checked={checked}
+                            onChange={() => {
+                              const next = checked
+                                ? overlayDraft.stockCodes.filter((c) => c !== s.code)
+                                : [...overlayDraft.stockCodes, s.code];
+                              setOverlayDraft({ ...overlayDraft, stockCodes: next });
+                            }} />
+                          <span>{s.name}</span>
+                          <span className="config-hint">({s.code})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="config-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                  <span className="config-label">或手动添加股票代码</span>
+                  <input type="text" className="config-input" placeholder="如 000001,600519"
+                    value={overlayDraft.stockCodes.join(',')}
+                    onChange={(e) => {
+                      const codes = e.target.value.split(',').map((c) => c.trim()).filter(Boolean);
+                      setOverlayDraft({ ...overlayDraft, stockCodes: codes });
+                    }} />
+                  <span className="config-hint">多个代码用英文逗号分隔</span>
+                </div>
+                <div className="config-row" style={{ gap: 12 }}>
+                  {overlayDirty && (
+                    <>
+                      <button type="button" className="btn-primary" onClick={saveOverlayConfig}>保存</button>
+                      <button type="button" className="btn-secondary" onClick={resetOverlayDraft}>取消</button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </section>)}
+
         {settingsTab === 'other' && (<section className="options-section">
           <h2>数据迁移</h2>
           <p className="section-desc">用于跨扩展 ID 迁移全部数据（自选、持仓、告警、通知、收益明细、显示设置等）。</p>
