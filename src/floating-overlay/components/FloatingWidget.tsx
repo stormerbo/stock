@@ -52,15 +52,20 @@ export default function FloatingWidget({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const panelEstW = (panelWidth && panelWidth >= MIN_W) ? panelWidth : 320;
+    // If saved Y is near the bottom third of viewport, reset to a sensible position
+    const reasonableY = initialPosition.y > vh * 0.6 ? 80 : initialPosition.y;
     if (isRightEdge.current) {
-      setPos({ x: 0, y: Math.max(8, Math.min(initialPosition.y, vh - 80)) });
+      setPos({ x: 0, y: Math.max(8, Math.min(reasonableY, vh - 80)) });
     } else {
       setPos({
         x: Math.max(8, Math.min(initialPosition.x, vw - panelEstW - 8)),
-        y: Math.max(8, Math.min(initialPosition.y, vh - 80)),
+        y: Math.max(8, Math.min(reasonableY, vh - 80)),
       });
     }
   }, [initialPosition, panelWidth]);
+
+  // Also clamp collapsed tab Y to viewport
+  const collapsedY = Math.max(8, Math.min(pos.y, window.innerHeight - 60));
 
   // Close opacity slider on outside click
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function FloatingWidget({
     return (
       <div
         className="float-collapsed-tab"
-        style={{ top: Math.max(8, Math.min(pos.y, window.innerHeight - 60)), right: COLLAPSED_RIGHT, opacity }}
+        style={{ top: collapsedY, right: COLLAPSED_RIGHT, opacity }}
         onMouseDown={(e) => {
           dragging.current = true;
           dragOrigin.current = { x: e.clientX, y: e.clientY };
