@@ -186,6 +186,7 @@ export default function App() {
       <FloatingWidget
         initialPosition={uiState.position}
         collapsed={uiState.collapsed}
+        opacity={uiState.opacity}
         stockCount={displayList.length}
         totalChangePct={totalChangePct}
         lastUpdated={lastUpdated}
@@ -193,6 +194,7 @@ export default function App() {
         onToggleCollapse={handleToggleCollapse}
         onClose={handleClose}
         onRefresh={handleRefresh}
+        onOpacityChange={(v) => persistState({ opacity: v })}
       >
         {selectedStock ? (
           <StockDetail

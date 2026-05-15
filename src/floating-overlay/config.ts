@@ -7,6 +7,7 @@ export type FloatingOverlayState = {
   position: { x: number; y: number };
   collapsed: boolean;
   hidden: boolean;
+  opacity: number;
 };
 
 export const DEFAULT_CONFIG: FloatingOverlayConfig = {
@@ -15,9 +16,10 @@ export const DEFAULT_CONFIG: FloatingOverlayConfig = {
 };
 
 export const DEFAULT_STATE: FloatingOverlayState = {
-  position: { x: 9999, y: 80 }, // x=9999 → clamp 到右侧边缘
+  position: { x: 9999, y: 80 },
   collapsed: false,
   hidden: false,
+  opacity: 1,
 };
 
 export const CONFIG_KEY = 'floatingOverlayConfig';
