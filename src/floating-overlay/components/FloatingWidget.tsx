@@ -96,25 +96,28 @@ export default function FloatingWidget({
 
   useEffect(() => {
     if (!collapsed) {
+      const clampPos = (x: number, y: number) => {
+        const el = panelRef.current;
+        if (!el) return { x, y };
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        return {
+          x: Math.max(8, Math.min(x, window.innerWidth - w - 8)),
+          y: Math.max(8, Math.min(y, window.innerHeight - h - 8)),
+        };
+      };
       const onMouseMove = (e: MouseEvent) => {
         if (!dragging.current) return;
-        setPos({
-          x: posOrigin.current.x + (e.clientX - dragOrigin.current.x),
-          y: posOrigin.current.y + (e.clientY - dragOrigin.current.y),
-        });
+        setPos((prev) => clampPos(
+          posOrigin.current.x + (e.clientX - dragOrigin.current.x),
+          posOrigin.current.y + (e.clientY - dragOrigin.current.y),
+        ));
       };
       const onMouseUp = () => {
         if (!dragging.current) return;
         dragging.current = false;
         setPos((prev) => {
-          const el = panelRef.current;
-          if (!el) return prev;
-          const vw = window.innerWidth;
-          const vh = window.innerHeight;
-          const clamped = {
-            x: Math.max(8, Math.min(prev.x, vw - el.offsetWidth - 8)),
-            y: Math.max(8, Math.min(prev.y, vh - el.offsetHeight - 8)),
-          };
+          const clamped = clampPos(prev.x, prev.y);
           onPositionChange(clamped);
           return clamped;
         });
