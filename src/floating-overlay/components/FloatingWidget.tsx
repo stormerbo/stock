@@ -159,7 +159,7 @@ export default function FloatingWidget({
   }, [pos.x]);
 
   useEffect(() => {
-    const MIN_H = 150;
+    const MIN_H = 200;
     const MAX_H = 800;
     const onMouseMove = (e: MouseEvent) => {
       if (!resizing.current) return;
@@ -219,8 +219,10 @@ export default function FloatingWidget({
     ? { right: 8, top: pos.y, opacity }
     : { left: pos.x, top: pos.y, opacity };
   if (panelWidth && panelWidth > 0) panelStyle.width = panelWidth;
+  // 忽略过小的高度（< 200px 可能是误操作）
   const bodyStyle: React.CSSProperties = {};
-  if (panelHeight && panelHeight > 0) bodyStyle.maxHeight = panelHeight;
+  const effectiveHeight = (panelHeight && panelHeight >= 200) ? panelHeight : 0;
+  if (effectiveHeight > 0) bodyStyle.maxHeight = effectiveHeight;
 
   return (
     <div ref={panelRef} className="float-panel" style={panelStyle}>
