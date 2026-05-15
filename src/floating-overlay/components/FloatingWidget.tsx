@@ -41,17 +41,26 @@ export default function FloatingWidget({
   const posOrigin = useRef({ x: 0, y: 0 });
   const [showOpacity, setShowOpacity] = useState(false);
   const opacityRef = useRef<HTMLDivElement>(null);
-  const isRightEdge = useRef(initialPosition.x >= 9999 || initialPosition.x < 100);
+  // Only treat as right-edge if position is the exact default sentinel value
+  const isRightEdge = useRef(initialPosition.x >= 9999);
   const resizing = useRef(false);
   const resizeOrigin = useRef({ x: 0, y: 0 });
   const sizeOrigin = useRef({ w: 0, h: 0 });
 
-  // On first render, use right-edge positioning
+  // On first render, clamp position to viewport
   useEffect(() => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const panelEstW = (panelWidth && panelWidth >= MIN_W) ? panelWidth : 320;
     if (isRightEdge.current) {
-      setPos({ x: 0, y: initialPosition.y });
+      setPos({ x: 0, y: Math.max(8, Math.min(initialPosition.y, vh - 80)) });
+    } else {
+      setPos({
+        x: Math.max(8, Math.min(initialPosition.x, vw - panelEstW - 8)),
+        y: Math.max(8, Math.min(initialPosition.y, vh - 80)),
+      });
     }
-  }, [initialPosition]);
+  }, [initialPosition, panelWidth]);
 
   // Close opacity slider on outside click
   useEffect(() => {
@@ -171,7 +180,7 @@ export default function FloatingWidget({
     return (
       <div
         className="float-collapsed-tab"
-        style={{ top: pos.y, right: COLLAPSED_RIGHT, opacity }}
+        style={{ top: Math.max(8, Math.min(pos.y, window.innerHeight - 60)), right: COLLAPSED_RIGHT, opacity }}
         onMouseDown={(e) => {
           dragging.current = true;
           dragOrigin.current = { x: e.clientX, y: e.clientY };
