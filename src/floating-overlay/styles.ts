@@ -457,14 +457,92 @@ export const OVERLAY_CSS = `
   font-weight: 600;
 }
 
-.stock-detail-chart-wrap {
-  padding: 12px;
+/* Chart area */
+.stock-detail-chart-area {
   display: flex;
-  justify-content: center;
+  padding: 10px 8px 10px 4px;
+  gap: 4px;
+  position: relative;
 }
 
-.stock-detail-chart-wrap svg {
+.stock-detail-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 0;
+  flex-shrink: 0;
+  width: 40px;
+}
+
+.stock-detail-ylabel {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1;
+}
+
+.stock-detail-chart-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 96px;
+}
+
+.stock-detail-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.stock-detail-grid-line {
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  height: 0;
+}
+
+.stock-detail-grid-mid {
+  border-top-color: rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+
+.stock-detail-chart-wrap svg.intraday-chart {
+  width: 100% !important;
+  height: 100% !important;
   display: block;
+}
+
+/* Stats strip */
+.stock-detail-stats {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+
+.stock-detail-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stock-detail-stat-label {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.stock-detail-stat-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* =================================================================

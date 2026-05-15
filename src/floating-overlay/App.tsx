@@ -14,6 +14,9 @@ type StockDisplay = {
   price: number;
   prevClose: number;
   changePct: number;
+  high?: number;
+  low?: number;
+  open?: number;
   intraday: { data: Array<{ time: string; price: number }>; prevClose: number };
 };
 
@@ -198,6 +201,9 @@ export default function App() {
             price={selectedStock.price}
             changePct={selectedStock.changePct}
             prevClose={selectedStock.prevClose}
+            high={selectedStock.high}
+            low={selectedStock.low}
+            open={selectedStock.open}
             intradayData={selectedStock.intraday?.data ?? []}
             intradayPrevClose={selectedStock.intraday?.prevClose}
             onBack={handleBackToList}
