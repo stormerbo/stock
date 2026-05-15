@@ -161,11 +161,6 @@ export default function FloatingWidget({
     >
       {/* Header */}
       <div className="float-header" onMouseDown={(e) => startDrag(e, pos)}>
-        <div className="float-drag-handle" aria-label="拖拽">
-          <span className="float-drag-dot" />
-          <span className="float-drag-dot" />
-          <span className="float-drag-dot" />
-        </div>
         <div className="float-header-title">
           <span className={`float-header-indicator ${tc}`} />
           <span>自选股</span>

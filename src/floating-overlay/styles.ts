@@ -68,28 +68,6 @@ export const OVERLAY_CSS = `
   cursor: grabbing;
 }
 
-.float-drag-handle {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5px;
-  padding: 2px 5px;
-  cursor: grab;
-  flex-shrink: 0;
-  opacity: 0.4;
-  transition: opacity 0.15s;
-}
-
-.float-header:hover .float-drag-handle {
-  opacity: 0.7;
-}
-
-.float-drag-dot {
-  width: 14px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--text-secondary);
-}
-
 .float-header-title {
   flex: 1;
   font-size: 12px;
