@@ -183,7 +183,7 @@ export default function FloatingWidget({
               <div className="float-opacity-popup">
                 <input
                   type="range"
-                  min={0.2}
+                  min={0.5}
                   max={1}
                   step={0.05}
                   value={opacity}
