@@ -213,6 +213,12 @@ export default function FloatingWidget({
   }
 
   // ---- Expanded state ----
+  setTimeout(() => {
+    if (panelRef.current) {
+      const r = panelRef.current.getBoundingClientRect();
+      console.log('[悬浮窗] 实际位置:', JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height, vw: window.innerWidth, vh: window.innerHeight }));
+    }
+  }, 100);
   console.log('[悬浮窗] 展开态', isRightEdge.current ? '(右侧)' : '(固定位置)', 'pos:', pos, 'w:', panelWidth, 'h:', panelHeight);
   const tc = toneClass(totalChangePct);
   const panelStyle: React.CSSProperties = isRightEdge.current
