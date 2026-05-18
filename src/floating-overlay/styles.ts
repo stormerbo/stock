@@ -39,6 +39,8 @@ export const OVERLAY_CSS = `
   border-radius: var(--radius);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
@@ -353,6 +355,8 @@ export const OVERLAY_CSS = `
   height: 26px;
   border-radius: 50%;
   background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
   font-family: var(--font);
@@ -609,8 +613,30 @@ export const OVERLAY_CSS = `
 }
 
 .theme-light .float-collapsed-tab {
-  background: rgba(248, 250, 252, 0.7);
   border-color: rgba(0, 0, 0, 0.12);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* =================================================================
+   Glass theme overrides
+   ================================================================= */
+.theme-glass {
+  --bg-surface: rgba(17, 19, 24, 0.2);
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --bg-card-hover: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.04);
+  --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.12), rgba(59, 130, 246, 0.04));
+}
+
+.theme-glass .float-panel,
+.theme-glass .float-collapsed-tab {
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.theme-glass .float-opacity-popup {
+  background: rgba(17, 19, 24, 0.3);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
 `;

@@ -22,7 +22,7 @@ type StockDisplay = {
 
 export default function App() {
   const [config, setConfig] = useState<FloatingOverlayConfig>(DEFAULT_CONFIG);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light' | 'glass'>('dark');
   const [uiState, setUiState] = useState<FloatingOverlayState>(DEFAULT_STATE);
   const [positions, setPositions] = useState<StockPosition[]>([]);
   const [ready, setReady] = useState(false);
@@ -34,7 +34,7 @@ export default function App() {
     chrome.storage.sync.get([CONFIG_KEY, 'popup-theme'], (result) => {
       const savedConfig = (result[CONFIG_KEY] as FloatingOverlayConfig) ?? DEFAULT_CONFIG;
       setConfig(savedConfig);
-      setTheme((result['popup-theme'] as 'dark' | 'light') ?? 'dark');
+      setTheme((result['popup-theme'] as 'dark' | 'light' | 'glass') ?? 'dark');
       // 如果开启了但被隐藏了，复位 hidden
       if (savedConfig.enabled) {
         chrome.storage.local.get(STATE_KEY, (sr) => {
@@ -74,7 +74,7 @@ export default function App() {
           setConfig(changes[CONFIG_KEY].newValue as FloatingOverlayConfig);
         }
         if (changes['popup-theme']) {
-          setTheme(changes['popup-theme'].newValue as 'dark' | 'light');
+          setTheme(changes['popup-theme'].newValue as 'dark' | 'light' | 'glass');
         }
       }
     };
@@ -193,7 +193,7 @@ export default function App() {
   if (uiState.hidden) return null;
 
   return (
-    <div className={theme === 'light' ? 'theme-light' : ''}>
+    <div className={theme === 'light' ? 'theme-light' : theme === 'glass' ? 'theme-glass' : ''}>
       <FloatingWidget
         initialPosition={uiState.position}
         collapsed={uiState.collapsed}

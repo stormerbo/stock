@@ -517,20 +517,24 @@ export default function App() {
   const [saved, setSaved] = useState(false);
 
   // ---- Theme ----
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+  const [theme, setTheme] = useState<'dark' | 'light' | 'glass'>(() => {
     const saved = localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return saved === 'light' || saved === 'dark' || saved === 'glass' ? saved : 'dark';
   });
 
   useEffect(() => {
-    document.body.classList.toggle('theme-light', theme === 'light');
+    document.body.classList.remove('theme-light', 'theme-glass');
+    if (theme === 'light') document.body.classList.add('theme-light');
+    else if (theme === 'glass') document.body.classList.add('theme-glass');
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
+      const next = prev === 'dark' ? 'light' : prev === 'light' ? 'glass' : 'dark';
       localStorage.setItem('popup-theme', next);
-      document.body.classList.toggle('theme-light', next === 'light');
+      document.body.classList.remove('theme-light', 'theme-glass');
+      if (next === 'light') document.body.classList.add('theme-light');
+      else if (next === 'glass') document.body.classList.add('theme-glass');
       // 同步到 storage，供 content script 读取
       try { chrome.storage.sync.set({ 'popup-theme': next }); } catch { /* best effort */ }
       return next;
@@ -948,7 +952,7 @@ export default function App() {
           <p className="desc">角标设置即时生效，其余配置需手动保存</p>
           <div className="header-actions">
             <button type="button" className="theme-btn" onClick={toggleTheme}>
-              {theme === 'dark' ? '🌞 浅色' : '🌙 深色'}
+              {theme === 'dark' ? '🌞 浅色' : theme === 'light' ? '🌙 深色' : '🫧 玻璃'}
             </button>
             <button type="button" className="donate-btn" onClick={() => setShowDonate(true)}>
               ☕ 打赏

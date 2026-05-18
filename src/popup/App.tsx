@@ -36,7 +36,7 @@ import {
 } from '../shared/fetch';
 import { fetchDayFqKline } from '../shared/technical-analysis';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/risk-metrics';
-import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, type StockTradeRecord } from '../shared/trade-history';
+import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, totalFees, type StockTradeRecord } from '../shared/trade-history';
 import type {
   PageTab, ThemeMode, IndexDetailTarget, SearchStock,
   RowContextMenuState, StockDetailTarget, FundDetailTarget,
@@ -104,7 +104,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = window.localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return saved === 'light' || saved === 'dark' || saved === 'glass' ? saved : 'dark';
   });
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
@@ -518,18 +518,26 @@ export default function App() {
         }
       }
 
-      // 当日盈亏百分比 = 当日盈亏 / (昨收 × 隔夜持仓股数)
+      // 当日盈亏百分比 = 当日盈亏 / (昨收 × 隔夜持仓股数 + 今日加仓成本)
       // 使用统一的公式：无交易时 = 股票今日涨跌幅；有交易时 = 考虑买卖后的真实日收益率
       if (Number.isFinite(next.dailyPnl) && Number.isFinite(row.prevClose) && row.prevClose > 0) {
         let sharesAtOpen = holding.shares;
+        let extraCapital = 0;
         if (trades && trades.length > 0) {
           const beforeToday = computePositionFromTrades(trades.filter((t) => t.date < today));
           if (beforeToday.shares > 0) {
             sharesAtOpen = beforeToday.shares;
           }
+          // 今日加仓资金 = 今日买入股数 × 买入价格 + 交易费用（与盈亏计算保持一致）
+          for (const t of trades) {
+            if (t.date === today && t.type === 'buy') {
+              extraCapital += t.shares * t.price + totalFees(t);
+            }
+          }
         }
-        if (sharesAtOpen > 0) {
-          next.dailyChangePct = (next.dailyPnl / (row.prevClose * sharesAtOpen)) * 100;
+        const totalCapital = (row.prevClose * sharesAtOpen) + extraCapital;
+        if (totalCapital > 0) {
+          next.dailyChangePct = (next.dailyPnl / totalCapital) * 100;
         }
       }
 
@@ -709,7 +717,9 @@ export default function App() {
   }, [portfolioReady, stockHoldings, fundHoldings]);
 
   useEffect(() => {
-    document.body.classList.toggle('theme-light', theme === 'light');
+    document.body.classList.remove('theme-light', 'theme-glass');
+    if (theme === 'light') document.body.classList.add('theme-light');
+    else if (theme === 'glass') document.body.classList.add('theme-glass');
     window.localStorage.setItem('popup-theme', theme);
     try { chrome.storage.sync.set({ 'popup-theme': theme }); } catch { /* best effort */ }
   }, [theme]);
@@ -1267,7 +1277,9 @@ function clearIntradayIfStale(
     setKeyword('');
   };
 
-  const toggleTheme = () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+  const toggleTheme = () => setTheme((current) => (
+    current === 'dark' ? 'light' : current === 'light' ? 'glass' : 'dark'
+  ));
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

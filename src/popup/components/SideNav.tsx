@@ -1,4 +1,4 @@
-import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Sun, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, Droplets, FileText, Moon, PieChart, Settings, Sun, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatNumber, formatMarketAmount } from '../utils/format';
@@ -115,8 +115,8 @@ export default function SideNav({
           onClick={toggleTheme}
           aria-label="切换主题"
         >
-          {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
-          <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+          {theme === 'dark' ? <Sun size={12} /> : theme === 'light' ? <Moon size={12} /> : <Droplets size={12} />}
+          <span>{theme === 'dark' ? '浅色' : theme === 'light' ? '深色' : '玻璃'}</span>
         </button>
       </div>
     </aside>
