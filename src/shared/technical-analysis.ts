@@ -652,7 +652,363 @@ export function detectAllSignals(kline: KlinePoint[]): TechnicalSignal[] {
     }
   }
 
+  // 10. CCI — 商品通道指数
+  if (kline.length >= 20) {
+    const cci = calcCCI(highs, lows, closes);
+    const lastCci = cci[cci.length - 1];
+    const prevCci = cci.length >= 2 ? cci[cci.length - 2] : null;
+    if (lastCci !== null) {
+      if (lastCci > 100 && prevCci !== null && prevCci <= 100) {
+        signals.push({
+          type: 'cci_break_100',
+          indicator: 'cci',
+          label: `CCI 突破+100(${lastCci.toFixed(0)})`,
+          guidance: `CCI(${lastCci.toFixed(0)})向上突破+100，进入超强区间，趋势可能加速`,
+          severity: 'positive',
+        });
+      } else if (lastCci < -100 && prevCci !== null && prevCci >= -100) {
+        signals.push({
+          type: 'cci_break_neg100',
+          indicator: 'cci',
+          label: `CCI 跌破-100(${lastCci.toFixed(0)})`,
+          guidance: `CCI(${lastCci.toFixed(0)})向下跌破-100，进入超弱区间，注意下行风险`,
+          severity: 'negative',
+        });
+      }
+      if (lastCci > 150) {
+        signals.push({
+          type: 'cci_overbought',
+          indicator: 'cci',
+          label: `CCI 超买(${lastCci.toFixed(0)})`,
+          guidance: `CCI(${lastCci.toFixed(0)})超过+150，严重超买，警惕回调`,
+          severity: 'negative',
+        });
+      } else if (lastCci < -150) {
+        signals.push({
+          type: 'cci_oversold',
+          indicator: 'cci',
+          label: `CCI 超卖(${lastCci.toFixed(0)})`,
+          guidance: `CCI(${lastCci.toFixed(0)})低于-150，严重超卖，关注反弹`,
+          severity: 'positive',
+        });
+      }
+    }
+  }
+
+  // 11. OBV — 能量潮
+  if (kline.length >= 20) {
+    const obv = calcOBV(closes, volumes);
+    const obvMa = calcMA(obv as number[], 20);
+    const lastObv = obv[obv.length - 1];
+    const lastObvMa = obvMa[obvMa.length - 1];
+    const prevObv = obv.length >= 2 ? obv[obv.length - 2] : null;
+    if (lastObv !== null && lastObvMa !== null && prevObv !== null) {
+      if (lastObv > lastObvMa && prevObv <= lastObvMa) {
+        signals.push({
+          type: 'obv_break_ma',
+          indicator: 'obv',
+          label: 'OBV 上穿均线',
+          guidance: 'OBV 上穿 20 日均线，量能配合良好，上涨趋势健康',
+          severity: 'positive',
+        });
+      } else if (lastObv < lastObvMa && prevObv >= lastObvMa) {
+        signals.push({
+          type: 'obv_break_ma_down',
+          indicator: 'obv',
+          label: 'OBV 跌破均线',
+          guidance: 'OBV 跌破 20 日均线，量能萎缩，资金流出迹象',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 12. PSY — 心理线
+  if (kline.length >= 24) {
+    const psy = calcPSY(closes);
+    const lastPsy = psy[psy.length - 1];
+    if (lastPsy !== null) {
+      if (lastPsy > 75) {
+        signals.push({
+          type: 'psy_overheat',
+          indicator: 'psy',
+          label: `PSY 过热(${lastPsy.toFixed(0)})`,
+          guidance: `PSY(${lastPsy.toFixed(0)})超过75，上涨天数过多，市场情绪过热，注意回调`,
+          severity: 'negative',
+        });
+      } else if (lastPsy < 25) {
+        signals.push({
+          type: 'psy_oversold',
+          indicator: 'psy',
+          label: `PSY 过冷(${lastPsy.toFixed(0)})`,
+          guidance: `PSY(${lastPsy.toFixed(0)})低于25，下跌天数过多，市场情绪低迷，关注反弹`,
+          severity: 'positive',
+        });
+      }
+    }
+  }
+
+  // 13. DMI — 趋向指标（简化版：PDI/MDI 金叉死叉）
+  if (kline.length >= 14) {
+    const dmi = calcDMI(highs, lows, closes);
+    const lastPdi = dmi.pdi[dmi.pdi.length - 1];
+    const lastMdi = dmi.mdi[dmi.mdi.length - 1];
+    const prevPdi = dmi.pdi.length >= 2 ? dmi.pdi[dmi.pdi.length - 2] : null;
+    const prevMdi = dmi.mdi.length >= 2 ? dmi.mdi[dmi.mdi.length - 2] : null;
+    if (lastPdi !== null && lastMdi !== null && prevPdi !== null && prevMdi !== null) {
+      if (prevPdi <= prevMdi && lastPdi > lastMdi) {
+        signals.push({
+          type: 'dmi_golden_cross',
+          indicator: 'dmi',
+          label: 'DMI 金叉(PDI上穿MDI)',
+          guidance: 'PDI 上穿 MDI，多方力量占优，上涨趋势确认',
+          severity: 'positive',
+        });
+      } else if (prevPdi >= prevMdi && lastPdi < lastMdi) {
+        signals.push({
+          type: 'dmi_death_cross',
+          indicator: 'dmi',
+          label: 'DMI 死叉(PDI跌破MDI)',
+          guidance: 'PDI 跌破 MDI，空方力量占优，下跌趋势确认',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 14. SAR — 抛物线转向
+  if (kline.length >= 10) {
+    const sar = calcSAR(highs, lows, closes);
+    const lastSar = sar[sar.length - 1];
+    const lastClose = closes[closes.length - 1];
+    const prevSar = sar.length >= 2 ? sar[sar.length - 2] : null;
+    const prevClose = closes.length >= 2 ? closes[closes.length - 2] : null;
+    if (lastSar !== null && lastClose !== null && prevSar !== null && prevClose !== null) {
+      if (prevClose <= prevSar && lastClose > lastSar) {
+        signals.push({
+          type: 'sar_bullish',
+          indicator: 'sar',
+          label: 'SAR 翻多',
+          guidance: '价格上穿 SAR 指标，趋势由空转多，发出买入信号',
+          severity: 'positive',
+        });
+      } else if (prevClose >= prevSar && lastClose < lastSar) {
+        signals.push({
+          type: 'sar_bearish',
+          indicator: 'sar',
+          label: 'SAR 翻空',
+          guidance: '价格跌破 SAR 指标，趋势由多转空，发出卖出信号',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 15. MOM — 动量指标
+  if (kline.length >= 12) {
+    const mom = calcMOM(closes, 10);
+    const lastMom = mom[mom.length - 1];
+    const prevMom = mom.length >= 2 ? mom[mom.length - 2] : null;
+    if (lastMom !== null && prevMom !== null) {
+      if (prevMom <= 0 && lastMom > 0) {
+        signals.push({
+          type: 'mom_positive',
+          indicator: 'mom',
+          label: 'MOM 翻正',
+          guidance: '动量指标由负转正，上涨动能增强',
+          severity: 'positive',
+        });
+      } else if (prevMom >= 0 && lastMom < 0) {
+        signals.push({
+          type: 'mom_negative',
+          indicator: 'mom',
+          label: 'MOM 翻负',
+          guidance: '动量指标由正转负，下跌动能增强',
+          severity: 'negative',
+        });
+      }
+    }
+  }
+
+  // 16. ATR — 平均真实波幅（辅助判断波动率变化）
+  if (kline.length >= 14) {
+    const atr = calcATR(highs, lows, closes);
+    const atrMa = calcMA(atr as number[], 14);
+    const lastAtr = atr[atr.length - 1];
+    const lastAtrMa = atrMa[atrMa.length - 1];
+    if (lastAtr !== null && lastAtrMa !== null && lastAtrMa > 0) {
+      const ratio = lastAtr / lastAtrMa;
+      if (ratio > 1.5) {
+        signals.push({
+          type: 'atr_expand',
+          indicator: 'atr',
+          label: `ATR 波幅扩大(${ratio.toFixed(1)}x)`,
+          guidance: `ATR(${ratio.toFixed(1)}倍均线)波幅显著扩大，价格波动加剧，注意风险控制`,
+          severity: 'info',
+        });
+      } else if (ratio < 0.6) {
+        signals.push({
+          type: 'atr_shrink',
+          indicator: 'atr',
+          label: `ATR 波幅收窄(${ratio.toFixed(1)}x)`,
+          guidance: `ATR(${ratio.toFixed(1)}倍均线)波幅持续收窄，蓄势整理，即将选择方向`,
+          severity: 'info',
+        });
+      }
+    }
+  }
+
   return signals;
+}
+
+// -----------------------------------------------------------
+// CCI — Commodity Channel Index
+// -----------------------------------------------------------
+export function calcCCI(highs: number[], lows: number[], closes: number[], period = 14): (number | null)[] {
+  const result: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { result.push(null); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      sum += (highs[j] + lows[j] + closes[j]) / 3;
+    }
+    const tp = (highs[i] + lows[i] + closes[i]) / 3;
+    const ma = sum / period;
+    let mad = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const tpj = (highs[j] + lows[j] + closes[j]) / 3;
+      mad += Math.abs(tpj - ma);
+    }
+    mad /= period;
+    result.push(mad > 0 ? (tp - ma) / (0.015 * mad) : 0);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// OBV — On-Balance Volume
+// -----------------------------------------------------------
+export function calcOBV(closes: number[], volumes: number[]): (number | null)[] {
+  const result: (number | null)[] = [volumes[0] ?? null];
+  for (let i = 1; i < closes.length; i++) {
+    const prev = result[i - 1];
+    if (prev === null) { result.push(null); continue; }
+    if (closes[i] > closes[i - 1]) result.push(prev + volumes[i]);
+    else if (closes[i] < closes[i - 1]) result.push(prev - volumes[i]);
+    else result.push(prev);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// PSY — Psychological Line
+// -----------------------------------------------------------
+export function calcPSY(closes: number[], period = 24): (number | null)[] {
+  const result: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) { result.push(null); continue; }
+    let upDays = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      if (closes[j] > closes[j - 1]) upDays++;
+    }
+    result.push((upDays / period) * 100);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// DMI — Directional Movement Index (simplified: PDI / MDI)
+// -----------------------------------------------------------
+export function calcDMI(highs: number[], lows: number[], closes: number[], period = 14): {
+  pdi: (number | null)[]; mdi: (number | null)[];
+} {
+  const up: (number | null)[] = [null];
+  const down: (number | null)[] = [null];
+  const tr: (number | null)[] = [null];
+  for (let i = 1; i < closes.length; i++) {
+    up.push(highs[i] - highs[i - 1] > lows[i - 1] - lows[i] ? Math.max(0, highs[i] - highs[i - 1]) : 0);
+    down.push(lows[i - 1] - lows[i] > highs[i] - highs[i - 1] ? Math.max(0, lows[i - 1] - lows[i]) : 0);
+    tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+  }
+  const trSmooth = calcSMMA(tr as number[], period);
+  const upSmooth = calcSMMA(up as number[], period);
+  const downSmooth = calcSMMA(down as number[], period);
+  const pdi: (number | null)[] = [];
+  const mdi: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    const t = trSmooth[i];
+    pdi.push(t !== null && t > 0 ? (upSmooth[i] ?? 0) / t * 100 : null);
+    mdi.push(t !== null && t > 0 ? (downSmooth[i] ?? 0) / t * 100 : null);
+  }
+  return { pdi, mdi };
+}
+
+// Smoothed Moving Average (Wilder's method, used in DMI)
+function calcSMMA(values: number[], period: number): (number | null)[] {
+  const result: (number | null)[] = [];
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (i < period) {
+      sum += values[i];
+      result.push(null);
+      if (i === period - 1) result[result.length - 1] = sum / period;
+      continue;
+    }
+    const prev = result[i - 1];
+    result.push(prev !== null ? (prev * (period - 1) + values[i]) / period : null);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// SAR — Parabolic Stop and Reverse
+// -----------------------------------------------------------
+export function calcSAR(highs: number[], lows: number[], closes: number[], acceleration = 0.02, maxAcc = 0.2): (number | null)[] {
+  const result: (number | null)[] = [];
+  if (closes.length < 3) return closes.map(() => null);
+  let isUp = closes[1] >= closes[0];
+  let sar = isUp ? lows.slice(0, 2).reduce((a, b) => Math.min(a, b), Infinity) : highs.slice(0, 2).reduce((a, b) => Math.max(a, b), -Infinity);
+  let ep = isUp ? highs.slice(0, 2).reduce((a, b) => Math.max(a, b), -Infinity) : lows.slice(0, 2).reduce((a, b) => Math.min(a, b), Infinity);
+  let af = acceleration;
+  result.push(null);
+  result.push(sar);
+  for (let i = 2; i < closes.length; i++) {
+    sar = sar + af * (ep - sar);
+    if (isUp) {
+      sar = Math.min(sar, lows[i - 1], lows[i - 2] ?? lows[i - 1]);
+      if (lows[i] < sar) { isUp = false; sar = ep; af = acceleration; ep = lows[i]; }
+      else { if (highs[i] > ep) { ep = highs[i]; af = Math.min(af + acceleration, maxAcc); } }
+    } else {
+      sar = Math.max(sar, highs[i - 1], highs[i - 2] ?? highs[i - 1]);
+      if (highs[i] > sar) { isUp = true; sar = ep; af = acceleration; ep = highs[i]; }
+      else { if (lows[i] < ep) { ep = lows[i]; af = Math.min(af + acceleration, maxAcc); } }
+    }
+    result.push(sar);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// MOM — Momentum
+// -----------------------------------------------------------
+export function calcMOM(closes: number[], period = 10): (number | null)[] {
+  const result: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { result.push(null); continue; }
+    result.push(closes[i] - closes[i - period]);
+  }
+  return result;
+}
+
+// -----------------------------------------------------------
+// ATR — Average True Range
+// -----------------------------------------------------------
+export function calcATR(highs: number[], lows: number[], closes: number[], period = 14): (number | null)[] {
+  const tr: (number | null)[] = [null];
+  for (let i = 1; i < closes.length; i++) {
+    tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+  }
+  return calcSMMA(tr as number[], period);
 }
 
 // -----------------------------------------------------------

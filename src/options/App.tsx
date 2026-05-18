@@ -1499,6 +1499,34 @@ export default function App() {
                   <span className="indicator-name">威廉指标(WR)</span>
                   <span className="indicator-desc">超买超卖区间判断短期回调或反弹机会</span>
                 </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">CCI</span>
+                  <span className="indicator-desc">商品通道指数，突破±100趋势加速，超±150严重超买超卖</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">OBV</span>
+                  <span className="indicator-desc">能量潮指标，量价配合分析，OBV与均线关系判断资金流向</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">PSY</span>
+                  <span className="indicator-desc">心理线指标，上涨天数比例，&gt;75过热&lt;25过冷提示情绪极端</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">DMI</span>
+                  <span className="indicator-desc">趋向指标，PDI/MDI金叉死叉，判断多空力量强弱转换</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">SAR</span>
+                  <span className="indicator-desc">抛物线转向，价格上穿/下穿SAR点，判断趋势翻转信号</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">MOM</span>
+                  <span className="indicator-desc">动量指标，当前价与N期前价差，衡量上涨/下跌动能变化</span>
+                </div>
+                <div className="indicator-card">
+                  <span className="indicator-name">ATR</span>
+                  <span className="indicator-desc">平均真实波幅，衡量波动率，扩大提示波动加剧，收窄提示蓄势整理</span>
+                </div>
               </div>
             )}
           </div>
