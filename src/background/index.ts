@@ -401,15 +401,22 @@ type UpdateInfo = {
   notified: boolean;
 };
 
-async function checkForUpdate(): Promise<{ found: boolean }> {
+async function checkForUpdate(): Promise<{ found: boolean; version?: string; downloadUrl?: string }> {
   try {
     const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest');
     if (!resp.ok) return { found: false };
-    const data = await resp.json() as { tag_name: string; html_url: string };
+    const data = await resp.json() as {
+      tag_name: string; html_url: string;
+      assets?: Array<{ name: string; browser_download_url: string }>;
+    };
     const latestVer = data.tag_name.replace(/^v/i, '');
     const currentVer = chrome.runtime.getManifest().version;
 
     if (isNewerVersion(latestVer, currentVer)) {
+      // 找到第一个 .zip 格式的资产
+      const zipAsset = data.assets?.find((a) => a.name.endsWith('.zip'));
+      const downloadUrl = zipAsset?.browser_download_url;
+
       const info: UpdateInfo = { version: latestVer, url: data.html_url, notified: true };
       await chrome.storage.local.set({ [UPDATE_INFO_KEY]: info });
 
@@ -426,7 +433,7 @@ async function checkForUpdate(): Promise<{ found: boolean }> {
           requireInteraction: true,
         });
       }
-      return { found: true };
+      return { found: true, version: latestVer, downloadUrl };
     }
     return { found: false };
   } catch {
@@ -1872,7 +1879,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void (async () => {
       try {
         const result = await checkForUpdate();
-        sendResponse({ ok: true, found: result.found });
+        sendResponse({ ok: true, found: result.found, version: result.version, downloadUrl: result.downloadUrl });
       } catch {
         sendResponse({ ok: false, found: false });
       }

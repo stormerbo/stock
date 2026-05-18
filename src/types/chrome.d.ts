@@ -139,4 +139,13 @@ declare namespace chrome {
   namespace tabs {
     function create(createProperties: { url: string }): void;
   }
+
+  namespace downloads {
+    function download(options: {
+      url: string;
+      filename?: string;
+      conflictAction?: string;
+      saveAs?: boolean;
+    }): Promise<number>;
+  }
 }

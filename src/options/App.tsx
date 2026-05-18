@@ -1665,9 +1665,12 @@ export default function App() {
                   if (typeof chrome?.runtime?.sendMessage !== 'function') return;
                   setUpdateStatus('检查中...');
                   try {
-                    const res = await chrome.runtime.sendMessage({ type: 'check-update' }) as { ok: boolean; found?: boolean } | undefined;
-                    if (res?.found) {
-                      setUpdateStatus('发现新版本，请在系统通知中查看');
+                    const res = await chrome.runtime.sendMessage({ type: 'check-update' }) as { ok: boolean; found?: boolean; version?: string; downloadUrl?: string } | undefined;
+                    if (res?.found && res?.downloadUrl) {
+                      setUpdateStatus('正在下载...');
+                      chrome.downloads.download({ url: res.downloadUrl, filename: `money-helper-${res.version}.zip` });
+                    } else if (res?.found) {
+                      setUpdateStatus('未找到下载文件');
                     } else {
                       setUpdateStatus('已是最新版本');
                     }
