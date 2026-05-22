@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "赚钱助手 - 股票&基金持仓管理",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "是你赚钱路上的最重要的小帮手",
   "permissions": [
     "storage",
@@ -38,7 +38,7 @@
   "options_page": "src/options/index.html",
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["src/floating-overlay/content.tsx"],
       "run_at": "document_idle"
     }
@@ -46,7 +46,7 @@
   "web_accessible_resources": [
     {
       "resources": ["public/icon16.png", "public/icon32.png", "public/icon48.png", "public/icon128.png"],
-      "matches": ["<all_urls>"]
+      "matches": ["http://*/*", "https://*/*"]
     }
   ],
   "icons": {
