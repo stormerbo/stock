@@ -20,7 +20,7 @@ type Props = {
   onToggleSort: (key: StockSortKey) => void;
   draggingCode: string | null;
   editingCell: EditingCell;
-  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null;
+  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }>; score?: number }> | null;
   stocksLoading: boolean;
   stocksError: string;
   stockTotalHoldingAmount: number;
@@ -162,7 +162,7 @@ export default function StockTable({
                           onMouseEnter={(e) => showSignalTip(e, signalStocks[item.code].signals, signalStocks[item.code].name, signalStocks[item.code].signalCount)}
                           onMouseLeave={hideSignalTip}
                         >
-                          <span className="stock-badge signal">技</span>
+                          <span className={'stock-badge signal' + (() => { const sc = signalStocks[item.code].score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : ''; })()}>技</span>
                         </span>
                       ) : null}
                       {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}

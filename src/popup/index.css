@@ -1474,6 +1474,19 @@ body.theme-light .data-table thead th {
   align-items: center;
 }
 
+.stock-badge.signal-up {
+  background: color-mix(in srgb, var(--up) 75%, white) !important;
+}
+
+.stock-badge.signal-dn {
+  background: color-mix(in srgb, var(--down) 75%, white) !important;
+}
+
+.stock-badge.signal-zero {
+  background: color-mix(in srgb, var(--text-2) 50%, transparent) !important;
+  animation: none !important;
+}
+
 .signal-tooltip-fixed {
   position: fixed;
   transform: translateY(-50%);

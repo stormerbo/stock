@@ -1286,12 +1286,14 @@ async function generateDailyTechnicalReport() {
   });
 
   // 保存有信号的股票列表（用于 popup 列表打标）
-  const signalStocks: Record<string, { name: string; signalCount: number; signals: Array<{ label: string; severity: string }> }> = {};
+  const signalStocks: Record<string, { name: string; signalCount: number; signals: Array<{ label: string; severity: string }>; score: number }> = {};
   for (const result of klineResults) {
     const types = currentSignals[result.code];
     const details = signalDetailsByStock[result.code] || [];
     if (types && types !== 'insufficient_data' && types.length > 0) {
-      signalStocks[result.code] = { name: result.name, signalCount: details.length, signals: details };
+      // 综合打分：看多 +1，看空 -1，中性 0
+      const score = details.reduce((sum, s) => sum + (s.severity === 'positive' ? 1 : s.severity === 'negative' ? -1 : 0), 0);
+      signalStocks[result.code] = { name: result.name, signalCount: details.length, signals: details, score };
     }
   }
   await chrome.storage.local.set({
