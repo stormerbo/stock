@@ -44,6 +44,16 @@ function genTradeId(): string {
   return `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function compareTrades(a: StockTradeRecord, b: StockTradeRecord): number {
+  const dateDiff = a.date.localeCompare(b.date);
+  if (dateDiff !== 0) return dateDiff;
+  const createdAtA = a.createdAt ?? '';
+  const createdAtB = b.createdAt ?? '';
+  const createdDiff = createdAtA.localeCompare(createdAtB);
+  if (createdDiff !== 0) return createdDiff;
+  return a.id.localeCompare(b.id);
+}
+
 // -----------------------------------------------------------
 // Pure computation — derives position from trade history
 // -----------------------------------------------------------
@@ -56,7 +66,7 @@ export function computePositionFromTrades(
   }
 
   // Sort ascending by date for chronological processing
-  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...trades].sort(compareTrades);
 
   let shares = 0;
   let totalCost = 0; // total cost basis of current position
@@ -100,67 +110,72 @@ export function computePositionFromTrades(
 /** 当日盈亏计算结果 */
 export type DailyPnlResult = {
   pnl: number;       // 当日盈亏金额
+  baseAmount: number; // 当日收益率分母（昨收持仓市值 + 今日买入成本）
+  changePct: number; // 当日收益率
 };
 
-/** 计算当日盈亏，区分隔夜持仓、今日卖出和今日买入 */
+/** 计算当日盈亏，按开盘权益 + 当日现金流统一口径计算 */
 export function computeDailyPnlFromTrades(
   trades: StockTradeRecord[],
   currentPrice: number,
   prevClose: number,
   today: string,
 ): DailyPnlResult {
-  const nan = { pnl: Number.NaN };
+  const nan = { pnl: Number.NaN, baseAmount: Number.NaN, changePct: Number.NaN };
   if (!Array.isArray(trades) || trades.length === 0) return nan;
   if (!Number.isFinite(currentPrice) || !Number.isFinite(prevClose)) return nan;
 
-  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...trades].sort(compareTrades);
 
-  let yesterdayShares = 0;
-  let todayBuyShares = 0;
-  let todayBuyAmount = 0;
-  let soldTodayPnl = 0;
+  let openingShares = 0;
+  let buyAmountToday = 0;
+  let sellAmountToday = 0;
+  let dividendToday = 0;
+  let endShares = 0;
 
   for (const t of sorted) {
     if (t.date < today) {
       if (t.type === 'buy') {
-        yesterdayShares += t.shares;
+        openingShares += t.shares;
       } else if (t.type === 'sell') {
-        if (yesterdayShares <= 0) continue;
-        const sellShares = Math.min(t.shares, yesterdayShares);
-        yesterdayShares -= sellShares;
+        if (openingShares <= 0) continue;
+        const sellShares = Math.min(t.shares, openingShares);
+        openingShares -= sellShares;
       }
     }
   }
 
-  // 处理今天交易，计算当日盈亏
+  endShares = openingShares;
+
   for (const t of sorted) {
-    if (t.date === today) {
-      if (t.type === 'buy') {
-        todayBuyShares += t.shares;
-        todayBuyAmount += t.shares * t.price + totalFees(t);
-      } else if (t.type === 'sell') {
-        let remaining = t.shares;
-        if (todayBuyShares > 0) {
-          const fromToday = Math.min(remaining, todayBuyShares);
-          todayBuyShares -= fromToday;
-          todayBuyAmount *= (todayBuyShares + fromToday > 0 ? todayBuyShares / (todayBuyShares + fromToday) : 0);
-          remaining -= fromToday;
-        }
-        if (remaining > 0 && yesterdayShares > 0) {
-          const sellFromYesterday = Math.min(remaining, yesterdayShares);
-          soldTodayPnl += (t.price - prevClose) * sellFromYesterday;
-          yesterdayShares -= sellFromYesterday;
-        }
-      }
+    if (t.date !== today) continue;
+
+    if (t.type === 'buy') {
+      buyAmountToday += t.shares * t.price + totalFees(t);
+      endShares += t.shares;
+    } else if (t.type === 'sell') {
+      const sellShares = Math.min(t.shares, endShares);
+      if (sellShares <= 0) continue;
+      const grossAmount = sellShares * t.price;
+      const feeRatio = t.shares > 0 ? sellShares / t.shares : 0;
+      sellAmountToday += grossAmount - totalFees(t) * feeRatio;
+      endShares -= sellShares;
+    } else if (t.type === 'dividend') {
+      dividendToday += (t.total ?? 0) - totalFees(t);
     }
   }
 
-  const overnightPnl = (currentPrice - prevClose) * yesterdayShares;
-  const intradayPnl = todayBuyShares > 0
-    ? (currentPrice - todayBuyAmount / todayBuyShares) * todayBuyShares
-    : 0;
+  const openingValue = openingShares * prevClose;
+  const closingValue = endShares * currentPrice;
+  const pnl = closingValue + sellAmountToday + dividendToday - openingValue - buyAmountToday;
+  const baseAmount = openingValue + buyAmountToday;
+  const changePct = baseAmount > 0 ? (pnl / baseAmount) * 100 : Number.NaN;
 
-  return { pnl: Math.round((overnightPnl + soldTodayPnl + intradayPnl) * 100) / 100 };
+  return {
+    pnl: Math.round(pnl * 100) / 100,
+    baseAmount: Math.round(baseAmount * 100) / 100,
+    changePct: Math.round(changePct * 100) / 100,
+  };
 }
 
 // -----------------------------------------------------------

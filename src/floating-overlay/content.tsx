@@ -1,11 +1,17 @@
 import { createRoot, type Root } from 'react-dom/client';
 import App from './App';
 import { OVERLAY_CSS } from './styles';
+import { shouldInjectFloatingOverlay } from './should-inject';
 
 let root: Root | null = null;
 
 function mount() {
   if (root) return;
+  if (!shouldInjectFloatingOverlay({
+    url: window.location.href,
+    contentType: document.contentType,
+    isTopFrame: window.top === window,
+  })) return;
 
   const host = document.createElement('div');
   host.id = 'money-helper-float-root';

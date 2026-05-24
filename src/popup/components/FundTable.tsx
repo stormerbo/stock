@@ -2,6 +2,7 @@ import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatLooseNumber, formatPercent, toneClass } from '../utils/format';
+import { isTradingHours } from '../../shared/fetch';
 import type { FundRow, FundSortKey, ColumnSort } from '../types';
 
 type EditingCell = {
@@ -68,7 +69,7 @@ export default function FundTable({
         <thead>
           <tr>
             <SortTh sortKey="name" currentSort={sort} onToggle={onToggleSort}>基金名称</SortTh>
-            <SortTh sortKey="estimatedNav" currentSort={sort} onToggle={onToggleSort}><span className="stacked-th"><span>持仓净值</span><span>估算净值</span></span></SortTh>
+            <SortTh sortKey="estimatedNav" currentSort={sort} onToggle={onToggleSort}><span className="stacked-th"><span>持仓净值</span><span>净值</span></span></SortTh>
             <SortTh sortKey="holdingAmount" currentSort={sort} onToggle={onToggleSort}>持有额</SortTh>
             <SortTh sortKey="holdingProfit" currentSort={sort} onToggle={onToggleSort}>持有收益</SortTh>
             <SortTh sortKey="holdingProfitRate" currentSort={sort} onToggle={onToggleSort}>持有收益率</SortTh>
@@ -139,7 +140,16 @@ export default function FundTable({
                     {hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值'}
                   </span>
                 )}
-                <span className="price-line">{Number.isFinite(item.estimatedNav) ? item.estimatedNav.toFixed(4) : '-'}</span>
+                <span className="price-line">
+                  {(() => {
+                    const tradingNow = isTradingHours();
+                    // 交易时段且净值未公布 → 显示估算净值；其他情况（盘后/周末）显示实际净值
+                    const showEst = tradingNow && !item.navDisclosedToday;
+                    const navValue = showEst ? item.estimatedNav : item.latestNav;
+                    const navStr = Number.isFinite(navValue) ? navValue.toFixed(4) : '-';
+                    return <>{navStr}</>;
+                  })()}
+                </span>
                 {Number.isFinite(item.addedNav) && item.addedNav! > 0 ? (
                   <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                     <span>关注 {item.addedNav!.toFixed(4)}</span>
@@ -174,7 +184,14 @@ export default function FundTable({
               <td className={toneClass(item.holdingProfit)}>{formatNumber(item.holdingProfit, 2)}</td>
               <td className={toneClass(item.holdingProfitRate)}>{formatPercent(item.holdingProfitRate)}</td>
               <td className={toneClass(item.changePct)}>{formatPercent(item.changePct)}</td>
-              <td className={toneClass(item.estimatedProfit)}>{formatNumber(item.estimatedProfit, 2)}</td>
+              <td className={toneClass(item.estimatedProfit)}>
+                {(() => {
+                  if (!Number.isFinite(item.estimatedProfit)) return '-';
+                  // 净值已公布（含周末回退到周五）→ 显示实际日涨跌收益；交易时段且未公布 → 显示估算
+                  if (item.navDisclosedToday || isTradingHours()) return formatNumber(item.estimatedProfit, 2);
+                  return '-';
+                })()}
+              </td>
               <td>{item.updatedAt}</td>
             </tr>
           );

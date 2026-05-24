@@ -6,6 +6,7 @@ import {
   type StockDetailData,
   type StockPeriod,
 } from '../stockDetail';
+import { normalizeStockCode } from '../../shared/fetch';
 import KlineChart from '../components/KlineChart';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from "../../shared/risk-metrics";
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
@@ -36,6 +37,20 @@ function formatPercent(value: number): string {
 function toneClass(value: number): string {
   if (!Number.isFinite(value)) return "";
   return value >= 0 ? "up" : "down";
+}
+
+/** 根据股票代码判断涨跌停幅度 */
+function getStockLimitPct(code: string): number {
+  const plain = normalizeStockCode(code);
+  if (!plain) return 0.1;
+  // 科创板 688/689: ±20%
+  if (/^(688|689)/.test(plain)) return 0.2;
+  // 创业板 300/301: ±20%
+  if (/^(300|301)/.test(plain)) return 0.2;
+  // 北交所 8xxxxx: ±30%
+  if (/^(430|440|830|831|832|833|835|836|837|838|839|870|871|872|873|874|875|876|877|878|879|880|881|882|883|884|885|886|887|888|889)/.test(plain)) return 0.3;
+  // 主板: ±10%
+  return 0.1;
 }
 
 type TabValue = StockPeriod | "fundamental" | "trades" | "analysis";
@@ -236,17 +251,26 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
             </div>
 
             {/* ─── Quick Stats Strip ─── */}
-            <div className="quick-stats">
-              <div className="stat-cell"><span className="stat-label">今开</span><b className={toneClass(detail.open - detail.prevClose)}>{formatNumber(detail.open, 2)}</b></div>
-              <div className="stat-cell"><span className="stat-label">昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
-              <div className="stat-cell"><span className="stat-label">最高</span><b className={toneClass(detail.high - detail.prevClose)}>{formatNumber(detail.high, 2)}</b></div>
-              <div className="stat-cell"><span className="stat-label">最低</span><b className={toneClass(detail.low - detail.prevClose)}>{formatNumber(detail.low, 2)}</b></div>
-              <div className="stat-cell"><span className="stat-label">成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
-              <div className="stat-cell"><span className="stat-label">成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
-              <div className="stat-cell"><span className="stat-label">换手</span><b>{formatPercent(detail.turnoverRate)}</b></div>
-              <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
-              <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
-            </div>
+            {(() => {
+              const limitPct = getStockLimitPct(detail.code);
+              const limitUp = Math.round(detail.prevClose * (1 + limitPct) * 100) / 100;
+              const limitDown = Math.round(detail.prevClose * (1 - limitPct) * 100) / 100;
+              return (
+              <div className="quick-stats">
+                <div className="stat-cell"><span className="stat-label">今开</span><b className={toneClass(detail.open - detail.prevClose)}>{formatNumber(detail.open, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">涨停</span><b className="up">{formatNumber(limitUp, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">跌停</span><b className="down">{formatNumber(limitDown, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">最高</span><b className={toneClass(detail.high - detail.prevClose)}>{formatNumber(detail.high, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">最低</span><b className={toneClass(detail.low - detail.prevClose)}>{formatNumber(detail.low, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
+                <div className="stat-cell"><span className="stat-label">成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
+                <div className="stat-cell"><span className="stat-label">换手</span><b>{formatPercent(detail.turnoverRate)}</b></div>
+                <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
+                <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
+              </div>
+              );
+            })()}
 
             {/* ─── Risk Metrics Strip ─── */}
             {detail.period === "day" && detail.kline.length >= 10 ? (

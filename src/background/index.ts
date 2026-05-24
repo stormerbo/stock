@@ -1146,7 +1146,7 @@ async function generateDailyTechnicalReport() {
     // 加载持仓股票
     const syncResult = await chrome.storage.sync.get(['stockHoldings']);
     const holdings = (syncResult.stockHoldings || []) as StockHoldingConfig[];
-    const heldStocks = holdings.filter((h) => Number(h.shares) > 0);
+    const heldStocks = holdings;
     if (heldStocks.length === 0) {
       await saveTechReportStatus({ status: 'no_signal', stockCount: 0, signalCount: 0, lastRunTime: Date.now(), details: '无持仓股票' });
       await chrome.storage.local.set({ [TECH_REPORT_DATE_KEY]: today });
@@ -1161,11 +1161,24 @@ async function generateDailyTechnicalReport() {
       if (sp.name) nameByCode[sp.code] = sp.name;
     }
 
+    // 如果缓存里查不到名称，尝试从 API 实时拉取
+    const holdingsMissingName = heldStocks.filter(
+      (h) => !h.name && !nameByCode[normalizeStockCode(h.code)],
+    );
+    if (holdingsMissingName.length > 0) {
+      try {
+        const namePositions = await fetchBatchStockQuotes(holdingsMissingName);
+        for (const pos of namePositions) {
+          if (pos.name) nameByCode[pos.code] = pos.name;
+        }
+      } catch { /* name lookup is best-effort */ }
+    }
+
     // 获取每只持仓股票的 K 线数据
     const klineResults = await pMap(
       heldStocks,
       async (holding) => {
-        const stockName = holding.name || nameByCode[holding.code] || holding.code;
+        const stockName = holding.name || nameByCode[normalizeStockCode(holding.code)] || holding.code;
         try {
           const kline = await fetchDayFqKline(holding.code, 60);
           return { code: holding.code, name: stockName, kline };
@@ -1179,6 +1192,7 @@ async function generateDailyTechnicalReport() {
     // 检测所有信号，按配置过滤，与上次状态比较去重
     const lastSignals = (local[TECH_REPORT_SIGNAL_KEY] as Record<string, string>) || {};
     const newSignalsByStock: Record<string, Array<{ code: string; name: string; signal: import('../shared/technical-analysis').TechnicalSignal }>> = {};
+    const signalDetailsByStock: Record<string, Array<{ label: string; severity: string }>> = {};
     const currentSignals: Record<string, string> = {};
     let totalNewSignals = 0;
 
@@ -1190,6 +1204,7 @@ async function generateDailyTechnicalReport() {
 
       // 检测全部信号
       const signals = detectAllSignals(result.kline);
+      signalDetailsByStock[result.code] = signals.map((s) => ({ label: s.label, severity: s.severity }));
 
       // 与上次状态比较去重
       const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
@@ -1223,7 +1238,9 @@ async function generateDailyTechnicalReport() {
       const first = entries[0];
       detailLines.push(`${first.name}(${code}):`);
       for (const entry of entries) {
-        detailLines.push(`  • ${entry.signal.label} — ${entry.signal.guidance}`);
+        const sevTag = entry.signal.severity === 'positive' ? '[看多]'
+          : entry.signal.severity === 'negative' ? '[看空]' : '[中性]';
+        detailLines.push(`  • ${sevTag} ${entry.signal.label} — ${entry.signal.guidance}`);
       }
       detailLines.push('');
     }
@@ -1269,12 +1286,12 @@ async function generateDailyTechnicalReport() {
   });
 
   // 保存有信号的股票列表（用于 popup 列表打标）
-  const signalStocks: Record<string, { name: string; signalCount: number }> = {};
+  const signalStocks: Record<string, { name: string; signalCount: number; signals: Array<{ label: string; severity: string }> }> = {};
   for (const result of klineResults) {
     const types = currentSignals[result.code];
+    const details = signalDetailsByStock[result.code] || [];
     if (types && types !== 'insufficient_data' && types.length > 0) {
-      const count = types.split(';').length;
-      signalStocks[result.code] = { name: result.name, signalCount: count };
+      signalStocks[result.code] = { name: result.name, signalCount: details.length, signals: details };
     }
   }
   await chrome.storage.local.set({
@@ -1443,7 +1460,6 @@ async function recalcSnapshotRange(startDate: string) {
 }
 
 async function refreshFunds() {
-  if (!isTradingHours()) return;
   if (refreshFundsInFlight) return;
   refreshFundsInFlight = true;
   try {
@@ -1999,6 +2015,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // Clear date + signal keys so manual re-run detects all signals fresh
         await chrome.storage.local.remove([TECH_REPORT_DATE_KEY, TECH_REPORT_SIGNAL_KEY]);
         await generateDailyTechnicalReport();
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });
+      }
+    })();
+    return true;
+  }
+
+  if (request.type === 'force-refresh') {
+    void (async () => {
+      try {
+        await Promise.all([refreshStocks(), refreshFunds()]);
         sendResponse({ ok: true });
       } catch (error) {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });

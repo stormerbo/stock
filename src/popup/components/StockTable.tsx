@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState, useCallback, useRef } from 'react';
 import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import IntradayChart from './IntradayChart';
@@ -20,7 +20,7 @@ type Props = {
   onToggleSort: (key: StockSortKey) => void;
   draggingCode: string | null;
   editingCell: EditingCell;
-  signalStocks: Record<string, { name: string; signalCount: number }> | null;
+  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null;
   stocksLoading: boolean;
   stocksError: string;
   stockTotalHoldingAmount: number;
@@ -68,6 +68,33 @@ export default function StockTable({
   handleDragStart, handleDragEnd, handleStockDrop,
   onRemoveStock, getStockBadge, onRefresh, refreshing,
 }: Props) {
+  const [tip, setTip] = useState<{
+    x: number; y: number;
+    signals: Array<{ label: string; severity: string }>;
+    name: string; count: number;
+  } | null>(null);
+  const tipTimerRef = useRef<number | null>(null);
+
+  const showSignalTip = useCallback((
+    e: React.MouseEvent,
+    signals: Array<{ label: string; severity: string }> | undefined,
+    name: string,
+    count: number,
+  ) => {
+    if (!signals || signals.length === 0) return;
+    if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTip({ x: Math.min(rect.right + 8, window.innerWidth - 290), y: rect.top + rect.height / 2, signals, name, count });
+  }, []);
+
+  const hideSignalTip = useCallback(() => {
+    tipTimerRef.current = window.setTimeout(() => setTip(null), 200);
+  }, []);
+
+  const keepTip = useCallback(() => {
+    if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
+  }, []);
+
   return (
     <div className="table-panel">
       <table className="data-table stock-table">
@@ -131,7 +158,12 @@ export default function StockTable({
                       <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                       {badge ? <span className={`stock-badge ${badge.tone}`}>{badge.label}</span> : null}
                       {signalStocks?.[item.code] ? (
-                        <span className="stock-badge signal" title={`${signalStocks[item.code].signalCount} 个技术信号`}>技</span>
+                        <span className="signal-badge-wrapper"
+                          onMouseEnter={(e) => showSignalTip(e, signalStocks[item.code].signals, signalStocks[item.code].name, signalStocks[item.code].signalCount)}
+                          onMouseLeave={hideSignalTip}
+                        >
+                          <span className="stock-badge signal">技</span>
+                        </span>
                       ) : null}
                       {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                     </span>
@@ -161,11 +193,11 @@ export default function StockTable({
                   />
                 </td>
                 <td className="dual-value">
-                  <span className={toneClass(item.floatingPnl)}>{formatNumber(item.floatingPnl, 1)}</span>
+                  <span className={toneClass(item.floatingPnl)}>{formatNumber(item.floatingPnl, 2)}</span>
                   <span className={toneClass(holdingRate)}>{formatPercent(holdingRate)}</span>
                 </td>
                 <td className="dual-value">
-                  <span className={toneClass(item.dailyPnl)}>{formatNumber(item.dailyPnl, 0)}</span>
+                  <span className={toneClass(item.dailyPnl)}>{formatNumber(item.dailyPnl, 2)}</span>
                   <span className={toneClass(item.dailyChangePct)}>{formatPercent(item.dailyChangePct)}</span>
                 </td>
                 <td className="dual-value price-cell">
@@ -201,12 +233,19 @@ export default function StockTable({
                       onKeyDown={(e) => { if (e.key === 'Enter') finishEditing(); else if (e.key === 'Escape') cancelEditing(); }}
                     />
                   ) : (
-                    <span className={hasShares ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
-                      onClick={(e) => { e.stopPropagation(); startEditing('stock', item.code, 'shares'); }}
-                      title="点击编辑股数"
-                    >
-                      {hasShares ? formatNumber(item.shares, 0) : '输入股数'}
-                    </span>
+                    <>
+                      <span className={hasShares ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
+                        onClick={(e) => { e.stopPropagation(); startEditing('stock', item.code, 'shares'); }}
+                        title="点击编辑股数"
+                      >
+                        {hasShares ? formatNumber(item.shares, 0) : '输入股数'}
+                      </span>
+                      {hasPosition && Number.isFinite(holdingAmount) ? (
+                        <span style={{ fontSize: 10, color: 'var(--text-1)', opacity: 0.55, display: 'block', marginTop: 2 }}>
+                          ≈¥{formatNumber(holdingAmount, 1)}
+                        </span>
+                      ) : null}
+                    </>
                   )}
                 </td>
                 <td>{formatRatioPercent(positionRatio)}</td>
@@ -224,6 +263,25 @@ export default function StockTable({
         </tbody>
       </table>
       <FloatingRefreshBtn onRefresh={onRefresh} spinning={refreshing} />
+
+      {tip ? (
+        <div className="signal-tooltip-fixed"
+          style={{ left: tip.x, top: tip.y }}
+          onMouseEnter={keepTip}
+          onMouseLeave={hideSignalTip}
+        >
+          <div className="signal-tooltip-header">{tip.name} — {tip.count} 个信号</div>
+          {tip.signals.slice(0, 15).map((s, i) => (
+            <div key={i} className="signal-tooltip-item">
+              <span className={'severity-tag severity-' + (s.severity === 'positive' ? 'positive' : s.severity === 'negative' ? 'negative' : 'info')}>
+                {s.severity === 'positive' ? '看多' : s.severity === 'negative' ? '看空' : '中性'}
+              </span>
+              <span className="signal-tooltip-label">{s.label}</span>
+            </div>
+          ))}
+          {tip.signals.length > 15 ? <div className="signal-tooltip-more">还有 {tip.signals.length - 15} 个信号...</div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -810,6 +810,10 @@ body.theme-light .index-tooltip {
   overflow: hidden;
 }
 
+.content-scroll.trades-scroll {
+  overflow: hidden;
+}
+
 .account-dashboard {
   display: grid;
   gap: 8px;
@@ -1318,6 +1322,9 @@ body.theme-light .data-table thead th {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.name-col .primary .name-text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1419,6 +1426,97 @@ body.theme-light .data-table thead th {
 @keyframes signal-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
+}
+
+/* ─── 技术信号严重度标签 ─── */
+.severity-tag {
+  display: inline;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.severity-tag.severity-positive,
+.severity-tag-inline.severity-positive {
+  background: color-mix(in srgb, var(--up) 18%, transparent);
+  color: var(--up);
+}
+
+.severity-tag.severity-negative,
+.severity-tag-inline.severity-negative {
+  background: color-mix(in srgb, var(--down) 18%, transparent);
+  color: var(--down);
+}
+
+.severity-tag.severity-info,
+.severity-tag-inline.severity-info {
+  background: color-mix(in srgb, var(--text-2) 18%, transparent);
+  color: var(--text-2);
+}
+
+.severity-tag-inline {
+  display: inline;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+/* ─── "技" 标签悬浮提示 ─── */
+.signal-badge-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.signal-tooltip-fixed {
+  position: fixed;
+  transform: translateY(-50%);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  white-space: nowrap;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.signal-tooltip-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+
+.signal-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.signal-tooltip-label {
+  color: var(--text-1);
+}
+
+.signal-tooltip-more {
+  font-size: 9px;
+  color: var(--text-2);
+  text-align: center;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
 }
 
 .special-star-icon {
@@ -2702,7 +2800,7 @@ body.theme-light .row-context-menu {
 
 .fund-holdings-header {
   display: grid;
-  grid-template-columns: 20px 1fr 48px 52px 52px 56px;
+  grid-template-columns: 20px 1fr 48px 52px 52px 56px auto;
   align-items: center;
   gap: 6px;
   padding: 4px 8px 6px;
@@ -2713,6 +2811,21 @@ body.theme-light .row-context-menu {
   margin-bottom: 4px;
 }
 
+.fund-add-stock-btn {
+  padding: 1px 6px;
+  font-size: 9px;
+  border: 1px solid var(--brand);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fund-add-stock-btn:hover {
+  background: var(--brand-soft);
+}
+
 .fund-holdings-list {
   display: flex;
   flex-direction: column;
@@ -2721,7 +2834,7 @@ body.theme-light .row-context-menu {
 
 .fund-holding-stock-row {
   display: grid;
-  grid-template-columns: 20px 1fr 48px 52px 52px 56px;
+  grid-template-columns: 20px 1fr 48px 52px 52px 56px auto;
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
@@ -3045,6 +3158,10 @@ body.theme-light .market-stats-panel {
   color: var(--text-1);
   line-height: 1.4;
   white-space: pre-line;
+}
+
+.notification-message strong {
+  color: var(--text-0);
 }
 
 .notification-price-row {

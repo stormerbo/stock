@@ -681,9 +681,13 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
             </>
           ) : null}
 
-          {/* Crosshair */}
-          <line x1="0" x2={SVG_W} y1={activeCloseY.toFixed(2)} y2={activeCloseY.toFixed(2)} className="crosshair-line" />
-          <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={mainHeight} className="crosshair-line" />
+          {/* Crosshair — 只在鼠标悬浮时显示 */}
+          {hoverIndex !== null ? (
+            <>
+              <line x1="0" x2={SVG_W} y1={activeCloseY.toFixed(2)} y2={activeCloseY.toFixed(2)} className="crosshair-line" />
+              <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={mainHeight} className="crosshair-line" />
+            </>
+          ) : null}
 
           {/* Minute: dot marker + time badge */}
           {isMinuteStyle ? (
@@ -743,7 +747,9 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
           ) : (
             <text x={2} y={10} textAnchor="start" className="axis-label">VOL {volumeUnit.unit}</text>
           )}
-          <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={volumeHeight} className="crosshair-line" />
+          {hoverIndex !== null ? (
+            <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={volumeHeight} className="crosshair-line" />
+          ) : null}
 
           {isMinuteStyle && hoverIndex !== null ? (() => {
             const amountWan = activeBar.close * activeBar.volume * 100 / 10000;
@@ -802,7 +808,9 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
             })}
             {showDif && <polyline points={createLinePath(macdData.dif, SVG_W, macdHeight, macdMin, macdMax)} className="dif-line" />}
             {showDea && <polyline points={createLinePath(macdData.dea, SVG_W, macdHeight, macdMin, macdMax)} className="dea-line" />}
-            <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={macdHeight} className="crosshair-line" />
+            {hoverIndex !== null ? (
+              <line x1={activeX.toFixed(2)} x2={activeX.toFixed(2)} y1="0" y2={macdHeight} className="crosshair-line" />
+            ) : null}
           </svg>
         ) : null}
       </div>

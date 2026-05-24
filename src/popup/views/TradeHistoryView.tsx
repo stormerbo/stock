@@ -10,6 +10,7 @@ import {
   deleteTrade,
 } from '../../shared/trade-history';
 import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
+import { toneClass } from '../utils/format';
 
 type Props = {
   code: string;
@@ -238,7 +239,7 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 10, color: 'var(--text-1)', marginBottom: 2 }}>已实现盈亏</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: computed.realizedPnl >= 0 ? '#10b981' : '#ef4444' }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }} className={toneClass(computed.realizedPnl)}>
               {computed.realizedPnl >= 0 ? '+' : ''}{formatNum(computed.realizedPnl)}
             </div>
           </div>

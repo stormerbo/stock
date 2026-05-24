@@ -13,6 +13,8 @@ export type StockHoldingConfig = {
   // hidden metadata for watchlist performance since added
   addedAt?: string;
   addedPrice?: number;
+  // 首次建仓时间（shares 从 0 变为 > 0 时记录），用于判断是否需要修正当日盈亏
+  positionOpenedAt?: string;
 };
 
 export type FundHoldingConfig = {
@@ -175,6 +177,20 @@ export function getShanghaiYesterday(): string {
   const shanghaiDate = new Date(`${y}-${m}-${d}T00:00:00+08:00`);
   shanghaiDate.setDate(shanghaiDate.getDate() - 1);
   return shanghaiDate.toISOString().slice(0, 10);
+}
+
+/** 获取最近一个交易日（周末回退到周五） */
+export function getLastTradingDay(): string {
+  const dayOfWeek = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    weekday: 'short',
+  }).format(new Date());
+  const today = getShanghaiToday();
+  const [y, m, d] = today.split('-').map(Number);
+  const offset = dayOfWeek === 'Sun' ? 2 : dayOfWeek === 'Sat' ? 1 : 0;
+  if (offset === 0) return today;
+  const date = new Date(Date.UTC(y, m - 1, d) - offset * 86400000);
+  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -848,7 +864,7 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
     const actualNav = mobData ? toNumber(mobData.NAV) : Number.NaN;
     const actualNavDate = mobData ? String(mobData.PDATE ?? '').trim() : '';
     const actualNavChange = mobData && mobData.NAVCHGRT ? toNumber(mobData.NAVCHGRT) : Number.NaN;
-    const navDisclosedToday = actualNavDate === getShanghaiToday();
+    const navDisclosedToday = actualNavDate === getLastTradingDay();
 
     const gzData = gzRes.status === 'fulfilled' ? gzRes.value : null;
     const estNav = toNumber(gzData?.gsz);
@@ -887,9 +903,11 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       // 已公布：用 actualNav - prevNav
       if (Number.isFinite(prevNav)) {
         estimatedProfit = (latestNav - prevNav) * units;
-      } else if (Number.isFinite(actualNavChange) && actualNavChange !== 0) {
-        // dwjz 缺失时，用 changePct 反推：profit ≈ latestNav * units * changePct / (100 + changePct)
-        estimatedProfit = (latestNav * units * actualNavChange) / (100 + actualNavChange);
+      } else if (Number.isFinite(changePct) && changePct !== 0) {
+        // dwjz 缺失时（如周末 fundgz 无数据），用 changePct 反推
+        estimatedProfit = (latestNav * units * changePct) / (100 + changePct);
+      } else if (Number.isFinite(changePct) && changePct === 0) {
+        estimatedProfit = 0;
       } else {
         estimatedProfit = Number.NaN;
       }
@@ -914,9 +932,9 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       holdingProfitRate,
       changePct,
       estimatedProfit,
-      updatedAt: gzData?.gztime
-        ? formatFundTime(gzData.gztime || '')
-        : (navDate || '-'),
+      updatedAt: navDisclosedToday && navDate
+        ? navDate.slice(5)  // 显示实际净值日期（如 "05-22"）
+        : (gzData?.gztime ? formatFundTime(gzData.gztime || '') : (navDate ? navDate.slice(5) : '-')),
     };
   } catch {
     return {

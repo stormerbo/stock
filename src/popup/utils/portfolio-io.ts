@@ -37,6 +37,8 @@ export function parseStockHoldings(input: unknown): StockHoldingConfig[] {
       const addedAt = String((item as StockHoldingConfig)?.addedAt ?? '').trim();
       if (Number.isFinite(addedPrice) && addedPrice > 0) parsed.addedPrice = addedPrice;
       if (addedAt) parsed.addedAt = addedAt;
+      const positionOpenedAt = String((item as StockHoldingConfig)?.positionOpenedAt ?? '').trim();
+      if (positionOpenedAt) parsed.positionOpenedAt = positionOpenedAt;
       return parsed;
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);

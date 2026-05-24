@@ -272,7 +272,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   // ─── 渲染 ───
 
   return (
-    <div className="table-panel" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="table-panel" style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
       <AssetCurveChart snapshots={assetSnapshots} />
       {/* 概况栏 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 12px', fontSize: 12, color: 'var(--text-1)' }}>

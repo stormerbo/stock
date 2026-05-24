@@ -46,8 +46,11 @@ export type StockDetailData = {
 type TencentKlineResponse = {
   data?: Record<string, {
     qfqday?: string[][];
+    day?: string[][];
     qfqweek?: string[][];
+    week?: string[][];
     qfqmonth?: string[][];
+    month?: string[][];
     year?: string[][];
     qt?: Record<string, string[]>;
   }>;
@@ -194,11 +197,11 @@ async function fetchFqPeriod(tencentCode: string, period: "day" | "week" | "mont
   const quote = payload?.qt?.[tencentCode];
   if (!payload || !quote) throw new Error("missing quote payload");
   const rows = period === "day"
-    ? payload.qfqday
+    ? (payload.qfqday ?? payload.day)
     : period === "week"
-      ? payload.qfqweek
+      ? (payload.qfqweek ?? payload.week)
       : period === "month"
-        ? payload.qfqmonth
+        ? (payload.qfqmonth ?? payload.month)
         : payload.year;
   return { quote, kline: parseKlineRows(rows) };
 }

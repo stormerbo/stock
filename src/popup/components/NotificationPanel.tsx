@@ -14,11 +14,11 @@ type Props = {
   setNotifSubTab: (tab: 'tech-report' | 'alerts') => void;
   techReportStatus: TechReportStatus;
   techReportDetail: TechReportDetail;
-  signalStocks: Record<string, { name: string; signalCount: number }> | null;
+  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null;
   unreadCount: number;
   markAllRead: () => void;
   markNotificationRead: (id: string) => void;
-  clearNotifications: () => void;
+  clearNotifications: (type?: 'alerts' | 'tech-report') => void;
   deleteNotification: (id: string) => void;
   setTechReportDetail: (d: TechReportDetail) => void;
   setTechReportStatus: (s: TechReportStatus) => void;
@@ -42,9 +42,14 @@ export default function NotificationPanel({
           {unreadCount > 0 && (
             <button type="button" className="notif-btn" onClick={markAllRead}>全部已读</button>
           )}
-          {notifications.length > 0 && (
-            <button type="button" className="notif-btn danger" onClick={clearNotifications}>清空</button>
-          )}
+          {(() => {
+            const currentList = notifSubTab === 'alerts'
+              ? notifications.filter(n => n.name !== '盘后技术报告')
+              : notifications.filter(n => n.name === '盘后技术报告');
+            return currentList.length > 0 && (
+              <button type="button" className="notif-btn danger" onClick={() => clearNotifications(notifSubTab)}>清空</button>
+            );
+          })()}
         </div>
       </div>
 

@@ -77,25 +77,51 @@ function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' |
 
 function renderNotificationMessage(message: string): ReactNode {
   const parts: ReactNode[] = [];
-  const regex = /([¥¥]?\d+\.\d+|\+\d+\.\d+%|-\d+\.\d+%)/g;
-  let lastIndex = 0;
-  let match;
-  while ((match = regex.exec(message)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(message.slice(lastIndex, match.index));
+  const lines = message.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    if (li > 0) parts.push('\n');
+
+    // 严重度标签 [看多]/[看空]/[中性]
+    const sevTagMatch = line.match(/^(\s*•\s*)(\[(看多|看空|中性)\])/);
+    if (sevTagMatch) {
+      const tag = sevTagMatch[3];
+      const rest = line.slice(sevTagMatch[1].length + sevTagMatch[2].length);
+      const className = tag === '看多' ? 'severity-positive' : tag === '看空' ? 'severity-negative' : 'severity-info';
+      parts.push(<span key={`l${li}`}>{sevTagMatch[1]}<span className={'severity-tag ' + className}>{sevTagMatch[2]}</span>{rest}</span>);
+      continue;
     }
-    const text = match[0];
-    if (text.startsWith('-')) {
-      parts.push(<span key={match.index} className="down notif-value">{text}</span>);
-    } else if (text.startsWith('+') || text.includes('%')) {
-      parts.push(<span key={match.index} className="up notif-value">{text}</span>);
+
+    // 股票名称(代码): → 加粗
+    const stockMatch = line.match(/^([^(]+)\(([^)]+)\):/);
+    if (stockMatch) {
+      parts.push(<strong key={`s${li}`}>{stockMatch[1]}({stockMatch[2]}):</strong>);
+      continue;
+    }
+
+    // 高亮价格/涨跌数值
+    const regex = /([¥¥]?\d+\.\d+|\+\d+\.\d+%|-\d+\.\d+%)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let hasValue = false;
+    while ((match = regex.exec(line)) !== null) {
+      hasValue = true;
+      if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
+      const text = match[0];
+      if (text.startsWith('-')) {
+        parts.push(<span key={`v${li}_${match.index}`} className="down notif-value">{text}</span>);
+      } else if (text.startsWith('+') || text.includes('%')) {
+        parts.push(<span key={`v${li}_${match.index}`} className="up notif-value">{text}</span>);
+      } else {
+        parts.push(<span key={`v${li}_${match.index}`} className="notif-value">{text}</span>);
+      }
+      lastIndex = regex.lastIndex;
+    }
+    if (hasValue) {
+      if (lastIndex < line.length) parts.push(line.slice(lastIndex));
     } else {
-      parts.push(<span key={match.index} className="notif-value">{text}</span>);
+      parts.push(line);
     }
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < message.length) {
-    parts.push(message.slice(lastIndex));
   }
   return parts.length > 0 ? parts : message;
 }
@@ -127,7 +153,7 @@ export default function App() {
     status: string; stockCount: number; signalCount: number; details: string; errorMessage: string;
   } | 'loading'>('loading');
   const [techReportDetail, setTechReportDetail] = useState<{ name: string; message: string; firedAt: number } | null>(null);
-  const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number }> | null>(null);
+  const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null>(null);
 
   useEffect(() => {
     // Load notifications and work mode config
@@ -217,9 +243,19 @@ export default function App() {
     });
   }, []);
 
-  const clearNotifications = useCallback(() => {
-    setNotifications([]);
-    chrome.storage.local.set({ notificationHistory: [] });
+  const clearNotifications = useCallback((type?: 'alerts' | 'tech-report') => {
+    setNotifications((prev) => {
+      let updated: NotificationRecord[];
+      if (type === 'alerts') {
+        updated = prev.filter((n) => n.name === '盘后技术报告');
+      } else if (type === 'tech-report') {
+        updated = prev.filter((n) => n.name !== '盘后技术报告');
+      } else {
+        updated = [];
+      }
+      chrome.storage.local.set({ notificationHistory: updated });
+      return updated;
+    });
   }, []);
 
   const deleteNotification = useCallback((id: string) => {
@@ -287,8 +323,9 @@ export default function App() {
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const scrollPosRef = useRef(0);
+  const returnContextRef = useRef<{ tab: PageTab } | null>(null);
 
-  // 统一出口：从 stockPositions + 交易记录汇总盈亏（区分隔夜/当日建仓）
+  // 统一出口：从 stockPositions + 交易记录汇总当日盈亏
   const correctedStockDaily = useMemo(() => {
     const today = getShanghaiToday();
     return stockPositions.reduce((sum, item) => {
@@ -333,7 +370,7 @@ export default function App() {
 
     return [
       { label: '总市值', value: formatNumber(totalMarketValue, 2), tone: 'neutral' },
-      { label: '总盈亏', value: formatNumber(correctedStockFloating + totalRealizedPnl, 1), tone: toneClass(correctedStockFloating + totalRealizedPnl) },
+      { label: '总盈亏', value: formatNumber(correctedStockFloating, 1), tone: toneClass(correctedStockFloating) },
       { label: '当日盈亏', value: formatNumber(correctedStockDaily, 1), tone: toneClass(correctedStockDaily) },
     ] as const;
   }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
@@ -506,38 +543,36 @@ export default function App() {
       }
 
       // 用交易记录修正当日盈亏
+      // 交易记录完整性检查
       const trades = tradeHistoryForPnl[holding.code];
+      let posInfo: { valid: boolean; shares: number } | null = null;
       if (trades && trades.length > 0) {
-        const result = computeDailyPnlFromTrades(trades, row.price, row.prevClose, today);
+        const pos = computePositionFromTrades(trades);
+        const sharesMatch = pos.shares > 0 && Math.abs(pos.shares - holding.shares) <= 1;
+        const soldToday = holding.shares <= 0 && trades.some(t => t.date === today && t.type === 'sell');
+        posInfo = { valid: sharesMatch || soldToday, shares: pos.shares };
+      }
+
+      if (posInfo?.valid) {
+        const result = computeDailyPnlFromTrades(trades!, row.price, row.prevClose, today);
         if (Number.isFinite(result.pnl)) {
           next.dailyPnl = result.pnl;
         }
-        // 同步修正浮动盈亏 = (现价 - 持仓成本) × 持仓股数
+        if (Number.isFinite(result.changePct)) {
+          next.dailyChangePct = result.changePct;
+        }
+
+        if (posInfo.shares > 0 && holding.cost > 0 && Number.isFinite(row.price)) {
+          next.floatingPnl = (row.price - holding.cost) * holding.shares;
+          next.cost = holding.cost;
+        }
+      } else {
+        // ======= 情况 1：无交易记录或记录不匹配 → 股票涨跌幅 =======
+        if (Number.isFinite(row.prevClose) && row.prevClose > 0) {
+          next.dailyChangePct = ((row.price - row.prevClose) / row.prevClose) * 100;
+        }
         if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
           next.floatingPnl = (row.price - holding.cost) * holding.shares;
-        }
-      }
-
-      // 当日盈亏百分比 = 当日盈亏 / (昨收 × 隔夜持仓股数 + 今日加仓成本)
-      // 使用统一的公式：无交易时 = 股票今日涨跌幅；有交易时 = 考虑买卖后的真实日收益率
-      if (Number.isFinite(next.dailyPnl) && Number.isFinite(row.prevClose) && row.prevClose > 0) {
-        let sharesAtOpen = holding.shares;
-        let extraCapital = 0;
-        if (trades && trades.length > 0) {
-          const beforeToday = computePositionFromTrades(trades.filter((t) => t.date < today));
-          if (beforeToday.shares > 0) {
-            sharesAtOpen = beforeToday.shares;
-          }
-          // 今日加仓资金 = 今日买入股数 × 买入价格 + 交易费用（与盈亏计算保持一致）
-          for (const t of trades) {
-            if (t.date === today && t.type === 'buy') {
-              extraCapital += t.shares * t.price + totalFees(t);
-            }
-          }
-        }
-        const totalCapital = (row.prevClose * sharesAtOpen) + extraCapital;
-        if (totalCapital > 0) {
-          next.dailyChangePct = (next.dailyPnl / totalCapital) * 100;
         }
       }
 
@@ -1283,9 +1318,24 @@ function clearIntradayIfStale(
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    setRefreshSig((prev) => prev + 1);
-    setTimeout(() => setRefreshing(false), 2000);
-  }, []);
+    // 硬刷新：直接从 API 拉取基金数据，不走 background 缓存
+    const doRefresh = async () => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({ type: 'force-refresh' }).catch(() => {});
+        }
+        // 基金数据：直接从天天基金 API 拉，确保用最新代码计算
+        if (fundHoldings.length > 0) {
+          const { fetchTiantianFundPosition } = await import('../shared/fetch');
+          const rows = await Promise.all(fundHoldings.map((h) => fetchTiantianFundPosition(h)));
+          setFundPositions(rows);
+        }
+      } catch { /* ignore */ }
+      setRefreshSig((prev) => prev + 1);
+      setTimeout(() => setRefreshing(false), 500);
+    };
+    doRefresh();
+  }, [fundHoldings]);
 
 
   const handleStockTradesChanged = useCallback(async (code: string) => {
@@ -1599,7 +1649,10 @@ function clearIntradayIfStale(
   };
 
   const closeStockDetail = () => {
+    const ctx = returnContextRef.current;
+    returnContextRef.current = null;
     setStockDetailTarget(null);
+    if (ctx) setActiveTab(ctx.tab);
   };
 
   const openFundDetail = (item: FundPosition) => {
@@ -1662,8 +1715,15 @@ function clearIntradayIfStale(
         const trimmed = value.trim();
         const num = trimmed === '' ? 0 : parseInt(trimmed, 10);
         if (!Number.isNaN(num) && num >= 0) {
+          const prevHolding = stockHoldings.find(h => h.code === code);
+          const prevShares = prevHolding?.shares ?? 0;
+          const isNewPosition = prevShares <= 0 && num > 0;
           setStockHoldings((prev) =>
-            prev.map((h) => (h.code === code ? { ...h, shares: num } : h))
+            prev.map((h) => (h.code === code ? {
+              ...h,
+              shares: num,
+              positionOpenedAt: isNewPosition ? getShanghaiToday() : h.positionOpenedAt,
+            } : h))
           );
           setStockPositions((prev) =>
             prev.map((item) => {
@@ -1671,9 +1731,12 @@ function clearIntradayIfStale(
               const floatingPnl = item.cost > 0 && Number.isFinite(item.price)
                 ? (item.price - item.cost) * num
                 : Number.NaN;
-              const dailyPnl = Number.isFinite(item.prevClose) && Number.isFinite(item.price)
-                ? (item.price - item.prevClose) * num
-                : Number.NaN;
+              // 今日新建仓：当日盈亏 = 浮动盈亏；已有持仓：用昨收差
+              const dailyPnl = isNewPosition
+                ? floatingPnl
+                : (Number.isFinite(item.prevClose) && Number.isFinite(item.price)
+                  ? (item.price - item.prevClose) * num
+                  : Number.NaN);
               return {
                 ...item,
                 shares: num,
@@ -1890,7 +1953,7 @@ function clearIntradayIfStale(
             </header>
           ) : null}
 
-          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${sectorDetailTarget || activeTab === 'trades' ? 'detail-mode' : ''}`}>
+          <section className={`content-scroll ${activeTab === 'stocks' && stockDetailTarget ? 'detail-mode' : ''} ${activeTab === 'funds' && fundDetailTarget ? 'detail-mode' : ''} ${sectorDetailTarget ? 'detail-mode' : ''} ${activeTab === 'trades' ? 'trades-scroll' : ''}`}>
             {activeTab === 'stocks' && stockDetailTarget && !sectorDetailTarget ? (
               <StockDetailView
                 code={stockDetailTarget.code}
@@ -1917,6 +1980,19 @@ function clearIntradayIfStale(
                   fundPosition={fundPositions.find((p) => p.code === fundDetailTarget.code)}
                   fundHolding={fundHoldings.find((h) => h.code === fundDetailTarget.code)}
                   onBack={closeFundDetail}
+                  onOpenStockDetail={(code, name) => {
+                    returnContextRef.current = { tab: 'funds' };
+                    setActiveTab('stocks');
+                    setStockDetailTarget({ code, name });
+                  }}
+                  onAddStock={(code, name) => {
+                    addStockToPortfolio({ code, name });
+                  }}
+                  existingStockCodes={new Set(
+                    stockHoldings
+                      .map(h => normalizeStockCode(h.code))
+                      .filter(Boolean)
+                  )}
                 />
               </DetailErrorBoundary>
             ) : null}
@@ -2047,6 +2123,19 @@ function clearIntradayIfStale(
                   const trimmed = line.trim();
                   if (!trimmed) return <br key={i} />;
                   if (trimmed.startsWith('•')) {
+                    // 解析严重度标签 [看多]/[看空]/[中性]
+                    const tagMatch = trimmed.match(/^(\s*•\s*)(\[(看多|看空|中性)\])/);
+                    if (tagMatch) {
+                      const tag = tagMatch[3];
+                      const rest = trimmed.slice(tagMatch[1].length + tagMatch[2].length);
+                      const className = tag === '看多' ? 'severity-positive' : tag === '看空' ? 'severity-negative' : 'severity-info';
+                      return (
+                        <div key={i} className="tech-report-detail-signal">
+                          <span className={'severity-tag-inline ' + className}>{tagMatch[2]}</span>
+                          <span>{rest}</span>
+                        </div>
+                      );
+                    }
                     return <div key={i} className="tech-report-detail-signal">{trimmed}</div>;
                   }
                   if (trimmed.startsWith('📊')) {

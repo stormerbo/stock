@@ -36,6 +36,9 @@ type Props = {
   fundPosition?: FundPosition;
   fundHolding?: FundHoldingConfig;
   onBack: () => void;
+  onOpenStockDetail?: (code: string, name: string) => void;
+  onAddStock?: (code: string, name: string) => void;
+  existingStockCodes?: Set<string>;
 };
 
 // -----------------------------------------------------------
@@ -821,7 +824,7 @@ const FUND_DETAIL_TABS: Array<{ label: string; value: FundDetailTab }> = [
 // Main Component
 // -----------------------------------------------------------
 
-export default function FundDetailView({ code, fundPosition, fundHolding, onBack }: Props) {
+export default function FundDetailView({ code, fundPosition, fundHolding, onBack, onOpenStockDetail, onAddStock, existingStockCodes }: Props) {
   const [detail, setDetail] = useState<FundDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1082,7 +1085,9 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
                   {detail.topHoldings.map((stock, i) => (
                     <div key={stock.code} className="fund-holding-stock-row">
                       <span className="fund-holding-stock-rank">{i + 1}</span>
-                      <span className="fund-holding-stock-name">
+                      <span className="fund-holding-stock-name"
+                        onClick={() => onOpenStockDetail?.(stock.code, stock.name)}
+                        style={{ cursor: onOpenStockDetail ? 'pointer' : 'default' }}>
                         {stock.name}
                         <span className="fund-holding-stock-code">（{stock.code}）</span>
                       </span>
@@ -1098,6 +1103,12 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
                       <span className="fund-holding-stock-prevchange">
                         {stock.prevChange === '新增' ? '新增' : stock.prevChange ? `${parseFloat(stock.prevChange) >= 0 ? '↑ ' : '↓ '}${Math.abs(parseFloat(stock.prevChange)).toFixed(2)}%` : '-'}
                       </span>
+                      {!existingStockCodes?.has(stock.code) && onAddStock ? (
+                        <button type="button" className="fund-add-stock-btn"
+                          onClick={(e) => { e.stopPropagation(); onAddStock(stock.code, stock.name); }}>
+                          +自选
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                 </div>
