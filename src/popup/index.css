@@ -5423,3 +5423,44 @@ body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
 .stop-block-item.loss { color: var(--down); }
 .stop-block-item.profit { color: var(--up); }
 .stop-block-divider { color: var(--border); margin: 0 2px; }
+
+/* ─── 新主题元素覆盖 ─── */
+body.theme-midnight .data-table thead th,
+body.theme-forest .data-table thead th,
+body.theme-apple .data-table thead th { color: var(--text-0); }
+body.theme-midnight .search-input::placeholder,
+body.theme-forest .search-input::placeholder,
+body.theme-apple .search-input::placeholder { color: var(--text-2); }
+body.theme-midnight .suggestion-item:hover,
+body.theme-forest .suggestion-item:hover,
+body.theme-apple .suggestion-item:hover { background: var(--glass-bg-strong); }
+body.theme-midnight .chart-tooltip,
+body.theme-forest .chart-tooltip,
+body.theme-apple .chart-tooltip { background: var(--bg-1) !important; }
+body.theme-midnight .chart-tooltip-label,
+body.theme-forest .chart-tooltip-label,
+body.theme-apple .chart-tooltip-label { color: var(--text-1); }
+body.theme-midnight .chart-tooltip-value,
+body.theme-forest .chart-tooltip-value,
+body.theme-apple .chart-tooltip-value { color: var(--text-0); }
+body.theme-midnight .popup-root::before,
+body.theme-forest .popup-root::before,
+body.theme-apple .popup-root::before { background: none; }
+body.theme-midnight .row-context-menu,
+body.theme-forest .row-context-menu,
+body.theme-apple .row-context-menu { background: color-mix(in srgb, var(--bg-1) 96%, white 4%); }
+body.theme-midnight .stock-detail-panel,
+body.theme-forest .stock-detail-panel,
+body.theme-apple .stock-detail-panel { background: color-mix(in srgb, var(--bg-1) 85%, transparent); }
+body.theme-midnight .tag-filter-btn.active,
+body.theme-forest .tag-filter-btn.active,
+body.theme-apple .tag-filter-btn.active { background: var(--brand); color: #fff; }
+body.theme-midnight .stop-ctx-menu,
+body.theme-forest .stop-ctx-menu,
+body.theme-apple .stop-ctx-menu { background: color-mix(in srgb, var(--bg-1) 96%, white 4%); }
+body.theme-midnight .search-box,
+body.theme-midnight .search-suggestions,
+body.theme-forest .search-box,
+body.theme-forest .search-suggestions,
+body.theme-apple .search-box,
+body.theme-apple .search-suggestions { background: color-mix(in srgb, var(--bg-1) 90%, transparent); border-color: var(--border-1); }
