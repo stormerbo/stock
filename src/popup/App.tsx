@@ -132,7 +132,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = window.localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return saved === 'light' || saved === 'midnight' || saved === 'forest' || saved === 'apple' || saved === 'dark' ? saved : 'dark';
   });
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
@@ -754,8 +754,8 @@ export default function App() {
   }, [portfolioReady, stockHoldings, fundHoldings]);
 
   useEffect(() => {
-    document.body.classList.remove('theme-light');
-    if (theme === 'light') document.body.classList.add('theme-light');
+    document.body.classList.remove('theme-light', 'theme-midnight', 'theme-forest', 'theme-apple');
+    if (theme !== 'dark') document.body.classList.add(`theme-${theme}`);
     window.localStorage.setItem('popup-theme', theme);
     try { chrome.storage.sync.set({ 'popup-theme': theme }); } catch { /* best effort */ }
   }, [theme]);
@@ -1313,9 +1313,11 @@ function clearIntradayIfStale(
     setKeyword('');
   };
 
-  const toggleTheme = () => setTheme((current) => (
-    current === 'dark' ? 'light' : 'dark'
-  ));
+  const ALL_THEMES: ThemeMode[] = ['dark', 'light', 'midnight', 'forest', 'apple'];
+  const cycleTheme = () => setTheme((current) => {
+    const idx = ALL_THEMES.indexOf(current);
+    return ALL_THEMES[(idx + 1) % ALL_THEMES.length];
+  });
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -1853,7 +1855,7 @@ function clearIntradayIfStale(
           unreadCount={unreadCount}
           marketStats={marketStats}
           theme={theme}
-          toggleTheme={toggleTheme}
+            toggleTheme={cycleTheme}
           openSettings={openSettings}
           clearDetailTargets={() => { setStockDetailTarget(null); setFundDetailTarget(null); }}
         />

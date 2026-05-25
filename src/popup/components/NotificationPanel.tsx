@@ -14,7 +14,7 @@ type Props = {
   setNotifSubTab: (tab: 'tech-report' | 'alerts') => void;
   techReportStatus: TechReportStatus;
   techReportDetail: TechReportDetail;
-  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null;
+  signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }>; score?: number }> | null;
   unreadCount: number;
   markAllRead: () => void;
   markNotificationRead: (id: string) => void;

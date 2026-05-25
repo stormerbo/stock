@@ -1,7 +1,15 @@
-import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Shield, Sun, Target, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileText, Moon, Palette, PieChart, Settings, Shield, Sun, Target, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatNumber, formatMarketAmount } from '../utils/format';
+
+const THEME_LABELS: Record<ThemeMode, string> = {
+  dark: '深色',
+  light: '浅色',
+  midnight: '午夜',
+  forest: '森林',
+  apple: '苹果',
+};
 
 type Props = {
   activeTab: PageTab;
@@ -128,8 +136,8 @@ export default function SideNav({
           className="nav-btn"
           onClick={toggleTheme}
         >
-          {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
-          <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+          <Palette size={10} />
+          <span>{THEME_LABELS[theme]}</span>
         </button>
       </div>
     </aside>

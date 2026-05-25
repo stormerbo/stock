@@ -70,6 +70,76 @@ body.theme-light {
   --down: var(--_green);
 }
 
+body.theme-midnight {
+  --bg-0: #0a0e1a;
+  --bg-1: #0f1629;
+  --bg-2: #182240;
+  --text-0: #e2e8f4;
+  --text-1: #a8b8d4;
+  --text-2: #6b7fa8;
+  --border-1: rgba(120, 150, 220, 0.14);
+  --border-2: rgba(120, 150, 220, 0.08);
+  --line: rgba(120, 150, 220, 0.10);
+  --glass-bg: rgba(90, 120, 220, 0.05);
+  --glass-bg-strong: rgba(90, 120, 220, 0.10);
+  --glass-border: rgba(90, 120, 220, 0.07);
+  --glass-shadow: 0 10px 28px rgba(5, 8, 20, 0.30);
+  --glass-blur: blur(20px) saturate(130%);
+  --brand: #7c8aff;
+  --brand-soft: rgba(124, 138, 255, 0.22);
+  --_red: #ff6b6b;
+  --_green: #2ed573;
+  --up: var(--_red);
+  --down: var(--_green);
+}
+
+body.theme-forest {
+  --bg-0: #0e140e;
+  --bg-1: #161f16;
+  --bg-2: #1e2a1e;
+  --text-0: #e8f0e4;
+  --text-1: #a8c4a0;
+  --text-2: #6b8a64;
+  --border-1: rgba(100, 160, 80, 0.16);
+  --border-2: rgba(100, 160, 80, 0.08);
+  --line: rgba(100, 160, 80, 0.12);
+  --glass-bg: rgba(80, 160, 60, 0.04);
+  --glass-bg-strong: rgba(80, 160, 60, 0.08);
+  --glass-border: rgba(80, 160, 60, 0.06);
+  --glass-shadow: 0 10px 28px rgba(5, 14, 4, 0.30);
+  --glass-blur: blur(20px) saturate(125%);
+  --brand: #e8a840;
+  --brand-soft: rgba(232, 168, 64, 0.22);
+  --_red: #ff7b5a;
+  --_green: #40c97a;
+  --up: var(--_red);
+  --down: var(--_green);
+}
+
+body.theme-apple {
+  --bg-0: #000000;
+  --bg-1: #1c1c1e;
+  --bg-2: #2c2c2e;
+  --text-0: #ffffff;
+  --text-1: #ebebf5;
+  --text-2: #98989d;
+  --text-3: #636366;
+  --border-1: rgba(84, 84, 88, 0.65);
+  --border-2: rgba(84, 84, 88, 0.35);
+  --line: rgba(84, 84, 88, 0.50);
+  --glass-bg: rgba(28, 28, 30, 0.80);
+  --glass-bg-strong: rgba(44, 44, 46, 0.90);
+  --glass-border: rgba(84, 84, 88, 0.50);
+  --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.40);
+  --glass-blur: blur(30px) saturate(200%);
+  --brand: #0a84ff;
+  --brand-soft: rgba(10, 132, 255, 0.18);
+  --_red: #ff453a;
+  --_green: #30d158;
+  --up: var(--_red);
+  --down: var(--_green);
+}
+
 /* 绿涨红跌（美股模式） */
 body.color-scheme-us {
   --up: var(--_green);
