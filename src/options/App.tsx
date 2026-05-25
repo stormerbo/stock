@@ -1699,6 +1699,8 @@ export default function App() {
                       chrome.downloads.download({ url: res.downloadUrl, filename: `money-helper-${res.version}.zip` });
                     } else if (res?.found) {
                       setUpdateStatus('未找到下载文件');
+                    } else if (res === undefined || res === null) {
+                      setUpdateStatus('检查失败');
                     } else {
                       setUpdateStatus('已是最新版本');
                     }

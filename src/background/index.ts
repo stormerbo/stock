@@ -403,8 +403,18 @@ type UpdateInfo = {
 
 async function checkForUpdate(): Promise<{ found: boolean; version?: string; downloadUrl?: string }> {
   try {
-    const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest');
-    if (!resp.ok) return { found: false };
+    const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest', {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'money-helper-chrome-extension/' + chrome.runtime.getManifest().version,
+      },
+    });
+    if (!resp.ok) {
+      if (resp.status === 403 || resp.status === 429) {
+        console.warn('[UpdateCheck] rate limited, will retry later');
+      }
+      return { found: false };
+    }
     const data = await resp.json() as {
       tag_name: string; html_url: string;
       assets?: Array<{ name: string; browser_download_url: string }>;
@@ -436,7 +446,8 @@ async function checkForUpdate(): Promise<{ found: boolean; version?: string; dow
       return { found: true, version: latestVer, downloadUrl };
     }
     return { found: false };
-  } catch {
+  } catch (e) {
+    console.warn('[UpdateCheck] error:', e);
     return { found: false };
   }
 }
