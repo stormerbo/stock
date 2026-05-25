@@ -15,6 +15,7 @@ import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../s
 import TradeHistoryView from "./TradeHistoryView";
 import StopSuggestBlock from "../components/StopSuggestBlock";
 import { loadCachedStopSuggestions, type StopSuggest } from "../../shared/stop-suggest";
+import { loadCachedTradeSignals, levelLabel, levelColor, type TradeSignal } from "../../shared/trade-signal";
 import type { StockPosition } from '../../shared/fetch';
 
 async function fillStopName(sugg: StopSuggest | null): Promise<StopSuggest | null> {
@@ -101,8 +102,15 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [stopSugg, setStopSugg] = useState<StopSuggest | null>(null);
+  const [tradeSignal, setTradeSignal] = useState<TradeSignal | null>(null);
 
   const hasTrades = trades.length > 0;
+
+  useEffect(() => {
+    loadCachedTradeSignals().then((signals) => {
+      setTradeSignal(signals.find((s) => s.code === code) ?? null);
+    });
+  }, [code]);
 
   // 加载止盈止损建议
   useEffect(() => {
@@ -303,6 +311,27 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
 
             {/* ─── Stop Suggest Block ─── */}
             <StopSuggestBlock suggestion={stopSugg} />
+
+            {tradeSignal ? (
+              <div className="trade-signal-card">
+                <div className="trade-signal-header">
+                  <span className="trade-signal-dot" style={{ background: levelColor(tradeSignal.level) }} />
+                  <strong>{levelLabel(tradeSignal.level)}</strong>
+                  <span className="trade-signal-score">{tradeSignal.score} 分</span>
+                </div>
+                <div className="trade-signal-dims">
+                  <span>趋势 {tradeSignal.details.trendScore}</span>
+                  <span>动量 {tradeSignal.details.momentumScore}</span>
+                  <span>风险 {tradeSignal.details.riskScore}</span>
+                  <span>支撑 {tradeSignal.details.supportScore}</span>
+                </div>
+                {tradeSignal.reasons.length > 0 ? (
+                  <div className="trade-signal-reasons">
+                    {tradeSignal.reasons.map((r, i) => <span key={i}>{r}</span>)}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* ─── Chart ─── */}

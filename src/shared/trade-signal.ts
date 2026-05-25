@@ -43,7 +43,7 @@ function levelInfo(score: number): TradeSignal['level'] {
   return 'avoid';
 }
 
-function levelLabel(level: TradeSignal['level']): string {
+export function levelLabel(level: TradeSignal['level']): string {
   switch (level) {
     case 'strong_buy': return '建议加仓';
     case 'buy': return '建议建仓';
