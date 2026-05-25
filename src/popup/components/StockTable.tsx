@@ -1,6 +1,7 @@
 import { Fragment, useState, useCallback, useRef } from 'react';
 import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
+import { levelColor } from '../../shared/trade-signal';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
@@ -21,6 +22,7 @@ type Props = {
   draggingCode: string | null;
   editingCell: EditingCell;
   signalStocks: Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }>; score?: number }> | null;
+  tradeSignals: Record<string, { score: number; level: string }> | null;
   stocksLoading: boolean;
   stocksError: string;
   stockTotalHoldingAmount: number;
@@ -63,7 +65,7 @@ function SortTh({
 
 export default function StockTable({
   rows, stockPinnedCode, sort, onToggleSort, draggingCode, editingCell,
-  signalStocks, stocksLoading, stocksError, stockTotalHoldingAmount,
+  signalStocks, tradeSignals, stocksLoading, stocksError, stockTotalHoldingAmount,
   openStockDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleStockDrop,
   onRemoveStock, getStockBadge, onRefresh, refreshing,
@@ -172,12 +174,15 @@ export default function StockTable({
                       <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                       {badge ? <span className={`stock-badge ${badge.tone}`}>{badge.label}</span> : null}
                       {signalStocks?.[item.code] ? (
-                        <span className="signal-badge-wrapper"
-                          onMouseEnter={(e) => showSignalTip(e, signalStocks[item.code].signals, signalStocks[item.code].name, signalStocks[item.code].signalCount)}
-                          onMouseLeave={hideSignalTip}
-                        >
-                          <span className={'stock-badge signal' + (() => { const sc = signalStocks[item.code].score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : ''; })()}>技</span>
-                        </span>
+                      <span className="signal-badge-wrapper"
+                        onMouseEnter={(e) => showSignalTip(e, signalStocks[item.code].signals, signalStocks[item.code].name, signalStocks[item.code].signalCount)}
+                        onMouseLeave={hideSignalTip}>
+                        <span className={'stock-badge signal' + (() => { const sc = signalStocks[item.code].score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : ''; })()}>技</span>
+                      </span>
+                      ) : null}
+                      {tradeSignals?.[item.code] ? (
+                        <span className="trade-dot" style={{ background: levelColor(tradeSignals[item.code].level as any) }}
+                          title={`交易评分 ${tradeSignals[item.code].score}`} />
                       ) : null}
                       {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                     </span>

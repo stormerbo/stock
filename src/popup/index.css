@@ -5355,3 +5355,6 @@ body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
 .stop-block-item.loss { color: var(--down); }
 .stop-block-item.profit { color: var(--up); }
 .stop-block-divider { color: var(--border); margin: 0 2px; }
+
+/* ─── Trade Signal Dot ─── */
+.trade-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: 4px; vertical-align: middle; }

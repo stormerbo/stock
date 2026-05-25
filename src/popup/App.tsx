@@ -156,6 +156,7 @@ export default function App() {
   } | 'loading'>('loading');
   const [techReportDetail, setTechReportDetail] = useState<{ name: string; message: string; firedAt: number } | null>(null);
   const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }>; score?: number }> | null>(null);
+  const [tradeSignals, setTradeSignals] = useState<Record<string, { score: number; level: string }> | null>(null);
 
   useEffect(() => {
     // Load notifications and work mode config
@@ -227,6 +228,17 @@ export default function App() {
       window.clearInterval(timer);
       chrome.storage.onChanged.removeListener(listener);
     };
+  }, []);
+
+  // 加载交易信号
+  useEffect(() => {
+    import('../shared/trade-signal').then(({ loadCachedTradeSignals }) => {
+      loadCachedTradeSignals().then((signals) => {
+        const map: Record<string, { score: number; level: string }> = {};
+        for (const s of signals) map[s.code] = { score: s.score, level: s.level };
+        setTradeSignals(Object.keys(map).length > 0 ? map : null);
+      });
+    });
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -2049,6 +2061,7 @@ function clearIntradayIfStale(
                 draggingCode={draggingCode}
                 editingCell={editingCell}
                 signalStocks={signalStocks}
+                tradeSignals={tradeSignals}
                 stocksLoading={stocksLoading}
                 stocksError={stocksError}
                 stockTotalHoldingAmount={stockTotalHoldingAmount}

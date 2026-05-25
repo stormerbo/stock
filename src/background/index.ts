@@ -57,6 +57,7 @@ import { diffHoldings, appendHoldingHistory, loadHoldingHistory, getHoldingsAtDa
 import { getKlineMap } from '../shared/kline-cache';
 import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleProfile } from '../shared/investment-style';
 import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
+import { calcAllTradeSignals, saveTradeSignalsCache, shouldRecalcTradeSignals } from '../shared/trade-signal';
 
 export type BadgeMode =
   | 'off'
@@ -1608,9 +1609,10 @@ async function triggerStyleAndStopCalc() {
     );
 
     // 投资风格画像
-    const [shouldCalcStyle, shouldCalcStop] = await Promise.all([
+    const [shouldCalcStyle, shouldCalcStop, shouldCalcSignal] = await Promise.all([
       shouldRecalcStyle(),
       shouldRecalcStop(),
+      shouldRecalcTradeSignals(),
     ]);
     if (shouldCalcStyle) {
       const stockFloating = positions.reduce((s, p) => s + (Number.isFinite(p.floatingPnl) ? p.floatingPnl : 0), 0);
@@ -1624,6 +1626,13 @@ async function triggerStyleAndStopCalc() {
     if (shouldCalcStop) {
       const suggestions = calcStopSuggest(holdings, klineByCode, currentPrices, nameByCode);
       if (suggestions.length > 0) await saveStopSuggestionsCache(suggestions);
+    }
+
+    // 交易信号
+    if (shouldCalcSignal) {
+      const holdingsWithName = holdings.map((h) => ({ code: h.code, name: nameByCode[h.code] || h.name || h.code }));
+      const signals = await calcAllTradeSignals(holdingsWithName, currentPrices);
+      if (signals.length > 0) await saveTradeSignalsCache(signals);
     }
   } catch (e) {
     console.warn('[StyleStop] calc failed:', e);
