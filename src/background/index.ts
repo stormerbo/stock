@@ -2159,7 +2159,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       try {
         await Promise.all([refreshStocks(), refreshFunds()]);
         // 同时清除缓存并触发画像/风控重算
-        await chrome.storage.local.remove(['_lastStyleCalcTime', '_lastStopCalcTime']);
+        await chrome.storage.local.remove(['_lastStyleCalcTime', '_lastStopCalcTime', '_lastTradeSignalTime']);
         void triggerStyleAndStopCalc();
         sendResponse({ ok: true });
       } catch (error) {
