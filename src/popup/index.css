@@ -1419,13 +1419,13 @@ body.theme-light .data-table thead th {
 
 .stock-badge.signal {
   background: linear-gradient(135deg, #f59e0b, #d97706);
-  animation: signal-blink 2s ease-in-out infinite;
+  animation: signal-blink 1.2s ease-in-out 3;
   cursor: help;
 }
 
 @keyframes signal-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
 /* ─── 技术信号严重度标签 ─── */
@@ -1484,7 +1484,6 @@ body.theme-light .data-table thead th {
 
 .stock-badge.signal-zero {
   background: color-mix(in srgb, var(--text-2) 50%, transparent) !important;
-  animation: none !important;
 }
 
 .signal-tooltip-fixed {
@@ -2281,11 +2280,11 @@ body.theme-light .row-context-menu {
   stroke-width: 1;
 }
 
-/* 同花顺均线配色：MA5白 MA10黄 MA30紫 MA60绿 */
+/* 同花顺均线配色：MA5亮蓝 MA10黄 MA30紫 MA60绿 */
 .ma5-line {
   fill: none;
-  stroke: #e8ecf4;
-  stroke-width: 1.1;
+  stroke: #4fc3f7;
+  stroke-width: 1.3;
 }
 
 .ma10-line {

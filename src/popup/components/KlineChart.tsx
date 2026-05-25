@@ -529,7 +529,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
       {/* ─── Indicator Toggles ─── */}
       {!isMinuteStyle ? (
         <div className="indicator-bar">
-          <IndicatorToggle label="MA5" color="#e8ecf4" value={lastMa5 === null ? '-' : formatNumber(lastMa5, 2)} active={showMa5} onClick={() => setShowMa5((v) => !v)} />
+          <IndicatorToggle label="MA5" color="#4fc3f7" value={lastMa5 === null ? '-' : formatNumber(lastMa5, 2)} active={showMa5} onClick={() => setShowMa5((v) => !v)} />
           <IndicatorToggle label="MA10" color="#f4c542" value={lastMa10 === null ? '-' : formatNumber(lastMa10, 2)} active={showMa10} onClick={() => setShowMa10((v) => !v)} />
           <IndicatorToggle label="MA20" color="#00a86b" value={lastMa20 === null ? '-' : formatNumber(lastMa20, 2)} active={showMa20} onClick={() => setShowMa20((v) => !v)} />
           <IndicatorToggle label="MA30" color="#d94ee0" value={lastMa30 === null ? '-' : formatNumber(lastMa30, 2)} active={showMa30} onClick={() => setShowMa30((v) => !v)} />

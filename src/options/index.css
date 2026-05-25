@@ -888,6 +888,25 @@ body.theme-light .color-scheme-item.active {
   background: var(--glass-bg-strong);
 }
 
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--glass-bg);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-icon:hover {
+  background: var(--glass-bg-strong);
+  color: var(--text-0);
+}
+
 /* ---- Toggle Switch ---- */
 
 .toggle-switch {
