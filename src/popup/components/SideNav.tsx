@@ -1,4 +1,4 @@
-import { BarChart3, Bell, Droplets, FileText, Moon, PieChart, Settings, Sun, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Shield, Sun, Target, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatNumber, formatMarketAmount } from '../utils/format';
@@ -24,7 +24,7 @@ export default function SideNav({
         className={`nav-btn ${activeTab === 'stocks' ? 'active' : ''}`}
         onClick={() => setActiveTab('stocks')}
       >
-        <BarChart3 size={12} />
+        <BarChart3 size={10} />
         <span>股票</span>
       </button>
       <button
@@ -32,7 +32,7 @@ export default function SideNav({
         className={`nav-btn ${activeTab === 'funds' ? 'active' : ''}`}
         onClick={() => setActiveTab('funds')}
       >
-        <WalletCards size={12} />
+        <WalletCards size={10} />
         <span>基金</span>
       </button>
       <button
@@ -40,7 +40,7 @@ export default function SideNav({
         className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}
         onClick={() => { setActiveTab('trades'); clearDetailTargets(); }}
       >
-        <FileText size={12} />
+        <FileText size={10} />
         <span>交易</span>
       </button>
       <button
@@ -49,7 +49,7 @@ export default function SideNav({
         onClick={() => { setActiveTab('notifications'); clearDetailTargets(); }}
         style={{ position: 'relative' }}
       >
-        <Bell size={12} />
+        <Bell size={10} />
         <span>通知</span>
         {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
       </button>
@@ -58,8 +58,24 @@ export default function SideNav({
         className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
         onClick={() => setActiveTab('account')}
       >
-        <PieChart size={12} />
+        <PieChart size={10} />
         <span>账户</span>
+      </button>
+      <button
+        type="button"
+        className={`nav-btn ${activeTab === 'style' ? 'active' : ''}`}
+        onClick={() => { setActiveTab('style'); clearDetailTargets(); }}
+      >
+        <Target size={10} />
+        <span>画像</span>
+      </button>
+      <button
+        type="button"
+        className={`nav-btn ${activeTab === 'risk' ? 'active' : ''}`}
+        onClick={() => { setActiveTab('risk'); clearDetailTargets(); }}
+      >
+        <Shield size={10} />
+        <span>风控</span>
       </button>
       <div className="nav-spacer" />
 
@@ -101,22 +117,19 @@ export default function SideNav({
 
         <button
           type="button"
-          className="nav-btn theme-toggle-btn"
+          className="nav-btn"
           onClick={openSettings}
-          aria-label="打开设置"
         >
-          <Settings size={12} />
+          <Settings size={10} />
           <span>设置</span>
         </button>
-
         <button
           type="button"
-          className="nav-btn theme-toggle-btn"
+          className="nav-btn"
           onClick={toggleTheme}
-          aria-label="切换主题"
         >
-          {theme === 'dark' ? <Sun size={12} /> : theme === 'light' ? <Moon size={12} /> : <Droplets size={12} />}
-          <span>{theme === 'dark' ? '浅色' : theme === 'light' ? '深色' : '玻璃'}</span>
+          {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
+          <span>{theme === 'dark' ? '浅色' : '深色'}</span>
         </button>
       </div>
     </aside>

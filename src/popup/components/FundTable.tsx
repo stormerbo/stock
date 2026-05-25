@@ -24,7 +24,7 @@ type Props = {
   fundPositionsLength: number;
   // event handlers
   openFundDetail: (item: FundRow) => void;
-  openRowContextMenu: (e: React.MouseEvent, kind: 'stock' | 'fund', code: string) => void;
+  openRowContextMenu: (e: React.MouseEvent, kind: 'stock' | 'fund', code: string, name: string) => void;
   startEditing: (kind: 'stock' | 'fund', code: string, field: 'cost' | 'shares' | 'units') => void;
   updateEditingValue: (v: string) => void;
   finishEditing: () => void;
@@ -85,7 +85,7 @@ export default function FundTable({
             const hasFundUnits = item.units > 0;
             return (
             <tr
-              onContextMenu={(event) => openRowContextMenu(event, 'fund', item.code)}
+              onContextMenu={(event) => openRowContextMenu(event, 'fund', item.code, item.name)}
               className={[
                 draggingCode === item.code ? 'dragging-row' : '',
                 isPinned ? 'locked-row' : '',

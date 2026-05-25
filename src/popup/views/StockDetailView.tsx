@@ -13,6 +13,21 @@ import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from 
 import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
 import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../shared/technical-analysis";
 import TradeHistoryView from "./TradeHistoryView";
+import StopSuggestBlock from "../components/StopSuggestBlock";
+import { loadCachedStopSuggestions, type StopSuggest } from "../../shared/stop-suggest";
+import type { StockPosition } from '../../shared/fetch';
+
+async function fillStopName(sugg: StopSuggest | null): Promise<StopSuggest | null> {
+  if (!sugg || (sugg.name && sugg.name !== sugg.code)) return sugg;
+  try {
+    const result = await chrome.storage.local.get(['stockPositions']);
+    const positions = (result.stockPositions ?? []) as StockPosition[];
+    const pos = positions.find((p) => p.code === sugg.code);
+    return pos?.name ? { ...sugg, name: pos.name } : sugg;
+  } catch {
+    return sugg;
+  }
+}
 
 type Props = {
   code: string;
@@ -85,8 +100,17 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [analysisSignals, setAnalysisSignals] = useState<TechnicalSignal[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const [stopSugg, setStopSugg] = useState<StopSuggest | null>(null);
 
   const hasTrades = trades.length > 0;
+
+  // 加载止盈止损建议
+  useEffect(() => {
+    loadCachedStopSuggestions().then(async (suggestions) => {
+      const found = suggestions.find((s) => s.code === code) ?? null;
+      setStopSugg(await fillStopName(found));
+    });
+  }, [code]);
 
   // 加载交易记录
   useEffect(() => {
@@ -276,6 +300,9 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
             {detail.period === "day" && detail.kline.length >= 10 ? (
               <RiskMetrics kline={detail.kline} />
             ) : null}
+
+            {/* ─── Stop Suggest Block ─── */}
+            <StopSuggestBlock suggestion={stopSugg} />
           </div>
 
           {/* ─── Chart ─── */}

@@ -54,6 +54,8 @@ import IntradayChart from './components/IntradayChart';
 import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
+import StyleProfile from './views/StyleProfile';
+import StopSuggestPanel from './views/StopSuggestPanel';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
 import ConfirmModal from './components/ConfirmModal';
@@ -130,7 +132,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = window.localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' || saved === 'glass' ? saved : 'dark';
+    return saved === 'light' || saved === 'dark' ? saved : 'dark';
   });
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
@@ -153,7 +155,7 @@ export default function App() {
     status: string; stockCount: number; signalCount: number; details: string; errorMessage: string;
   } | 'loading'>('loading');
   const [techReportDetail, setTechReportDetail] = useState<{ name: string; message: string; firedAt: number } | null>(null);
-  const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }> }> | null>(null);
+  const [signalStocks, setSignalStocks] = useState<Record<string, { name: string; signalCount: number; signals?: Array<{ label: string; severity: string }>; score?: number }> | null>(null);
 
   useEffect(() => {
     // Load notifications and work mode config
@@ -752,9 +754,8 @@ export default function App() {
   }, [portfolioReady, stockHoldings, fundHoldings]);
 
   useEffect(() => {
-    document.body.classList.remove('theme-light', 'theme-glass');
+    document.body.classList.remove('theme-light');
     if (theme === 'light') document.body.classList.add('theme-light');
-    else if (theme === 'glass') document.body.classList.add('theme-glass');
     window.localStorage.setItem('popup-theme', theme);
     try { chrome.storage.sync.set({ 'popup-theme': theme }); } catch { /* best effort */ }
   }, [theme]);
@@ -1313,7 +1314,7 @@ function clearIntradayIfStale(
   };
 
   const toggleTheme = () => setTheme((current) => (
-    current === 'dark' ? 'light' : current === 'light' ? 'glass' : 'dark'
+    current === 'dark' ? 'light' : 'dark'
   ));
 
   const handleRefresh = useCallback(() => {
@@ -1495,7 +1496,7 @@ function clearIntradayIfStale(
     }
   }, [fundPositions]);
 
-  const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string) => {
+  const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string, name: string) => {
     event.preventDefault();
     event.stopPropagation();
     const rootRect = popupRootRef.current?.getBoundingClientRect();
@@ -1509,19 +1510,21 @@ function clearIntradayIfStale(
     let calcY = event.clientY - rootTop;
     let calcX = event.clientX - rootLeft;
 
-    // 如果菜单底部超出视口，则翻转到鼠标上方（留足间隙避免仍被 popup 底部裁剪）
-    if (event.clientY + menuHeight + 12 > viewportH) {
-      calcY = Math.max(8, calcY - menuHeight - 24);
-    }
+    // 紧贴底部防止溢出，不做大幅度翻转
+    const rootBottom = (rootRect?.bottom ?? viewportH) - rootTop;
+    const maxY = rootBottom - menuHeight - 4;
+    if (calcY > maxY) calcY = Math.max(4, maxY);
+
     // 确保不超出右侧边界
     const rootVisibleRight = (rootRect?.right ?? window.innerWidth) - rootLeft;
     if (calcX + menuWidth + 8 > rootVisibleRight) {
-      calcX = Math.max(8, calcX - menuWidth - 8);
+      calcX = Math.max(4, calcX - menuWidth - 8);
     }
 
     setRowContextMenu({
       kind,
       code,
+      name,
       x: calcX,
       y: calcY,
     });
@@ -1856,7 +1859,7 @@ function clearIntradayIfStale(
         />
 
         <main className={`main-area ${stockDetailTarget || fundDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'style' && activeTab !== 'risk' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -1879,7 +1882,7 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'style' && activeTab !== 'risk' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
@@ -2091,6 +2094,14 @@ function clearIntradayIfStale(
               />
             ) : null}
 
+            {activeTab === 'style' ? (
+              <StyleProfile />
+            ) : null}
+
+            {activeTab === 'risk' ? (
+              <StopSuggestPanel />
+            ) : null}
+
             {activeTab === 'trades' ? (
               <TradeHistoryPage stockNames={stockNameMap} allStockCodes={stockHoldings.map(h => h.code)} onStockTradesChanged={handleStockTradesChanged} />
             ) : null}
@@ -2166,6 +2177,10 @@ function clearIntradayIfStale(
             style={{ left: rowContextMenu.x, top: rowContextMenu.y }}
             onMouseDown={(event) => event.stopPropagation()}
           >
+            <div className="ctx-menu-title">
+              {rowContextMenu.name}
+              <span className="ctx-menu-code">{rowContextMenu.code}</span>
+            </div>
             {rowContextMenu.kind === 'stock' ? (
               <>
                 <button type="button" onClick={() => toggleStockPinned(rowContextMenu.code)}>

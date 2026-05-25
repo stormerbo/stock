@@ -16,18 +16,19 @@ function getProxyPort(): chrome.runtime.Port {
   return _proxyPort;
 }
 
-async function proxyFetchText(url: string): Promise<string> {
+async function proxyFetchText(url: string, headers?: Record<string, string>): Promise<string> {
   if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     // Ensure Service Worker is kept alive via port connection
     getProxyPort();
-    const result = await chrome.runtime.sendMessage<{ type: 'fetch-text'; url: string }, { ok: boolean; status: number; text?: string; error?: string }>({
+    const result = await chrome.runtime.sendMessage<{ type: 'fetch-text'; url: string; headers?: Record<string, string> }, { ok: boolean; status: number; text?: string; error?: string }>({
       type: 'fetch-text',
       url,
+      headers,
     });
     if (result?.ok && typeof result.text === 'string') return result.text;
     throw new Error(result?.error || `request failed: ${result?.status ?? 0}`);
   }
-  const response = await fetch(url);
+  const response = await fetch(url, headers ? { headers } : undefined);
   return response.text();
 }
 
@@ -268,32 +269,105 @@ async function fetchNavDiagram(code: string, range: string): Promise<FundNavPoin
   }
 }
 
-/** 4. 累计收益率走势图 (FundYieldDiagramNew.ashx) */
+/** 4. 累计收益率走势图（从净值数据计算 + 沪深300基准，默认 3 年） */
 async function fetchYieldDiagram(code: string): Promise<{ points: FundYieldPoint[]; benchmarkName: string }> {
   try {
-    // Fetch 1-year yield data by default
+    // 并行拉取基金净值和沪深300指数 K 线
     const params = new URLSearchParams({
       FCODE: code,
-      RANGE: 'n',
-      ...API_COMMON,
+      RANGE: '3n',
+      deviceid: 'Wap',
+      plat: 'Wap',
+      product: 'EFund',
+      version: '2.0.0',
       _: String(Date.now()),
     });
-    const url = `https://fundmobapi.eastmoney.com/FundMApi/FundYieldDiagramNew.ashx?${params}`;
-    const text = await proxyFetchText(url);
-    const data = JSON.parse(text) as {
-      Datas?: Array<{ PDATE: string; YIELD: string; INDEXYIED: string }>;
-      Expansion?: { INDEXNAME?: string };
+    const [navText, klineData] = await Promise.all([
+      proxyFetchText(`https://fundmobapi.eastmoney.com/FundMApi/FundNetDiagram.ashx?${params}`),
+      // 沪深 300 指数 K 线（用于基准收益率，使用 day 字段而非 qfqday）
+      (async () => {
+        try {
+          const resp = await fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz399300,day,,,800,qfq');
+          const json = await resp.json() as { data?: Record<string, { day?: string[][] }> };
+          const rows = json.data?.sz399300?.day ?? [];
+          return rows
+            .filter((r) => r.length >= 3)
+            .map((r) => {
+              const rawDate = String(r[0] ?? '');
+              const date = rawDate.length === 8
+                ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+                : rawDate;
+              return { date, close: parseFloat(String(r[2])) };
+            })
+            .filter((r) => r.date && r.date.length >= 10 && Number.isFinite(r.close));
+        } catch { return []; }
+      })(),
+    ]);
+
+    const navData = JSON.parse(navText) as {
+      Datas?: Array<{ FSRQ: string; LJJZ: string }>;
     };
-    const items = data.Datas ?? [];
-    const benchmarkName = data.Expansion?.INDEXNAME || '';
-    const points: FundYieldPoint[] = items.map((item) => ({
-      date: item.PDATE || '',
-      yield: toNumber(item.YIELD),
-      indexYield: toNumber(item.INDEXYIED),
-      benchmarkName,
-    }));
-    points.sort((a, b) => a.date.localeCompare(b.date));
-    return { points, benchmarkName };
+    const navItems = navData.Datas ?? [];
+    if (navItems.length < 2) return { points: [], benchmarkName: '' };
+
+    // 基金累计净值 → 累计收益率
+    const fundSorted = navItems
+      .map((item) => ({ date: item.FSRQ, ljjz: toNumber(item.LJJZ) }))
+      .filter((item) => item.date && Number.isFinite(item.ljjz) && item.ljjz > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (fundSorted.length < 2) return { points: [], benchmarkName: '' };
+
+    const firstLjjz = fundSorted[0].ljjz;
+
+    // 沪深 300 收盘价 → 累计收益率
+    const indexSorted = klineData
+      .filter((k) => k.date && Number.isFinite(k.close) && k.close > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const firstIndexClose = indexSorted.length > 0 ? indexSorted[0].close : 0;
+
+    // 合并两个数据集
+    const allDates = new Set<string>();
+    for (const item of fundSorted) allDates.add(item.date);
+    for (const item of indexSorted) allDates.add(item.date);
+    const mergedDates = [...allDates].sort();
+
+    const getFundYield = (date: string): number | null => {
+      // 找最近的不超过该日期的基金净值
+      for (let i = fundSorted.length - 1; i >= 0; i--) {
+        if (fundSorted[i].date <= date && fundSorted[i].date) {
+          return ((fundSorted[i].ljjz / firstLjjz) - 1) * 100;
+        }
+      }
+      return null;
+    };
+
+    const getIndexYield = (date: string): number | null => {
+      if (!firstIndexClose) return null;
+      for (let i = indexSorted.length - 1; i >= 0; i--) {
+        if (indexSorted[i].date <= date) {
+          return ((indexSorted[i].close / firstIndexClose) - 1) * 100;
+        }
+      }
+      return null;
+    };
+
+    const points: FundYieldPoint[] = [];
+    for (const date of mergedDates) {
+      const fundYield = getFundYield(date);
+      const indexYield = getIndexYield(date);
+      if (fundYield !== null) {
+        points.push({
+          date,
+          yield: fundYield,
+          indexYield: indexYield ?? Number.NaN,
+          benchmarkName: '沪深300',
+        });
+      }
+    }
+
+    return { points, benchmarkName: '沪深300' };
   } catch {
     return { points: [], benchmarkName: '' };
   }
@@ -671,14 +745,15 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  const validData = data.filter((d) => Number.isFinite(d.yield) && Number.isFinite(d.indexYield));
+  const validData = data.filter((d) => Number.isFinite(d.yield));
   if (validData.length < 2) {
     return <div className="fund-chart-empty">暂无收益对比数据</div>;
   }
 
+  const hasIndex = validData.some((d) => Number.isFinite(d.indexYield));
   const yields = validData.map((d) => d.yield);
   const indexYields = validData.map((d) => d.indexYield);
-  const allValues = [...yields, ...indexYields];
+  const allValues = hasIndex ? [...yields, ...indexYields] : yields;
   const minVal = Math.min(...allValues);
   const maxVal = Math.max(...allValues);
   const range = Math.max(maxVal - minVal, 0.01);
@@ -691,12 +766,12 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
   const toY = (val: number) => padding.top + (1 - (val - displayMin) / displayRange) * chartHeight;
 
   const fundPath = validData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(2)} ${toY(d.yield).toFixed(2)}`).join(' ');
-  const indexPath = validData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(2)} ${toY(d.indexYield).toFixed(2)}`).join(' ');
+  const indexPath = hasIndex ? validData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(2)} ${toY(d.indexYield).toFixed(2)}`).join(' ') : '';
 
   const lastYield = yields[yields.length - 1];
-  const lastIndexYield = indexYields[indexYields.length - 1];
+  const lastIndexYield = hasIndex ? indexYields.filter(Number.isFinite).pop() ?? 0 : Number.NaN;
   const fundColor = lastYield >= 0 ? '#ff5e57' : '#1fc66d';
-  const indexColor = lastIndexYield >= 0 ? '#ff9f43' : '#5f7cff';
+  const indexColor = Number.isFinite(lastIndexYield) ? (lastIndexYield >= 0 ? '#ff9f43' : '#5f7cff') : '#999';
 
   const activeIndex = hoverIndex === null ? validData.length - 1 : Math.max(0, Math.min(hoverIndex, validData.length - 1));
   const activeItem = validData[activeIndex];
@@ -736,7 +811,9 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
         ))}
 
         {/* Index line */}
-        <path d={indexPath} fill="none" stroke={indexColor} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4,3" />
+        {hasIndex && indexPath ? (
+          <path d={indexPath} fill="none" stroke={indexColor} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4,3" />
+        ) : null}
 
         {/* Fund line */}
         <path d={fundPath} fill="none" stroke={fundColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -758,13 +835,17 @@ function YieldChart({ data }: { data: FundYieldPoint[] }) {
         {/* Crosshair + dots */}
         <line x1={toX(activeIndex).toFixed(2)} x2={toX(activeIndex).toFixed(2)} y1={padding.top} y2={height - padding.bottom} className="fund-crosshair" />
         <circle cx={toX(activeIndex).toFixed(2)} cy={toY(activeItem.yield).toFixed(2)} r="3.5" fill="white" stroke={fundColor} strokeWidth="2" />
-        <circle cx={toX(activeIndex).toFixed(2)} cy={toY(activeItem.indexYield).toFixed(2)} r="2.5" fill="white" stroke={indexColor} strokeWidth="1.5" />
+        {hasIndex && Number.isFinite(activeItem.indexYield) ? (
+          <circle cx={toX(activeIndex).toFixed(2)} cy={toY(activeItem.indexYield).toFixed(2)} r="2.5" fill="white" stroke={indexColor} strokeWidth="1.5" />
+        ) : null}
       </svg>
 
       {/* Legend */}
       <div className="fund-yield-legend">
         <span><span className="fund-legend-dot" style={{ background: fundColor }} />本基金 {formatPercent(activeItem.yield)}</span>
-        <span><span className="fund-legend-dot" style={{ background: indexColor, opacity: 0.7 }} />{activeItem.benchmarkName || '基准指数'} {formatPercent(activeItem.indexYield)}</span>
+        {hasIndex && Number.isFinite(activeItem.indexYield) ? (
+          <span><span className="fund-legend-dot" style={{ background: indexColor, opacity: 0.7 }} />{activeItem.benchmarkName || '基准指数'} {formatPercent(activeItem.indexYield)}</span>
+        ) : null}
       </div>
 
       {/* Floating tooltip popup（类似走势图弹窗） */}

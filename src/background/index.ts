@@ -51,10 +51,12 @@ import {
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
 import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, computePositionFromTrades, migrateTradeHistoryToLocal, type StockTradeRecord } from '../shared/trade-history';
-import { detectAllSignals, fetchDayFqKline } from '../shared/technical-analysis';
+import { detectAllSignals, fetchDayFqKline, type KlinePoint } from '../shared/technical-analysis';
 import { recalcSnapshotsInRange, type RecalcContext } from '../shared/recalc-snapshot';
 import { diffHoldings, appendHoldingHistory, loadHoldingHistory, getHoldingsAtDate } from '../shared/holding-history';
 import { getKlineMap } from '../shared/kline-cache';
+import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleProfile } from '../shared/investment-style';
+import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
 
 export type BadgeMode =
   | 'off'
@@ -98,11 +100,13 @@ const ALARM_TECH_REPORT = 'daily-technical-report';
 const ALARM_UPDATE_CHECK = 'check-update';
 const UPDATE_INFO_KEY = 'extensionUpdateInfo';
 const UPDATE_COOLDOWN_KEY = 'updateCooldown';
+const LAST_UPDATE_CHECK_KEY = '_lastUpdateCheckTime';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
 const API_ERROR_KEY = '_apiErrorState';
 const API_ERROR_COOLDOWN_MS = 30 * 60 * 1000; // 30 分钟
 let refreshStocksInFlight = false;
 let refreshFundsInFlight = false;
+let refreshUpdateCheckInFlight = false;
 
 const DEFAULT_BADGE_CONFIG: BadgeConfig = {
   enabled: true,
@@ -380,7 +384,8 @@ async function handleAlarm(name: string) {
 const GITHUB_REPO = 'stormerbo/stock';
 
 function parseVersion(v: string): number[] {
-  return v.replace(/^v/i, '').split('.').map(Number);
+  const parts = v.replace(/^v/i, '').match(/\d+/g);
+  return parts ? parts.map(Number) : [];
 }
 
 function isNewerVersion(latest: string, current: string): boolean {
@@ -402,6 +407,20 @@ type UpdateInfo = {
 };
 
 async function checkForUpdate(): Promise<{ found: boolean; version?: string; downloadUrl?: string }> {
+  if (refreshUpdateCheckInFlight) return { found: false };
+  refreshUpdateCheckInFlight = true;
+  try {
+    return await checkForUpdateInternal(0);
+  } finally {
+    refreshUpdateCheckInFlight = false;
+  }
+}
+
+async function checkForUpdateInternal(retryCount: number, retryDelayMs = 0): Promise<{ found: boolean; version?: string; downloadUrl?: string }> {
+  const MAX_RETRIES = 2;
+  if (retryDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, retryDelayMs));
+  }
   try {
     const resp = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest', {
       headers: {
@@ -410,9 +429,14 @@ async function checkForUpdate(): Promise<{ found: boolean; version?: string; dow
       },
     });
     if (!resp.ok) {
-      if (resp.status === 403 || resp.status === 429) {
-        console.warn('[UpdateCheck] rate limited, will retry later');
+      if ((resp.status === 403 || resp.status === 429) && retryCount < MAX_RETRIES) {
+        const resetHeader = resp.headers.get('x-ratelimit-reset');
+        const resetTime = resetHeader ? Number(resetHeader) * 1000 : 0;
+        const delay = resetTime > Date.now() ? Math.min(resetTime - Date.now() + 1000, 60 * 60 * 1000) : (retryCount + 1) * 30_000;
+        console.warn(`[UpdateCheck] rate limited, retry ${retryCount + 1}/${MAX_RETRIES} in ${Math.round(delay / 1000)}s`);
+        return checkForUpdateInternal(retryCount + 1, delay);
       }
+      console.warn(`[UpdateCheck] fetch failed: HTTP ${resp.status}`);
       return { found: false };
     }
     const data = await resp.json() as {
@@ -421,6 +445,9 @@ async function checkForUpdate(): Promise<{ found: boolean; version?: string; dow
     };
     const latestVer = data.tag_name.replace(/^v/i, '');
     const currentVer = chrome.runtime.getManifest().version;
+
+    // 记录最后检查时间
+    void chrome.storage.local.set({ [LAST_UPDATE_CHECK_KEY]: Date.now() });
 
     if (isNewerVersion(latestVer, currentVer)) {
       // 找到第一个 .zip 格式的资产
@@ -448,6 +475,8 @@ async function checkForUpdate(): Promise<{ found: boolean; version?: string; dow
     return { found: false };
   } catch (e) {
     console.warn('[UpdateCheck] error:', e);
+    // 网络错误也记录时间（避免 SW 频繁重启时反复尝试）
+    void chrome.storage.local.set({ [LAST_UPDATE_CHECK_KEY]: Date.now() });
     return { found: false };
   }
 }
@@ -467,6 +496,8 @@ function startRefreshLoop() {
   clearAlarms();
   // 每 6 小时检查一次 GitHub 新版本
   chrome.alarms.create(ALARM_UPDATE_CHECK, { periodInMinutes: 6 * 60 });
+  // SW 重启后立即执行一次更新检查
+  void checkForUpdate();
   void loadRefreshConfig().then((config) => {
     setupAlarms(config);
     // 立即刷新一次
@@ -637,6 +668,9 @@ async function refreshStocks() {
         await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });
       }
     }
+
+    // 异步触发风格画像和止盈止损计算
+    void triggerStyleAndStopCalc();
   } catch (e) {
     console.warn('[Portfolio Pulse] stock refresh failed:', e);
     void notifyApiError('股票行情', 'stockQuoteErrorAt');
@@ -1524,6 +1558,81 @@ async function refreshIndexes() {
 }
 
 // -----------------------------------------------------------
+// 风格画像 + 止盈止损计算（refreshStocks 完成后异步触发）
+// -----------------------------------------------------------
+
+let styleStopCalcInFlight = false;
+
+async function triggerStyleAndStopCalc() {
+  if (styleStopCalcInFlight) return;
+  styleStopCalcInFlight = true;
+  try {
+    const [posResult, holdingsResult, fundResult, tradeResult] = await Promise.all([
+      chrome.storage.local.get(['stockPositions']),
+      chrome.storage.sync.get(['stockHoldings']),
+      chrome.storage.local.get(['fundPositions']),
+      chrome.storage.local.get([TRADE_HISTORY_KEY]),
+    ]);
+    const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as StockPosition[];
+    const holdings = (Array.isArray(holdingsResult.stockHoldings) ? holdingsResult.stockHoldings : []) as StockHoldingConfig[];
+    const fundPositions = (Array.isArray(fundResult.fundPositions) ? fundResult.fundPositions : []) as FundPosition[];
+    const allTrades = (tradeResult[TRADE_HISTORY_KEY] ?? {}) as Record<string, StockTradeRecord[]>;
+    if (holdings.length === 0 && fundPositions.filter((f) => f.units > 0).length === 0) return;
+
+    // 获取每只持仓股票的 K 线数据
+    const klineByCode: Record<string, KlinePoint[]> = {};
+    const closePricesByCode: Record<string, number[]> = {};
+    const currentPrices: Record<string, number> = {};
+    const nameByCode: Record<string, string> = {};
+    for (const h of holdings) {
+      const pos = positions.find((p) => p.code === h.code);
+      if (pos) {
+        if (Number.isFinite(pos.price)) currentPrices[h.code] = pos.price;
+        if (pos.name) nameByCode[h.code] = pos.name;
+      }
+    }
+
+    // 异步并行拉 K 线
+    await pMap(
+      holdings,
+      async (h) => {
+        try {
+          const kline = await fetchDayFqKline(h.code, 60);
+          klineByCode[h.code] = kline;
+          closePricesByCode[h.code] = kline.map((k) => k.close).filter((v) => Number.isFinite(v));
+        } catch {
+          // skip
+        }
+      },
+      4,
+    );
+
+    // 投资风格画像
+    const [shouldCalcStyle, shouldCalcStop] = await Promise.all([
+      shouldRecalcStyle(),
+      shouldRecalcStop(),
+    ]);
+    if (shouldCalcStyle) {
+      const stockFloating = positions.reduce((s, p) => s + (Number.isFinite(p.floatingPnl) ? p.floatingPnl : 0), 0);
+      const fundFloating = fundPositions.reduce((s, p) => s + (Number.isFinite(p.holdingProfit) ? p.holdingProfit : 0), 0);
+      const floatingPnl = stockFloating + fundFloating;
+      const profile = calcStyleProfile(holdings, allTrades, closePricesByCode, [], fundPositions, floatingPnl);
+      if (profile) await saveStyleProfileCache(profile);
+    }
+
+    // 止盈止损建议
+    if (shouldCalcStop) {
+      const suggestions = calcStopSuggest(holdings, klineByCode, currentPrices, nameByCode);
+      if (suggestions.length > 0) await saveStopSuggestionsCache(suggestions);
+    }
+  } catch (e) {
+    console.warn('[StyleStop] calc failed:', e);
+  } finally {
+    styleStopCalcInFlight = false;
+  }
+}
+
+// -----------------------------------------------------------
 // 角标渲染
 // -----------------------------------------------------------
 
@@ -1798,8 +1907,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
     }
   }
-  startRefreshLoop();
-  // 等数据刷新后更新悬浮标题
+  // startRefreshLoop() 已在模块顶层执行，onInstalled 无需重复调用
   setTimeout(() => void updateHoverTitleFromStorage(), 3000);
 });
 
@@ -1871,11 +1979,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (request.type === 'fetch-text' && typeof request.url === 'string') {
     const url = request.url;
+    const customHeaders = (message as { type: string; url: string; headers?: Record<string, string> }).headers;
     keepAlive();
     void (async () => {
       try {
         const response = await fetch(url, {
-          headers: { 'Referer': 'https://quote.eastmoney.com/' },
+          headers: customHeaders || { 'Referer': 'https://quote.eastmoney.com/' },
         });
         // Tencent finance uses GB18030 encoding
         const isGb18030 = url.includes('qt.gtimg.cn');
@@ -2040,6 +2149,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void (async () => {
       try {
         await Promise.all([refreshStocks(), refreshFunds()]);
+        // 同时清除缓存并触发画像/风控重算
+        await chrome.storage.local.remove(['_lastStyleCalcTime', '_lastStopCalcTime']);
+        void triggerStyleAndStopCalc();
         sendResponse({ ok: true });
       } catch (error) {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });

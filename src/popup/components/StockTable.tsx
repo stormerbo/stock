@@ -26,7 +26,7 @@ type Props = {
   stockTotalHoldingAmount: number;
   // event handlers
   openStockDetail: (item: StockRow) => void;
-  openRowContextMenu: (e: React.MouseEvent, kind: 'stock' | 'fund', code: string) => void;
+  openRowContextMenu: (e: React.MouseEvent, kind: 'stock' | 'fund', code: string, name: string) => void;
   startEditing: (kind: 'stock' | 'fund', code: string, field: 'cost' | 'shares' | 'units') => void;
   updateEditingValue: (v: string) => void;
   finishEditing: () => void;
@@ -84,7 +84,21 @@ export default function StockTable({
     if (!signals || signals.length === 0) return;
     if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTip({ x: Math.min(rect.right + 8, window.innerWidth - 290), y: rect.top + rect.height / 2, signals, name, count });
+    const TOOLTIP_W = 290;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    let x = rect.right + 8;
+    // translateY(-100%)：tooltip 底部对齐 Y，上方延伸
+    let y = Math.min(e.clientY + 8, viewportH - 4);
+    if (y < 52) y = 52;
+
+    if (x + TOOLTIP_W + 8 > viewportW) {
+      x = rect.left - TOOLTIP_W - 8;
+    }
+    if (x < 8) x = 8;
+
+    setTip({ x, y, signals, name, count });
   }, []);
 
   const hideSignalTip = useCallback(() => {
@@ -133,7 +147,7 @@ export default function StockTable({
                   draggingCode === item.code ? 'dragging-row' : '',
                   isPinned ? 'locked-row' : '',
                 ].filter(Boolean).join(' ')}
-                onContextMenu={(event) => openRowContextMenu(event, 'stock', item.code)}
+                onContextMenu={(event) => openRowContextMenu(event, 'stock', item.code, item.name)}
                 draggable={!isPinned}
                 onDragStart={() => handleDragStart(item.code)}
                 onDragEnd={handleDragEnd}

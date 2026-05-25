@@ -517,24 +517,22 @@ export default function App() {
   const [saved, setSaved] = useState(false);
 
   // ---- Theme ----
-  const [theme, setTheme] = useState<'dark' | 'light' | 'glass'>(() => {
-    const saved = localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' || saved === 'glass' ? saved : 'dark';
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('options-theme');
+    return saved === 'light' || saved === 'dark' ? saved : 'dark';
   });
 
   useEffect(() => {
-    document.body.classList.remove('theme-light', 'theme-glass');
-    if (theme === 'light') document.body.classList.add('theme-light');
-    else if (theme === 'glass') document.body.classList.add('theme-glass');
+  document.body.classList.remove('theme-light');
+  if (theme === 'light') document.body.classList.add('theme-light');
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : prev === 'light' ? 'glass' : 'dark';
+      const next = prev === 'dark' ? 'light' : 'dark';
       localStorage.setItem('popup-theme', next);
-      document.body.classList.remove('theme-light', 'theme-glass');
+      document.body.classList.remove('theme-light');
       if (next === 'light') document.body.classList.add('theme-light');
-      else if (next === 'glass') document.body.classList.add('theme-glass');
       // 同步到 storage，供 content script 读取
       try { chrome.storage.sync.set({ 'popup-theme': next }); } catch { /* best effort */ }
       return next;

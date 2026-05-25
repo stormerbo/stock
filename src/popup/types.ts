@@ -7,8 +7,8 @@ import type {
   MarketStats,
 } from '../shared/fetch';
 
-export type PageTab = 'stocks' | 'funds' | 'notifications' | 'trades' | 'account';
-export type ThemeMode = 'dark' | 'light' | 'glass';
+export type PageTab = 'stocks' | 'funds' | 'notifications' | 'trades' | 'account' | 'style' | 'risk';
+export type ThemeMode = 'dark' | 'light';
 
 export type IndexDetailTarget = {
   code: string;
@@ -28,8 +28,8 @@ export type FundSearchEntry = SearchStock & {
 };
 
 export type RowContextMenuState =
-  | { kind: 'stock'; code: string; x: number; y: number }
-  | { kind: 'fund'; code: string; x: number; y: number };
+  | { kind: 'stock'; code: string; name: string; x: number; y: number }
+  | { kind: 'fund'; code: string; name: string; x: number; y: number };
 
 /** 股票列排序 key */
 export type StockSortKey = 'name' | 'floatingPnl' | 'holdingRate' | 'dailyPnl' | 'dailyChangePct' | 'cost' | 'price' | 'shares' | 'positionRatio';
