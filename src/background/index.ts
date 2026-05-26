@@ -58,6 +58,7 @@ import { getKlineMap } from '../shared/kline-cache';
 import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleProfile } from '../shared/investment-style';
 import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
 import { calcAllTradeSignals, saveTradeSignalsCache, shouldRecalcTradeSignals } from '../shared/trade-signal';
+import { getNextShanghaiScheduledTime } from '../shared/shanghai-time';
 
 export type BadgeMode =
   | 'off'
@@ -339,22 +340,7 @@ function setupAlarms(config: RefreshConfig) {
 /** 设置盘后技术报告告警（15:30 上海时间） */
 function setupTechnicalReportAlarm() {
   chrome.alarms.clear(ALARM_TECH_REPORT);
-  const now = new Date();
-  const target = new Date(now);
-  // 设置为上海时区的 15:30
-  const shanghaiParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date());
-  const shHour = Number(shanghaiParts.find((p) => p.type === 'hour')?.value ?? '15');
-  const shMinute = Number(shanghaiParts.find((p) => p.type === 'minute')?.value ?? '30');
-
-  // 计算下一次 15:30 上海时间对应的本地时间
-  const localTarget = new Date();
-  const utcHours = (Number(shHour) - 8 + 24) % 24; // Shanghai = UTC+8
-  localTarget.setUTCHours(utcHours, shMinute >= 30 ? shMinute : 30, 0, 0);
-  if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
+  const localTarget = getNextShanghaiScheduledTime(15, 30);
 
   chrome.alarms.create(ALARM_TECH_REPORT, {
     when: localTarget.getTime(),
@@ -511,16 +497,7 @@ function startRefreshLoop() {
       setupTechnicalReportAlarm();
       // Save enabled status + compute next run time for the popup status UI
       const now = new Date();
-      const shParts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Shanghai',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-      }).formatToParts(new Date());
-      const shHour = Number(shParts.find((p) => p.type === 'hour')?.value ?? '15');
-      const shMinute = Number(shParts.find((p) => p.type === 'minute')?.value ?? '30');
-      const localTarget = new Date();
-      localTarget.setUTCHours((shHour - 8 + 24) % 24, shMinute >= 30 ? shMinute : 30, 0, 0);
-      if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
+      const localTarget = getNextShanghaiScheduledTime(15, 30, now);
       void saveTechReportStatus({ enabled: true, status: 'pending', nextRunTime: localTarget.getTime() });
     } else {
       void saveTechReportStatus({ enabled: false, status: 'disabled' });
@@ -2117,18 +2094,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             status.nextRunTime = alarm.scheduledTime;
           } else {
             // Alarm not yet set — calculate from config
-            const now = new Date();
-            const shParts = new Intl.DateTimeFormat('en-CA', {
-              timeZone: 'Asia/Shanghai',
-              year: 'numeric', month: '2-digit', day: '2-digit',
-              hour: '2-digit', minute: '2-digit', hour12: false,
-            }).formatToParts(new Date());
-            const shHour = Number(shParts.find((p) => p.type === 'hour')?.value ?? '15');
-            const shMinute = Number(shParts.find((p) => p.type === 'minute')?.value ?? '30');
-            const localTarget = new Date();
-            localTarget.setUTCHours((shHour - 8 + 24) % 24, shMinute >= 30 ? shMinute : 30, 0, 0);
-            if (localTarget <= now) localTarget.setDate(localTarget.getDate() + 1);
-            status.nextRunTime = localTarget.getTime();
+            status.nextRunTime = getNextShanghaiScheduledTime(15, 30).getTime();
           }
         }
 

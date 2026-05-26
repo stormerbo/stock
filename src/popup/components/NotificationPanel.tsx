@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { formatRelativeTime } from '../utils/format';
 import type { NotificationRecord, PageTab } from '../types';
+import { formatShanghaiMonthDayTime } from '../../shared/shanghai-time';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TechReportStatus = any;
@@ -113,10 +114,7 @@ export default function NotificationPanel({
                         <span className="tech-report-value">
                           {techReportStatus.nextRunTime > 0 ? (
                             <>
-                              {new Date(techReportStatus.nextRunTime).toLocaleString('zh-CN', {
-                                month: '2-digit', day: '2-digit',
-                                hour: '2-digit', minute: '2-digit',
-                              })}
+                              {formatShanghaiMonthDayTime(techReportStatus.nextRunTime)}
                               <button type="button" className="tech-report-run-btn" onClick={() => {
                                 if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
                                   void chrome.runtime.sendMessage({ type: 'trigger-tech-report' }).then(() => {
