@@ -45,7 +45,7 @@ import type {
   StockSortKey, FundSortKey, SortDir, ColumnSort,
 } from './types';
 import { formatNumber, formatLooseNumber, formatMarketAmount, formatPercent, formatRatioPercent, toneClass, formatRelativeTime, getShanghaiDateKey, resolvePrevTurnover, deriveMarketStats } from './utils/format';
-import { applyPinnedOrder, insertAfterPinned, reorderCodes, sortStockRows, sortFundRows } from './utils/sorting';
+import { applyPinnedOrder, insertAfterPinned, prioritizePinnedRows, reorderCodes, sortStockRows, sortFundRows } from './utils/sorting';
 import { STORAGE_KEYS, EMPTY_PORTFOLIO, parseStockHoldings, parseFundHoldings, loadPortfolioConfig, savePortfolioConfig } from './utils/portfolio-io';
 import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/search-suggestions';
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
@@ -59,23 +59,13 @@ import StopSuggestPanel from './views/StopSuggestPanel';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
 import ConfirmModal from './components/ConfirmModal';
+import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const MARKET_STATS_CACHE_KEY = 'marketStats';
 const MARKET_STATS_UPDATED_AT_KEY = 'marketStatsUpdatedAt';
 const MARKET_STATS_HISTORY_KEY = 'marketStatsHistory';
 const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
-
-function getStockBadge(code: string): { label: string; tone: 'growth' | 'tech' | 'beijing' } | null {
-  const plain = normalizeStockCode(code);
-  if (!plain) return null;
-  if (/^(300|301)/.test(plain)) return { label: '创', tone: 'growth' };
-  if (/^(688|689)/.test(plain)) return { label: '科', tone: 'tech' };
-  if (/^(430|440|830|831|832|833|835|836|837|838|839|870|871|872|873|874|875|876|877|878|879|880|881|882|883|884|885|886|887|888|889)/.test(plain)) {
-    return { label: '北', tone: 'beijing' };
-  }
-  return null;
-}
 
 function renderNotificationMessage(message: string): ReactNode {
   const parts: ReactNode[] = [];
@@ -131,8 +121,7 @@ function renderNotificationMessage(message: string): ReactNode {
 export default function App() {
   const [activeTab, setActiveTab] = useState<PageTab>('stocks');
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    const saved = window.localStorage.getItem('popup-theme');
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return normalizeThemeMode(window.localStorage.getItem(THEME_STORAGE_KEY));
   });
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
@@ -534,8 +523,8 @@ export default function App() {
       totalSinceAddedRate,
     };
   }, [fundHoldings, fundPositions, stockHoldings, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
-  const stockPinnedCode = stockHoldings.find((item) => item.pinned)?.code ?? null;
-  const fundPinnedCode = fundHoldings.find((item) => item.pinned)?.code ?? null;
+  const stockPinnedCodes = stockHoldings.filter((item) => item.pinned).map((item) => item.code);
+  const fundPinnedCodes = fundHoldings.filter((item) => item.pinned).map((item) => item.code);
   const stockRows = useMemo<StockRow[]>(() => {
     const positionMap = new Map(stockPositions.map((item) => [item.code, item]));
     const today = getShanghaiToday();
@@ -651,6 +640,7 @@ export default function App() {
     let rows = stockSort.key
       ? sortStockRows(stockRows, stockSort.key, stockSort.dir)
       : stockRows; // default: use holdings order (pinned first)
+    rows = prioritizePinnedRows(rows);
     if (tagFilter.length > 0) {
       rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
     }
@@ -662,6 +652,7 @@ export default function App() {
     let rows = fundSort.key
       ? sortFundRows(fundRows, fundSort.key, fundSort.dir)
       : fundRows;
+    rows = prioritizePinnedRows(rows);
     if (tagFilter.length > 0) {
       rows = rows.filter(r => r.tags.some(t => tagFilter.includes(t)));
     }
@@ -773,9 +764,26 @@ export default function App() {
   useEffect(() => {
     document.body.classList.remove('theme-light');
     if (theme === 'light') document.body.classList.add('theme-light');
-    window.localStorage.setItem('popup-theme', theme);
-    try { chrome.storage.sync.set({ 'popup-theme': theme }); } catch { /* best effort */ }
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    try { chrome.storage.sync.set({ [THEME_STORAGE_KEY]: theme }); } catch { /* best effort */ }
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(THEME_STORAGE_KEY, (result: Record<string, unknown>) => {
+        setTheme(normalizeThemeMode(result[THEME_STORAGE_KEY]));
+      });
+    }
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+        if (area === 'sync' && changes[THEME_STORAGE_KEY]) {
+          setTheme(normalizeThemeMode(changes[THEME_STORAGE_KEY].newValue));
+        }
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
 
   // 读取设置页的涨跌色配置
   useEffect(() => {
@@ -1632,7 +1640,7 @@ function clearIntradayIfStale(
   const handleStockDrop = (targetCode: string) => {
     if (!draggingCode) return;
     const codes = stockHoldings.map((h) => h.code);
-    const reordered = reorderCodes(codes, draggingCode, targetCode, stockPinnedCode ?? undefined);
+    const reordered = reorderCodes(codes, draggingCode, targetCode, stockPinnedCodes);
     const map = new Map(stockHoldings.map((h) => [h.code, h]));
     setStockHoldings(reordered.map((c) => map.get(c)!).filter(Boolean));
     setDraggingCode(null);
@@ -1641,7 +1649,7 @@ function clearIntradayIfStale(
   const handleFundDrop = (targetCode: string) => {
     if (!draggingCode) return;
     const codes = fundHoldings.map((h) => h.code);
-    const reordered = reorderCodes(codes, draggingCode, targetCode, fundPinnedCode ?? undefined);
+    const reordered = reorderCodes(codes, draggingCode, targetCode, fundPinnedCodes);
     const map = new Map(fundHoldings.map((h) => [h.code, h]));
     setFundHoldings(reordered.map((c) => map.get(c)!).filter(Boolean));
     setDraggingCode(null);
@@ -2061,7 +2069,6 @@ function clearIntradayIfStale(
             {activeTab === 'stocks' && !stockDetailTarget ? (
               <StockTable
                 rows={stockDisplayRows}
-                stockPinnedCode={stockPinnedCode}
                 sort={stockSort}
                 onToggleSort={toggleStockSort}
                 draggingCode={draggingCode}
@@ -2081,7 +2088,6 @@ function clearIntradayIfStale(
                 handleDragEnd={handleDragEnd}
                 handleStockDrop={handleStockDrop}
                 onRemoveStock={removeStockFromPortfolio}
-                getStockBadge={getStockBadge}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
               />
@@ -2090,7 +2096,6 @@ function clearIntradayIfStale(
             {activeTab === 'funds' && !fundDetailTarget ? (
               <FundTable
                 rows={fundDisplayRows}
-                fundPinnedCode={fundPinnedCode}
                 sort={fundSort}
                 onToggleSort={toggleFundSort}
                 draggingCode={draggingCode}

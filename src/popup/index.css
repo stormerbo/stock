@@ -1171,8 +1171,14 @@ body.theme-light .data-table thead th {
   opacity: 0.45;
 }
 
-.locked-row td {
-  background: color-mix(in srgb, var(--brand-soft) 10%, transparent);
+.stock-table tbody tr.locked-row td,
+.fund-table tbody tr.locked-row td {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-soft) 24%, transparent), color-mix(in srgb, var(--brand-soft) 14%, transparent));
+}
+
+.stock-table tbody tr.locked-row:hover td,
+.fund-table tbody tr.locked-row:hover td {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-soft) 30%, transparent), color-mix(in srgb, var(--brand-soft) 18%, transparent));
 }
 
 .sort-insert-row td {
@@ -1323,15 +1329,30 @@ body.theme-light .data-table thead th {
   display: block;
   font-size: 12px;
   font-weight: 600;
+  width: 100%;
+  min-height: 16px;
 }
-.name-col .primary .name-inline {
-  display: inline-flex;
-  flex-wrap: wrap;
+
+.name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 3px;
+  column-gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.name-col .primary .name-inline {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
 }
 
 .name-col .primary .name-text {
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1366,10 +1387,11 @@ body.theme-light .data-table thead th {
 }
 
 .name-inline {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .drag-handle {
@@ -1479,6 +1501,7 @@ body.theme-light .data-table thead th {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .stock-badge.signal-up {
@@ -1566,10 +1589,35 @@ body.theme-light .data-table thead th {
 }
 
 .name-col .secondary {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
   margin-top: 1px;
   color: var(--text-1);
   font-size: 10px;
+  min-width: 0;
+}
+
+.secondary-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name-badge-slot,
+.secondary-badge-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 14px;
+  white-space: nowrap;
+}
+
+.signal-badge-wrapper-code {
+  flex-shrink: 0;
 }
 
 .sparkline {
@@ -1918,17 +1966,85 @@ body.theme-light .row-context-menu {
 
 /* ─── Quick Stats Strip ─── */
 
+.quick-stats-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 2px;
+  position: relative;
+}
+
+.quick-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+  align-items: center;
+  padding: 0 88px 0 0;
+}
+
+.summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding: 0 2px 0 0;
+}
+
+.summary-label {
+  color: var(--text-1);
+  font-size: 8.5px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.summary-cell b {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.quick-stats-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 55%, transparent);
+  background: color-mix(in srgb, var(--glass-bg-strong) 46%, transparent);
+  color: var(--text-1);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.quick-stats-toggle:hover {
+  background: color-mix(in srgb, var(--glass-bg-strong) 62%, transparent);
+  color: var(--text-0);
+}
+
+.quick-stats-toggle-icon {
+  width: 10px;
+  text-align: center;
+  opacity: 0.8;
+}
+
 .quick-stats {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
+  margin-top: 0;
 }
 
 .stat-cell {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 3px 6px;
+  gap: 0;
+  padding: 2px 4px;
   border-right: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
   min-width: 0;
 }
@@ -1939,13 +2055,13 @@ body.theme-light .row-context-menu {
 
 .stat-label {
   color: var(--text-1);
-  font-size: 9px;
+  font-size: 8.5px;
   white-space: nowrap;
   line-height: 1;
 }
 
 .stat-cell b {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2863,6 +2979,20 @@ body.theme-light .row-context-menu {
   background: var(--brand-soft);
 }
 
+.fund-add-stock-btn.is-added,
+.fund-add-stock-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  background: rgba(80, 104, 205, 0.08);
+  border-color: rgba(80, 104, 205, 0.28);
+  color: var(--text-1);
+}
+
+.fund-add-stock-btn.is-added:hover,
+.fund-add-stock-btn:disabled:hover {
+  background: rgba(80, 104, 205, 0.08);
+}
+
 .fund-holdings-list {
   display: flex;
   flex-direction: column;
@@ -3565,6 +3695,20 @@ body.theme-light .notification-item.clickable:hover {
   margin-top: 2px;
 }
 
+.tag-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  margin-top: 0;
+  margin-left: 0;
+  overflow: hidden;
+}
+
 .tag-badge {
   display: inline-flex;
   align-items: center;
@@ -3575,6 +3719,7 @@ body.theme-light .notification-item.clickable:hover {
   line-height: 14px;
   border: 1px solid;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tag-badge-medium {
@@ -3610,6 +3755,8 @@ body.theme-light .notification-item.clickable:hover {
   font-size: 9px;
   color: var(--text-1);
   opacity: 0.5;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════
@@ -3854,43 +4001,6 @@ body.theme-light .notification-item.clickable:hover {
 .trade-delete-btn:hover {
   color: #ef4444;
   background: color-mix(in srgb, #ef4444 15%, var(--bg-2));
-}
-
-/* ═══════════════════════════════════════
-   Risk Metrics Strip (StockDetailView)
-   ═══════════════════════════════════════ */
-.risk-metrics-strip {
-  display: flex;
-  gap: 16px;
-  padding: 6px 14px;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
-}
-
-.risk-metric-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.risk-metric-label {
-  font-size: 9px;
-  color: var(--text-1);
-  opacity: 0.5;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.risk-metric-value {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-0);
-}
-
-.risk-metric-sub {
-  font-size: 9px;
-  color: var(--text-1);
-  opacity: 0.5;
 }
 
 /* ═══════════════════════════════════════
@@ -5394,4 +5504,246 @@ body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
   background: var(--glass-bg);
   padding: 1px 6px;
   border-radius: 4px;
+}
+
+.trade-toolbar-icon-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--line));
+  color: var(--brand);
+}
+.trade-toolbar-icon-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  outline-offset: 2px;
+}
+
+/* ─── Date Picker Field ─── */
+.date-picker-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.date-picker-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-0) 94%, white 6%), var(--bg-0));
+  color: var(--text-0);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background .15s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.32);
+}
+.date-picker-trigger:hover,
+.date-picker-trigger.is-open {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-soft) 50%, transparent);
+}
+.date-picker-trigger-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.date-picker-trigger-label {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-3);
+}
+.date-picker-trigger-value {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-0);
+  white-space: nowrap;
+}
+.date-picker-trigger-value.is-placeholder { color: var(--text-3); font-weight: 500; }
+.date-picker-trigger-icon { color: var(--text-2); flex-shrink: 0; }
+
+.date-picker-popover {
+  position: fixed;
+  z-index: 320;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 82%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 96%, white 4%), var(--bg-1));
+  box-shadow: 0 24px 58px rgba(6, 10, 20, .22);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+.date-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.date-picker-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.date-picker-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-0);
+  letter-spacing: .2px;
+}
+.date-picker-subtitle {
+  font-size: 9px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.date-picker-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.date-picker-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-0) 90%, white 10%);
+  color: var(--text-1);
+  cursor: pointer;
+}
+.date-picker-nav-btn:hover { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, var(--line)); }
+.date-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.date-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-0) 92%, white 8%);
+  color: var(--text-1);
+  font-size: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.date-picker-chip:hover {
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--line));
+  background: color-mix(in srgb, var(--brand-soft) 26%, var(--bg-0));
+}
+.date-picker-chip.is-active {
+  background: color-mix(in srgb, var(--brand-soft) 48%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+  color: var(--brand);
+}
+.date-picker-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 9px;
+  color: var(--text-3);
+}
+.date-picker-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.date-picker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.date-picker-dot.is-trading { background: var(--up); }
+.date-picker-dot.is-closed { background: color-mix(in srgb, var(--text-3) 65%, transparent); }
+.date-picker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: 4px;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--text-3);
+}
+.date-picker-weekdays span {
+  text-align: center;
+  padding: 3px 0;
+}
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.date-picker-day {
+  position: relative;
+  min-height: 42px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  padding: 5px 5px 4px;
+  background: color-mix(in srgb, var(--bg-0) 92%, white 8%);
+  color: var(--text-0);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.date-picker-day:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand) 22%, var(--line));
+  box-shadow: 0 8px 20px rgba(6, 10, 20, .08);
+}
+.date-picker-day:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+.date-picker-day.is-outside {
+  opacity: .5;
+}
+.date-picker-day.is-closed .date-picker-day-number,
+.date-picker-day.is-closed .date-picker-day-meta {
+  color: var(--text-3);
+}
+.date-picker-day.is-trading .date-picker-day-meta {
+  color: var(--up);
+}
+.date-picker-day.is-selected {
+  background: color-mix(in srgb, var(--brand-soft) 58%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--brand) 48%, var(--line));
+}
+.date-picker-day.is-today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 42%, transparent);
+}
+.date-picker-day-number {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.date-picker-day-meta {
+  font-size: 8px;
+  line-height: 1;
+}
+.date-picker-day-badge {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 55%, transparent);
+  padding: 1px 3px;
+  border-radius: 999px;
 }

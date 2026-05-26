@@ -5,6 +5,7 @@ import { levelLabel } from '../../shared/trade-signal';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
+import { getStockRowBadges, hasTechSignalBadge } from './stock-row-badges';
 import type { StockRow, StockSortKey, SortDir, ColumnSort } from '../types';
 
 type EditingCell = {
@@ -16,7 +17,6 @@ type EditingCell = {
 
 type Props = {
   rows: StockRow[];
-  stockPinnedCode: string | null;
   sort: ColumnSort<StockSortKey>;
   onToggleSort: (key: StockSortKey) => void;
   draggingCode: string | null;
@@ -37,7 +37,6 @@ type Props = {
   handleDragEnd: () => void;
   handleStockDrop: (code: string) => void;
   onRemoveStock: (code: string) => void;
-  getStockBadge: (code: string) => { label: string; tone: 'growth' | 'tech' | 'beijing' } | null;
   onRefresh: () => void;
   refreshing: boolean;
 };
@@ -64,11 +63,11 @@ function SortTh({
 }
 
 export default function StockTable({
-  rows, stockPinnedCode, sort, onToggleSort, draggingCode, editingCell,
+  rows, sort, onToggleSort, draggingCode, editingCell,
   signalStocks, tradeSignals, stocksLoading, stocksError, stockTotalHoldingAmount,
   openStockDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleStockDrop,
-  onRemoveStock, getStockBadge, onRefresh, refreshing,
+  onRemoveStock, onRefresh, refreshing,
 }: Props) {
   const [tip, setTip] = useState<{
     x: number; y: number;
@@ -132,8 +131,7 @@ export default function StockTable({
             const hasShares = item.shares > 0;
             const hasCost = item.cost > 0;
             const hasPosition = hasShares && hasCost;
-            const isPinned = item.code === stockPinnedCode;
-            const badge = getStockBadge(item.code);
+            const isPinned = item.pinned;
             const holdingAmount = hasPosition && Number.isFinite(item.price)
               ? item.price * item.shares
               : Number.NaN;
@@ -143,6 +141,10 @@ export default function StockTable({
             const positionRatio = stockTotalHoldingAmount > 0 && Number.isFinite(holdingAmount)
               ? (holdingAmount / stockTotalHoldingAmount) * 100
               : Number.NaN;
+            const badges = getStockRowBadges({
+              code: item.code,
+              hasTechSignal: hasTechSignalBadge(signalStocks, tradeSignals, item.code),
+            });
 
             return (
               <tr
@@ -171,31 +173,43 @@ export default function StockTable({
                     onClick={(e) => { e.stopPropagation(); onRemoveStock(item.code); }}
                   ><X size={10} strokeWidth={1} /></button>
                   <span className="primary">
-                    <span className="name-inline">
-                      {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
-                      <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
-                      {badge ? <span className={`stock-badge ${badge.tone}`}>{badge.label}</span> : null}
-                      {signalStocks?.[item.code] || tradeSignals?.[item.code] ? (
-                      <span className="signal-badge-wrapper"
-                        onMouseEnter={(e) => showSignalTip(e, signalStocks?.[item.code]?.signals, signalStocks?.[item.code]?.name || item.name, signalStocks?.[item.code]?.signalCount ?? 0, tradeSignals?.[item.code] ? { level: tradeSignals[item.code].level, score: tradeSignals[item.code].score } : undefined)}
-                        onMouseLeave={hideSignalTip}>
-                        <span className={'stock-badge signal' + (() => { const sc = signalStocks?.[item.code]?.score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : (tradeSignals?.[item.code] ? ' signal-up' : ''); })()}>技</span>
+                    <span className="name-row">
+                      <span className="name-inline">
+                        {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
+                        {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
+                        <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                       </span>
-                      ) : null}
-                      {tradeSignals?.[item.code] ? (
-                        <span className={`trade-dot signal-${tradeSignals[item.code].level}`}
-                          title={`${levelLabel(tradeSignals[item.code].level as any)} · ${tradeSignals[item.code].score} 分`} />
-                      ) : null}
-                      {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
+                      <span className="name-badge-slot">
+                        {badges.nameRowBadge ? <span className={`stock-badge ${badges.nameRowBadge.tone}`}>{badges.nameRowBadge.label}</span> : null}
+                      </span>
                     </span>
                     {item.tags.length > 0 ? (
-                      <span className="tag-row">
+                      <span className="tag-row tag-row-inline">
                         {item.tags.slice(0, 2).map(tag => (<TagBadge key={tag} tag={tag} />))}
                         {item.tags.length > 2 ? <span className="tag-badge-more">+{item.tags.length - 2}</span> : null}
                       </span>
                     ) : null}
                   </span>
-                  <span className="secondary">{item.code}</span>
+                  <span className="secondary">
+                    <span className="secondary-code">{item.code}</span>
+                    <span className="secondary-badge-slot">
+                      {badges.codeRowBadge ? (
+                        <span
+                          className="signal-badge-wrapper signal-badge-wrapper-code"
+                          onMouseEnter={(e) => showSignalTip(
+                            e,
+                            signalStocks?.[item.code]?.signals,
+                            signalStocks?.[item.code]?.name || item.name,
+                            signalStocks?.[item.code]?.signalCount ?? 0,
+                            tradeSignals?.[item.code] ? { level: tradeSignals[item.code].level, score: tradeSignals[item.code].score } : undefined,
+                          )}
+                          onMouseLeave={hideSignalTip}
+                        >
+                          <span className={'stock-badge signal' + (() => { const sc = signalStocks?.[item.code]?.score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : (tradeSignals?.[item.code] ? ' signal-up' : ''); })()}>技</span>
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
                 </td>
                 <td
                   className="stock-detail-trigger stock-detail-chart"

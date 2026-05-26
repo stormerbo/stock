@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
 import { type FundPosition, type FundHoldingConfig } from '../../shared/fetch';
+import { getFundHoldingAddButtonState } from './fund-holdings';
 
 // Proxy fetch through background to avoid CORS
 // Uses a long-lived port connection to keep the Service Worker alive during fetch
@@ -1184,12 +1185,27 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
                       <span className="fund-holding-stock-prevchange">
                         {stock.prevChange === '新增' ? '新增' : stock.prevChange ? `${parseFloat(stock.prevChange) >= 0 ? '↑ ' : '↓ '}${Math.abs(parseFloat(stock.prevChange)).toFixed(2)}%` : '-'}
                       </span>
-                      {!existingStockCodes?.has(stock.code) && onAddStock ? (
-                        <button type="button" className="fund-add-stock-btn"
-                          onClick={(e) => { e.stopPropagation(); onAddStock(stock.code, stock.name); }}>
-                          +自选
-                        </button>
-                      ) : null}
+                      {(() => {
+                        const buttonState = getFundHoldingAddButtonState(Boolean(existingStockCodes?.has(stock.code)));
+                        if (!onAddStock) {
+                          return <span className={buttonState.className} aria-hidden="true">{buttonState.label}</span>;
+                        }
+                        return (
+                          <button
+                            type="button"
+                            className={buttonState.className}
+                            disabled={buttonState.disabled}
+                            aria-disabled={buttonState.disabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (buttonState.disabled) return;
+                              onAddStock(stock.code, stock.name);
+                            }}
+                          >
+                            {buttonState.label}
+                          </button>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

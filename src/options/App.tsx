@@ -23,6 +23,7 @@ import {
   type TagDefinition,
 } from '../shared/tags';
 import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
+import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
@@ -518,23 +519,38 @@ export default function App() {
 
   // ---- Theme ----
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const saved = localStorage.getItem('options-theme');
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return normalizeThemeMode(localStorage.getItem(THEME_STORAGE_KEY));
   });
 
   useEffect(() => {
-  document.body.classList.remove('theme-light');
-  if (theme === 'light') document.body.classList.add('theme-light');
+    document.body.classList.remove('theme-light');
+    if (theme === 'light') document.body.classList.add('theme-light');
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(THEME_STORAGE_KEY, (result: Record<string, unknown>) => {
+        setTheme(normalizeThemeMode(result[THEME_STORAGE_KEY]));
+      });
+    }
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+        if (area === 'sync' && changes[THEME_STORAGE_KEY]) {
+          setTheme(normalizeThemeMode(changes[THEME_STORAGE_KEY].newValue));
+        }
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('popup-theme', next);
       document.body.classList.remove('theme-light');
       if (next === 'light') document.body.classList.add('theme-light');
-      // 同步到 storage，供 content script 读取
-      try { chrome.storage.sync.set({ 'popup-theme': next }); } catch { /* best effort */ }
+      try { chrome.storage.sync.set({ [THEME_STORAGE_KEY]: next }); } catch { /* best effort */ }
       return next;
     });
   }, []);

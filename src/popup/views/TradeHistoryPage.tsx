@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ChevronLeft, X, Search } from 'lucide-react';
+import { Plus, Trash2, ChevronLeft, X, Search, RotateCcw, Clock3 } from 'lucide-react';
 import {
   loadTradeHistory, addTrade, deleteTrade, computePositionFromTrades,
   type StockTradeRecord, type TradeType,
@@ -7,11 +7,13 @@ import {
 import { loadFeeConfig, DEFAULT_FEE_CONFIG, type FeeConfig } from '../../shared/fee-config';
 import { formatNumber, formatPercent, toneClass } from '../utils/format';
 import type { DailyAssetSnapshot, StockPosition, FundPosition } from '../../shared/fetch';
-import { pMap, getShanghaiYesterday } from '../../shared/fetch';
+import { pMap, getShanghaiToday, getShanghaiYesterday } from '../../shared/fetch';
 import { recalcSnapshotsInRange, type RecalcContext, type RecalcProgress } from '../../shared/recalc-snapshot';
 import { getKlineMap } from '../../shared/kline-cache';
 import { loadHoldingHistory } from '../../shared/holding-history';
 import AssetCurveChart from '../components/AssetCurveChart';
+import DatePickerField from '../components/DatePickerField';
+import { getTradeHistoryToolbarActions } from './trade-history-toolbar';
 
 type Props = {
   stockNames: Record<string, string>;
@@ -36,7 +38,7 @@ type ModalState = {
 
 const emptyModal = (stockCodes: string[]): ModalState => ({
   code: stockCodes[0] || '',
-  date: new Date().toISOString().slice(0, 10),
+  date: getShanghaiToday(),
   type: 'buy',
   shares: '', price: '', total: '',
   commission: '', stampTax: '', transferFee: '',
@@ -61,6 +63,24 @@ const inputCls = (w = 1): React.CSSProperties => ({
   background: 'var(--bg-0)', color: 'var(--text-0)',
   outline: 'none', minWidth: 0,
 });
+
+const toolbarIconBtn = (_variant: 'brand' | 'ghost' = 'ghost', disabled = false): React.CSSProperties => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 32,
+  height: 32,
+  minWidth: 32,
+  padding: 0,
+  borderRadius: 8,
+  border: '1px solid var(--line)',
+  background: 'transparent',
+  color: 'var(--text-1)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    transition: 'border-color .15s ease, color .15s ease, transform .15s ease',
+    opacity: disabled ? 0.55 : 1,
+    flexShrink: 0,
+  });
 
 export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTradesChanged }: Props) {
   const [stockHistory, setStockHistory] = useState<Record<string, StockTradeRecord[]>>({});
@@ -270,6 +290,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   const filteredStockCodes = stockSearch
     ? allStockCodes.filter((c) => c.includes(stockSearch) || (stockNames[c] || '').includes(stockSearch))
     : allStockCodes;
+  const toolbarActions = getTradeHistoryToolbarActions(recalculating);
 
   // ─── 渲染 ───
 
@@ -282,23 +303,49 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
         <span>共 <b style={{ color: 'var(--text-0)' }}>{summary.totalTrades}</b> 笔</span>
         <span>合计已实现盈亏 <b className={toneClass(summary.totalRealizedPnl)}>{formatNumber(summary.totalRealizedPnl, 2)}</b></span>
         {recalcMsg ? <span style={{ fontSize: 11, color: 'var(--text-1)' }}>{recalcMsg}</span> : null}
-        <button type="button" style={{ ...btnStyle('brand'), marginLeft: 'auto', fontSize: 11, padding: '4px 10px', opacity: recalculating ? 0.5 : 1 }}
-          disabled={recalculating}
-          onClick={async () => {
-            setRecalculating(true);
-            setRecalcMsg(null);
-            let count = 0;
-            for (const code of allStockCodes) {
-              try { onStockTradesChanged?.(code); count++; } catch { /* skip */ }
-            }
-            setRecalculating(false);
-            setRecalcMsg(count > 0 ? `已重算 ${count} 只` : '无交易记录');
-            setTimeout(() => setRecalcMsg(null), 2000);
-          }}>{recalculating ? '重算中...' : '重算持仓'}</button>
-        <button type="button" style={{ ...btnStyle('ghost'), fontSize: 18, lineHeight: 1, padding: '2px 6px' }} onClick={() => setShowRecalcModal(true)} title="重新计算累计收益">⏱</button>
-        <button type="button" style={{ ...btnStyle('brand') }} onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}>
-          <Plus size={13} /> 新增交易
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            type="button"
+            className="trade-toolbar-icon-btn"
+            style={toolbarIconBtn('brand', toolbarActions[0].disabled)}
+            disabled={toolbarActions[0].disabled}
+            onClick={async () => {
+              setRecalculating(true);
+              setRecalcMsg(null);
+              let count = 0;
+              for (const code of allStockCodes) {
+                try { onStockTradesChanged?.(code); count++; } catch { /* skip */ }
+              }
+              setRecalculating(false);
+              setRecalcMsg(count > 0 ? `已重算 ${count} 只` : '无交易记录');
+              setTimeout(() => setRecalcMsg(null), 2000);
+            }}
+            title={toolbarActions[0].title}
+            aria-label={toolbarActions[0].ariaLabel}
+          >
+            <RotateCcw size={15} className={recalculating ? 'spinning' : ''} />
+          </button>
+          <button
+            type="button"
+            className="trade-toolbar-icon-btn"
+            style={toolbarIconBtn('ghost')}
+            onClick={() => setShowRecalcModal(true)}
+            title={toolbarActions[1].title}
+            aria-label={toolbarActions[1].ariaLabel}
+          >
+            <Clock3 size={15} />
+          </button>
+          <button
+            type="button"
+            className="trade-toolbar-icon-btn"
+            style={toolbarIconBtn('brand')}
+            onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}
+            title={toolbarActions[2].title}
+            aria-label={toolbarActions[2].ariaLabel}
+          >
+            <Plus size={15} />
+          </button>
+        </div>
       </div>
 
       {/* 交易表格 */}
@@ -404,8 +451,11 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
             {/* 日期 + 类型 */}
             <div style={{ display: 'flex', gap: 8 }}>
-              <input type="date" style={inputCls()} value={modal.date}
-                onChange={(e) => setModal((m) => ({ ...m, date: e.target.value }))} />
+              <DatePickerField
+                label="交易日期"
+                value={modal.date}
+                onChange={(date) => setModal((m) => ({ ...m, date }))}
+              />
               <select style={inputCls()} value={modal.type}
                 onChange={(e) => setModal((m) => ({ ...m, type: e.target.value as TradeType }))}>
                 <option value="buy">买入</option>
@@ -494,14 +544,12 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
                 <div style={{ fontSize: 11, color: "var(--text-1)", lineHeight: 1.5 }}>
                   选择起始日期，从该日期到今天的累计收益将被重新计算。
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-1)" }}>起始日期</span>
-                  <input type="date" value={recalcDate} onChange={(e) => setRecalcDate(e.target.value)}
-                    style={{
-                      padding: "8px 10px", fontSize: 12, border: "1px solid var(--line)", borderRadius: 6,
-                      background: "var(--bg-0)", color: "var(--text-0)", outline: "none",
-                    }} />
-                </div>
+                <DatePickerField
+                  label="起始日期"
+                  value={recalcDate}
+                  onChange={setRecalcDate}
+                  maxDate={getShanghaiYesterday()}
+                />
                 {recalcError && <div style={{ fontSize: 11, color: "#ef4444" }}>{recalcError}</div>}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
                   <button type="button" onClick={() => setShowRecalcModal(false)}

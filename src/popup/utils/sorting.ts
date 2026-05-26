@@ -74,24 +74,16 @@ export function applyPinnedOrder<T extends { code: string; pinned?: boolean }>(i
   const target = items.find((item) => item.code === code);
   if (!target) return items;
 
-  if (target.pinned) {
-    return items.map((item) => (item.code === code ? { ...item, pinned: false } : { ...item, pinned: false }));
-  }
-
-  const currentPinned = items.find((item) => item.pinned && item.code !== code);
-  const remaining = items
-    .filter((item) => item.code !== code && item.code !== currentPinned?.code)
-    .map((item) => ({ ...item, pinned: false }));
-
-  const next: T[] = [{ ...target, pinned: true }];
-  if (currentPinned) {
-    next.push({ ...currentPinned, pinned: false });
-  }
-  return [...next, ...remaining];
+  const next = items.map((item) => (
+    item.code === code ? { ...item, pinned: !item.pinned } : { ...item }
+  ));
+  const pinned = next.filter((item) => item.pinned);
+  const unpinned = next.filter((item) => !item.pinned);
+  return [...pinned, ...unpinned];
 }
 
 export function insertAfterPinned<T extends { pinned?: boolean }>(items: T[], nextItem: T): T[] {
-  const pinnedIndex = items.findIndex((item) => item.pinned);
+  const pinnedIndex = items.reduce((last, item, index) => (item.pinned ? index : last), -1);
   if (pinnedIndex === -1) {
     return [nextItem, ...items];
   }
@@ -106,10 +98,11 @@ export function insertAfterPinned<T extends { pinned?: boolean }>(items: T[], ne
 // Drag reorder helpers
 // -----------------------------------------------------------
 
-export function reorderCodes(codes: string[], draggedCode: string, targetCode: string, lockedCode?: string): string[] {
+export function reorderCodes(codes: string[], draggedCode: string, targetCode: string, lockedCodes?: string | string[]): string[] {
   if (draggedCode === targetCode) return codes;
 
-  const movable = lockedCode ? codes.filter((code) => code !== lockedCode) : [...codes];
+  const locked = Array.isArray(lockedCodes) ? lockedCodes : lockedCodes ? [lockedCodes] : [];
+  const movable = locked.length > 0 ? codes.filter((code) => !locked.includes(code)) : [...codes];
   const fromIndex = movable.indexOf(draggedCode);
   const targetIndex = movable.indexOf(targetCode);
   if (fromIndex < 0 || targetIndex < 0) return codes;
@@ -118,11 +111,12 @@ export function reorderCodes(codes: string[], draggedCode: string, targetCode: s
   const [dragged] = next.splice(fromIndex, 1);
   next.splice(targetIndex, 0, dragged);
 
-  return lockedCode ? [lockedCode, ...next] : next;
+  return locked.length > 0 ? [...locked.filter((code) => codes.includes(code)), ...next] : next;
 }
 
-export function moveCodeAfterPinned(codes: string[], draggedCode: string, lockedCode?: string): string[] {
-  const movable = lockedCode ? codes.filter((code) => code !== lockedCode) : [...codes];
+export function moveCodeAfterPinned(codes: string[], draggedCode: string, lockedCodes?: string | string[]): string[] {
+  const locked = Array.isArray(lockedCodes) ? lockedCodes : lockedCodes ? [lockedCodes] : [];
+  const movable = locked.length > 0 ? codes.filter((code) => !locked.includes(code)) : [...codes];
   const fromIndex = movable.indexOf(draggedCode);
   if (fromIndex < 0) return codes;
 
@@ -130,7 +124,7 @@ export function moveCodeAfterPinned(codes: string[], draggedCode: string, locked
   const [dragged] = next.splice(fromIndex, 1);
   next.unshift(dragged);
 
-  return lockedCode ? [lockedCode, ...next] : next;
+  return locked.length > 0 ? [...locked.filter((code) => codes.includes(code)), ...next] : next;
 }
 
 export function sortRowsByCodes<T extends { code: string }>(rows: T[], codes: string[]): T[] {
@@ -141,4 +135,8 @@ export function sortRowsByCodes<T extends { code: string }>(rows: T[], codes: st
   const used = new Set(ordered.map((row) => row.code));
   const rest = rows.filter((row) => !used.has(row.code));
   return [...ordered, ...rest];
+}
+
+export function prioritizePinnedRows<T extends { pinned?: boolean }>(rows: T[]): T[] {
+  return [...rows.filter((row) => row.pinned), ...rows.filter((row) => !row.pinned)];
 }

@@ -14,7 +14,6 @@ type EditingCell = {
 
 type Props = {
   rows: FundRow[];
-  fundPinnedCode: string | null;
   sort: ColumnSort<FundSortKey>;
   onToggleSort: (key: FundSortKey) => void;
   draggingCode: string | null;
@@ -57,7 +56,7 @@ function SortTh({
 }
 
 export default function FundTable({
-  rows, fundPinnedCode, sort, onToggleSort, draggingCode, editingCell,
+  rows, sort, onToggleSort, draggingCode, editingCell,
   fundsLoading, fundsError, fundPositionsLength,
   openFundDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleFundDrop,
@@ -80,7 +79,7 @@ export default function FundTable({
         </thead>
         <tbody>
           {rows.map((item) => {
-            const isPinned = item.code === fundPinnedCode;
+            const isPinned = item.pinned;
             const hasFundCost = item.cost > 0;
             const hasFundUnits = item.units > 0;
             return (

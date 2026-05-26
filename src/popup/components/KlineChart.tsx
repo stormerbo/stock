@@ -4,6 +4,7 @@ import {
   calcMACD,
   type StockDetailData,
 } from '../stockDetail';
+import { computeKlinePriceBounds } from './kline-scale';
 
 const UP_COLOR = '#e45555';
 const DN_COLOR = '#2aa568';
@@ -195,8 +196,6 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
   }, [detail.kline, windowSize, clampedOffset, effectiveSize, isMinuteStyle, total]);
 
   const closes = useMemo(() => visibleKline.map((item) => item.close), [visibleKline]);
-  const highs = useMemo(() => visibleKline.map((item) => item.high), [visibleKline]);
-  const lows = useMemo(() => visibleKline.map((item) => item.low), [visibleKline]);
   const volumes = useMemo(() => visibleKline.map((item) => item.volume), [visibleKline]);
   const ma5 = useMemo(() => calcMA(closes, 5), [closes]);
   const ma10 = useMemo(() => calcMA(closes, 10), [closes]);
@@ -393,11 +392,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
   const macdHeight = isMinuteStyle ? 0 : 90;
   const mainHeight = Math.max(80, chartAreaH - volumeHeight - macdHeight);
 
-  const low = Math.min(...lows);
-  const high = Math.max(...highs);
-  const pad = (high - low) * 0.08;
-  const min = low - pad;
-  const max = high + pad;
+  const { min, max } = computeKlinePriceBounds(visibleKline);
   const priceRange = Math.max(0.00001, max - min);
 
   const baseline = isMinuteStyle ? detail.prevClose : (visibleKline[0]?.open ?? visibleKline[0]?.close ?? 0);
