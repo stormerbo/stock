@@ -567,8 +567,8 @@ async function notifyApiError(label: string, errorAtKey: 'stockQuoteErrorAt' | '
   });
 }
 
-async function refreshStocks() {
-  if (!isTradingHours()) return;
+async function refreshStocks(force = false) {
+  if (!force && !isTradingHours()) return;
   if (refreshStocksInFlight) return;
   refreshStocksInFlight = true;
   try {
@@ -2157,7 +2157,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (request.type === 'force-refresh') {
     void (async () => {
       try {
-        await Promise.all([refreshStocks(), refreshFunds()]);
+        await Promise.all([refreshStocks(true), refreshFunds()]);
         // 同时清除缓存并触发画像/风控重算
         await chrome.storage.local.remove(['_lastStyleCalcTime', '_lastStopCalcTime', '_lastTradeSignalTime']);
         void triggerStyleAndStopCalc();

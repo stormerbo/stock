@@ -581,12 +581,17 @@ export default function App() {
           next.cost = holding.cost;
         }
       } else {
-        // ======= 情况 1：无交易记录或记录不匹配 → 股票涨跌幅 =======
-        if (Number.isFinite(row.prevClose) && row.prevClose > 0) {
-          next.dailyChangePct = ((row.price - row.prevClose) / row.prevClose) * 100;
-        }
-        if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
-          next.floatingPnl = (row.price - holding.cost) * holding.shares;
+        if (holding.shares <= 0 && holding.cost <= 0) {
+          next.floatingPnl = Number.NaN;
+          next.dailyPnl = Number.NaN;
+        } else {
+          // ======= 情况 1：无交易记录或记录不匹配 → 股票涨跌幅 =======
+          if (Number.isFinite(row.prevClose) && row.prevClose > 0) {
+            next.dailyChangePct = ((row.price - row.prevClose) / row.prevClose) * 100;
+          }
+          if (holding.cost > 0 && holding.shares > 0 && Number.isFinite(row.price)) {
+            next.floatingPnl = (row.price - holding.cost) * holding.shares;
+          }
         }
       }
 
@@ -1522,10 +1527,11 @@ function clearIntradayIfStale(
     let calcY = event.clientY - rootTop;
     let calcX = event.clientX - rootLeft;
 
-    // 紧贴底部防止溢出，不做大幅度翻转
-    const rootBottom = (rootRect?.bottom ?? viewportH) - rootTop;
-    const maxY = rootBottom - menuHeight - 4;
+    // 紧贴底部，双重防溢出
+    const visibleBottom = Math.min(rootRect?.bottom ?? viewportH, viewportH) - rootTop;
+    const maxY = visibleBottom - menuHeight - 8;
     if (calcY > maxY) calcY = Math.max(4, maxY);
+    if (calcY < 4) calcY = 4;
 
     // 确保不超出右侧边界
     const rootVisibleRight = (rootRect?.right ?? window.innerWidth) - rootLeft;

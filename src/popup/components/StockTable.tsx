@@ -1,7 +1,7 @@
 import { Fragment, useState, useCallback, useRef } from 'react';
 import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
-import { levelColor } from '../../shared/trade-signal';
+import { levelLabel } from '../../shared/trade-signal';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
@@ -72,8 +72,9 @@ export default function StockTable({
 }: Props) {
   const [tip, setTip] = useState<{
     x: number; y: number;
-    signals: Array<{ label: string; severity: string }>;
+    signals?: Array<{ label: string; severity: string }>;
     name: string; count: number;
+    tradeLevel?: string; tradeScore?: number;
   } | null>(null);
   const tipTimerRef = useRef<number | null>(null);
 
@@ -82,8 +83,9 @@ export default function StockTable({
     signals: Array<{ label: string; severity: string }> | undefined,
     name: string,
     count: number,
+    trade?: { level: string; score: number },
   ) => {
-    if (!signals || signals.length === 0) return;
+    if (!signals && !trade) return;
     if (tipTimerRef.current != null) window.clearTimeout(tipTimerRef.current);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const TOOLTIP_W = 290;
@@ -100,7 +102,7 @@ export default function StockTable({
     }
     if (x < 8) x = 8;
 
-    setTip({ x, y, signals, name, count });
+    setTip({ x, y, signals, name, count, tradeLevel: trade?.level, tradeScore: trade?.score });
   }, []);
 
   const hideSignalTip = useCallback(() => {
@@ -173,16 +175,16 @@ export default function StockTable({
                       {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
                       <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
                       {badge ? <span className={`stock-badge ${badge.tone}`}>{badge.label}</span> : null}
-                      {signalStocks?.[item.code] ? (
+                      {signalStocks?.[item.code] || tradeSignals?.[item.code] ? (
                       <span className="signal-badge-wrapper"
-                        onMouseEnter={(e) => showSignalTip(e, signalStocks[item.code].signals, signalStocks[item.code].name, signalStocks[item.code].signalCount)}
+                        onMouseEnter={(e) => showSignalTip(e, signalStocks?.[item.code]?.signals, signalStocks?.[item.code]?.name || item.name, signalStocks?.[item.code]?.signalCount ?? 0, tradeSignals?.[item.code] ? { level: tradeSignals[item.code].level, score: tradeSignals[item.code].score } : undefined)}
                         onMouseLeave={hideSignalTip}>
-                        <span className={'stock-badge signal' + (() => { const sc = signalStocks[item.code].score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : ''; })()}>技</span>
+                        <span className={'stock-badge signal' + (() => { const sc = signalStocks?.[item.code]?.score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : (tradeSignals?.[item.code] ? ' signal-up' : ''); })()}>技</span>
                       </span>
                       ) : null}
                       {tradeSignals?.[item.code] ? (
-                        <span className="trade-dot" style={{ background: levelColor(tradeSignals[item.code].level as any) }}
-                          title={`交易评分 ${tradeSignals[item.code].score}`} />
+                        <span className={`trade-dot signal-${tradeSignals[item.code].level}`}
+                          title={`${levelLabel(tradeSignals[item.code].level as any)} · ${tradeSignals[item.code].score} 分`} />
                       ) : null}
                       {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                     </span>
@@ -289,8 +291,16 @@ export default function StockTable({
           onMouseEnter={keepTip}
           onMouseLeave={hideSignalTip}
         >
-          <div className="signal-tooltip-header">{tip.name} — {tip.count} 个信号</div>
-          {tip.signals.slice(0, 15).map((s, i) => (
+          <div className="signal-tooltip-header">{tip.name}{tip.count > 0 ? ` — ${tip.count} 个信号` : ''}</div>
+          {tip.tradeLevel ? (
+            <div className="signal-tooltip-item">
+              <span className={'severity-tag severity-' + (tip.tradeLevel === 'strong_buy' || tip.tradeLevel === 'buy' ? 'positive' : tip.tradeLevel === 'reduce' || tip.tradeLevel === 'avoid' ? 'negative' : 'info')}>
+                {levelLabel(tip.tradeLevel as any)}
+              </span>
+              <span className="signal-tooltip-label">{tip.tradeScore} 分</span>
+            </div>
+          ) : null}
+          {tip.signals?.slice(0, 15).map((s, i) => (
             <div key={i} className="signal-tooltip-item">
               <span className={'severity-tag severity-' + (s.severity === 'positive' ? 'positive' : s.severity === 'negative' ? 'negative' : 'info')}>
                 {s.severity === 'positive' ? '看多' : s.severity === 'negative' ? '看空' : '中性'}
@@ -298,7 +308,7 @@ export default function StockTable({
               <span className="signal-tooltip-label">{s.label}</span>
             </div>
           ))}
-          {tip.signals.length > 15 ? <div className="signal-tooltip-more">还有 {tip.signals.length - 15} 个信号...</div> : null}
+          {tip.signals && tip.signals.length > 15 ? <div className="signal-tooltip-more">还有 {tip.signals.length - 15} 个信号...</div> : null}
         </div>
       ) : null}
     </div>

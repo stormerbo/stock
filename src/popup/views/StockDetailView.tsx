@@ -188,6 +188,9 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
     };
   }, [code, fallbackName, period, refreshAt]);
 
+  const isTextContent = period === "fundamental" || period === "trades" || period === "analysis";
+  const isKlineActive = detail && period !== "fundamental" && period !== "trades" && period !== "analysis";
+
   return (
     <section className="stock-detail-panel">
       {/* ─── Top Bar ─── */}
@@ -202,162 +205,146 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
         </button>
       </header>
 
-      {loading && !detail && period !== "fundamental" ? (
-        <div className="detail-loading">详情加载中...</div>
-      ) : null}
+      {/* ─── Content Body (scrollable for text tabs, flex for K-line) ─── */}
+      <div className="detail-body" style={{ overflowY: isTextContent ? 'auto' : 'hidden' }}>
+        {loading && !detail && period !== "fundamental" ? (
+          <div className="detail-loading">详情加载中...</div>
+        ) : null}
 
-      {error && !detail && period !== "fundamental" && period !== "trades" && period !== "analysis" ? (
-        <div className="detail-error">详情获取失败：{error}</div>
-      ) : null}
+        {error && !detail && period !== "fundamental" && period !== "trades" && period !== "analysis" ? (
+          <div className="detail-error">详情获取失败：{error}</div>
+        ) : null}
 
-      {period === "fundamental" ? (
-        <div className="detail-body">
+        {period === "fundamental" ? (
           <FundamentalPanel data={fundamentals} loading={fundamentalsLoading} code={code} fallbackName={fallbackName} />
-          {/* ─── Period Tabs ─── */}
-          <div className="period-tabs">
-            {PERIOD_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={`period-tab ${period === tab.value ? "active" : ""}`}
-                onClick={() => setPeriod(tab.value)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {period === "trades" ? (
-        <div className="detail-body">
-          <TradeHistoryView code={code} name={detail?.name || fallbackName}
-            onBack={() => setPeriod("minute")}
-            onUpdate={() => getTradesForStock(code).then(setTrades)} />
-        </div>
-      ) : null}
-
-      {period === "analysis" ? (
-        <div className="detail-body">
-          <div className="detail-quote-header">
-            <div className="quote-title-row">
-              <div className="quote-title-left">
-                <strong>{detail?.name || fallbackName}</strong>
-                <span className="quote-code">{code}</span>
-              </div>
-            </div>
-          </div>
-          <TechnicalAnalysisPanel signals={analysisSignals} loading={analysisLoading} error={analysisError} />
-          <div className="period-tabs" style={{ marginTop: 8 }}>
-            {PERIOD_TABS.map((tab) => (
-              <button key={tab.value} type="button"
-                className={`period-tab ${period === tab.value ? "active" : ""}`}
-                onClick={() => setPeriod(tab.value)}>{tab.label}</button>
-            ))}
-            {hasTrades && (
-              <button type="button"
-                className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
-                onClick={() => setPeriod("trades")}>交易</button>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {detail && period !== "fundamental" && period !== "trades" && period !== "analysis" ? (
-        <div className="detail-body">
-          {/* ─── Quote Header ─── */}
-          <div className="detail-quote-header">
-            <div className="quote-title-row">
-              <div className="quote-title-left">
-                <strong>{detail.name}</strong>
-                <span className="quote-code">{detail.code}</span>
-              </div>
-              <div className="quote-price-block">
-                <div className={`quote-price ${toneClass(detail.changePct)}`}>
-                  {formatNumber(detail.price, 2)}
-                </div>
-                <div className={`quote-change ${toneClass(detail.changePct)}`}>
-                  {formatPercent(detail.changePct)}
+        {period === "trades" ? (
+          <>
+            <div className="detail-quote-header">
+              <div className="quote-title-row">
+                <div className="quote-title-left">
+                  <strong>{detail?.name || fallbackName}</strong>
+                  <span className="quote-code">{code}</span>
                 </div>
               </div>
             </div>
+            <TradeHistoryView code={code} name={detail?.name || fallbackName}
+              embedded
+              onUpdate={() => getTradesForStock(code).then(setTrades)} />
+          </>
+        ) : null}
 
-            {/* ─── Quick Stats Strip ─── */}
-            {(() => {
-              const limitPct = getStockLimitPct(detail.code);
-              const limitUp = Math.round(detail.prevClose * (1 + limitPct) * 100) / 100;
-              const limitDown = Math.round(detail.prevClose * (1 - limitPct) * 100) / 100;
-              return (
-              <div className="quick-stats">
-                <div className="stat-cell"><span className="stat-label">今开</span><b className={toneClass(detail.open - detail.prevClose)}>{formatNumber(detail.open, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">涨停</span><b className="up">{formatNumber(limitUp, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">跌停</span><b className="down">{formatNumber(limitDown, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">最高</span><b className={toneClass(detail.high - detail.prevClose)}>{formatNumber(detail.high, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">最低</span><b className={toneClass(detail.low - detail.prevClose)}>{formatNumber(detail.low, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
-                <div className="stat-cell"><span className="stat-label">成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
-                <div className="stat-cell"><span className="stat-label">换手</span><b>{formatPercent(detail.turnoverRate)}</b></div>
-                <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
-                <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
+        {period === "analysis" ? (
+          <>
+            <div className="detail-quote-header">
+              <div className="quote-title-row">
+                <div className="quote-title-left">
+                  <strong>{detail?.name || fallbackName}</strong>
+                  <span className="quote-code">{code}</span>
+                </div>
               </div>
-              );
-            })()}
+            </div>
+            <TechnicalAnalysisPanel signals={analysisSignals} loading={analysisLoading} error={analysisError} />
+          </>
+        ) : null}
 
-            {/* ─── Risk Metrics Strip ─── */}
-            {detail.period === "day" && detail.kline.length >= 10 ? (
-              <RiskMetrics kline={detail.kline} />
-            ) : null}
-
-            {/* ─── Stop Suggest Block ─── */}
-            <StopSuggestBlock suggestion={stopSugg} />
-
-            {tradeSignal ? (
-              <div className="trade-signal-card">
-                <div className="trade-signal-header">
-                  <span className="trade-signal-dot" style={{ background: levelColor(tradeSignal.level) }} />
-                  <strong>{levelLabel(tradeSignal.level)}</strong>
-                  <span className="trade-signal-score">{tradeSignal.score} 分</span>
+        {isKlineActive ? (
+          <>
+            {/* ─── Quote Header ─── */}
+            <div className="detail-quote-header">
+              <div className="quote-title-row">
+                <div className="quote-title-left">
+                  <strong>{detail.name}</strong>
+                  <span className="quote-code">{detail.code}</span>
                 </div>
-                <div className="trade-signal-dims">
-                  <span>趋势 {tradeSignal.details.trendScore}</span>
-                  <span>动量 {tradeSignal.details.momentumScore}</span>
-                  <span>风险 {tradeSignal.details.riskScore}</span>
-                  <span>支撑 {tradeSignal.details.supportScore}</span>
-                </div>
-                {tradeSignal.reasons.length > 0 ? (
-                  <div className="trade-signal-reasons">
-                    {tradeSignal.reasons.map((r, i) => <span key={i}>{r}</span>)}
+                <div className="quote-price-block">
+                  <div className={`quote-price ${toneClass(detail.changePct)}`}>
+                    {formatNumber(detail.price, 2)}
                   </div>
-                ) : null}
+                  <div className={`quote-change ${toneClass(detail.changePct)}`}>
+                    {formatPercent(detail.changePct)}
+                  </div>
+                </div>
               </div>
-            ) : null}
-          </div>
 
-          {/* ─── Chart ─── */}
-          <KlineChart detail={detail} />
+              {/* ─── Quick Stats Strip ─── */}
+              {(() => {
+                const limitPct = getStockLimitPct(detail.code);
+                const limitUp = Math.round(detail.prevClose * (1 + limitPct) * 100) / 100;
+                const limitDown = Math.round(detail.prevClose * (1 - limitPct) * 100) / 100;
+                return (
+                <div className="quick-stats">
+                  <div className="stat-cell"><span className="stat-label">今开</span><b className={toneClass(detail.open - detail.prevClose)}>{formatNumber(detail.open, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">涨停</span><b className="up">{formatNumber(limitUp, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">跌停</span><b className="down">{formatNumber(limitDown, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">最高</span><b className={toneClass(detail.high - detail.prevClose)}>{formatNumber(detail.high, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">最低</span><b className={toneClass(detail.low - detail.prevClose)}>{formatNumber(detail.low, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
+                  <div className="stat-cell"><span className="stat-label">成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
+                  <div className="stat-cell"><span className="stat-label">换手</span><b>{formatPercent(detail.turnoverRate)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
+                  <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
+                </div>
+                );
+              })()}
 
-          {/* ─── Period Tabs ─── */}
-          <div className="period-tabs">
-            {PERIOD_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={`period-tab ${period === tab.value ? "active" : ""}`}
-                onClick={() => setPeriod(tab.value)}
-              >
-                {tab.label}
-              </button>
-            ))}
-            {hasTrades && (
-              <button type="button"
-                className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
-                onClick={() => setPeriod("trades")}
-              >交易</button>
-            )}
-          </div>
-        </div>
-      ) : null}
+              {/* ─── Risk Metrics Strip ─── */}
+              {detail.period === "day" && detail.kline.length >= 10 ? (
+                <RiskMetrics kline={detail.kline} />
+              ) : null}
+
+              {/* ─── Stop Suggest Block ─── */}
+              <StopSuggestBlock suggestion={stopSugg} />
+
+              {tradeSignal ? (
+                <div className="trade-signal-card">
+                  <div className="trade-signal-header">
+                    <span className="trade-signal-dot" style={{ background: levelColor(tradeSignal.level) }} />
+                    <strong>{levelLabel(tradeSignal.level)}</strong>
+                    <span className="trade-signal-score">{tradeSignal.score} 分</span>
+                  </div>
+                  <div className="trade-signal-dims">
+                    <span>趋势 {tradeSignal.details.trendScore}</span>
+                    <span>动量 {tradeSignal.details.momentumScore}</span>
+                    <span>风险 {tradeSignal.details.riskScore}</span>
+                    <span>支撑 {tradeSignal.details.supportScore}</span>
+                  </div>
+                  {tradeSignal.reasons.length > 0 ? (
+                    <div className="trade-signal-reasons">
+                      {tradeSignal.reasons.map((r, i) => <span key={i}>{r}</span>)}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {/* ─── Chart ─── */}
+            <KlineChart detail={detail} />
+          </>
+        ) : null}
+      </div>
+
+      {/* ─── Fixed Bottom Tabs ─── */}
+      <div className="period-tabs">
+        {PERIOD_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            className={`period-tab ${period === tab.value ? "active" : ""}`}
+            onClick={() => setPeriod(tab.value)}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {hasTrades && (
+          <button type="button"
+            className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
+            onClick={() => setPeriod("trades")}
+          >交易</button>
+        )}
+      </div>
     </section>
   );
 }

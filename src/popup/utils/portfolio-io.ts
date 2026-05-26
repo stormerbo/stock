@@ -73,10 +73,22 @@ export function parseFundHoldings(input: unknown): FundHoldingConfig[] {
 export async function loadPortfolioConfig(): Promise<PortfolioConfig> {
   if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
     const result = await chrome.storage.sync.get([STORAGE_KEYS.stockHoldings, STORAGE_KEYS.fundHoldings]);
-    return {
+    const synced = {
       stockHoldings: parseStockHoldings(result[STORAGE_KEYS.stockHoldings]),
       fundHoldings: parseFundHoldings(result[STORAGE_KEYS.fundHoldings]),
     };
+    // sync 为空时尝试 local 兜底
+    if (synced.stockHoldings.length === 0 && synced.fundHoldings.length === 0) {
+      try {
+        const localResult = await chrome.storage.local.get([STORAGE_KEYS.stockHoldings, STORAGE_KEYS.fundHoldings]);
+        const localHoldings = parseStockHoldings(localResult[STORAGE_KEYS.stockHoldings]);
+        const localFunds = parseFundHoldings(localResult[STORAGE_KEYS.fundHoldings]);
+        if (localHoldings.length > 0 || localFunds.length > 0) {
+          return { stockHoldings: localHoldings, fundHoldings: localFunds };
+        }
+      } catch { /* ignore */ }
+    }
+    return synced;
   }
 
   try {
@@ -94,10 +106,19 @@ export async function loadPortfolioConfig(): Promise<PortfolioConfig> {
 
 export async function savePortfolioConfig(config: PortfolioConfig): Promise<void> {
   if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-    await chrome.storage.sync.set({
-      [STORAGE_KEYS.stockHoldings]: config.stockHoldings,
-      [STORAGE_KEYS.fundHoldings]: config.fundHoldings,
-    });
+    try {
+      await chrome.storage.sync.set({
+        [STORAGE_KEYS.stockHoldings]: config.stockHoldings,
+        [STORAGE_KEYS.fundHoldings]: config.fundHoldings,
+      });
+    } catch (e) {
+      console.warn('[Portfolio] sync save failed, falling back to local:', e);
+      // 同步失败时保存到 local storage 兜底
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.stockHoldings]: config.stockHoldings,
+        [STORAGE_KEYS.fundHoldings]: config.fundHoldings,
+      });
+    }
     return;
   }
 

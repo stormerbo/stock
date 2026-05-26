@@ -255,7 +255,9 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
   // ─── 删除交易 ───
 
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+   const [recalculating, setRecalculating] = useState(false);
+   const [recalcMsg, setRecalcMsg] = useState<string | null>(null);
   const handleDelete = async (code: string, tradeId: string) => {
     await deleteTrade(code, tradeId);
     await refreshStock(code);
@@ -279,7 +281,21 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
         <span>股票 <b style={{ color: 'var(--text-0)' }}>{summary.totalStocks}</b> 只</span>
         <span>共 <b style={{ color: 'var(--text-0)' }}>{summary.totalTrades}</b> 笔</span>
         <span>合计已实现盈亏 <b className={toneClass(summary.totalRealizedPnl)}>{formatNumber(summary.totalRealizedPnl, 2)}</b></span>
-        <button type="button" style={{ ...btnStyle('ghost'), marginLeft: 'auto', fontSize: 18, lineHeight: 1, padding: '2px 6px' }} onClick={() => setShowRecalcModal(true)} title="重新计算累计收益">⏱</button>
+        {recalcMsg ? <span style={{ fontSize: 11, color: 'var(--text-1)' }}>{recalcMsg}</span> : null}
+        <button type="button" style={{ ...btnStyle('brand'), marginLeft: 'auto', fontSize: 11, padding: '4px 10px', opacity: recalculating ? 0.5 : 1 }}
+          disabled={recalculating}
+          onClick={async () => {
+            setRecalculating(true);
+            setRecalcMsg(null);
+            let count = 0;
+            for (const code of allStockCodes) {
+              try { onStockTradesChanged?.(code); count++; } catch { /* skip */ }
+            }
+            setRecalculating(false);
+            setRecalcMsg(count > 0 ? `已重算 ${count} 只` : '无交易记录');
+            setTimeout(() => setRecalcMsg(null), 2000);
+          }}>{recalculating ? '重算中...' : '重算持仓'}</button>
+        <button type="button" style={{ ...btnStyle('ghost'), fontSize: 18, lineHeight: 1, padding: '2px 6px' }} onClick={() => setShowRecalcModal(true)} title="重新计算累计收益">⏱</button>
         <button type="button" style={{ ...btnStyle('brand') }} onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}>
           <Plus size={13} /> 新增交易
         </button>

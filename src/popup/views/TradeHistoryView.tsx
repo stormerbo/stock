@@ -15,8 +15,9 @@ import { toneClass } from '../utils/format';
 type Props = {
   code: string;
   name: string;
-  onBack: () => void;
+  onBack?: () => void;
   onUpdate: () => void;
+  embedded?: boolean;
 };
 
 type FormState = {
@@ -62,7 +63,7 @@ const typeColor: Record<TradeType, string> = {
   dividend: '#f59e0b',
 };
 
-export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props) {
+export default function TradeHistoryView({ code, name, onBack, onUpdate, embedded }: Props) {
   const [trades, setTrades] = useState<StockTradeRecord[]>([]);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [loading, setLoading] = useState(true);
@@ -208,22 +209,10 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
     style: { ...inputStyle, width: 0 },
   });
 
-  return (
-    <section className="detail-view">
-      {/* Header */}
-      <div className="detail-header">
-        <button type="button" className="detail-back-btn" onClick={onBack}>
-          <ChevronLeft size={16} />
-        </button>
-        <h2 className="detail-title">
-          {name}
-          <span className="detail-subtitle">{code}</span>
-          <span className="detail-subtitle" style={{ marginLeft: 8, fontWeight: 400, fontSize: 12 }}>交易记录</span>
-        </h2>
-      </div>
-
+  const content = (
+    <>
       {/* Summary Card */}
-      <div className="tag-editor-body" style={{ padding: '8px 0 0' }}>
+      <div className="tag-editor-body" style={{ padding: embedded ? '0' : '8px 0 0' }}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 12, padding: '8px 10px', background: 'var(--bg-2)', borderRadius: 6 }}>
           <div style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 10, color: 'var(--text-1)', marginBottom: 2 }}>持仓</div>
@@ -251,9 +240,14 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
 
         {/* Trade Table */}
         <div className="tag-editor-section">
-          <span className="tag-editor-label">
-            交易流水 {loading && <span style={{ color: 'var(--text-1)', opacity: 0.6 }}>(加载中...)</span>}
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="tag-editor-label">
+              交易流水 {loading && <span style={{ color: 'var(--text-1)', opacity: 0.6 }}>(加载中...)</span>}
+            </span>
+            <button type="button" className="tag-editor-btn tag-editor-btn-save" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => { setForm(INITIAL_FORM); setShowAddModal(true); }}>
+              <Plus size={12} style={{ marginRight: 4 }} /> 新增交易
+            </button>
+          </div>
           {sortedTrades.length === 0 ? (
             <div className="tag-editor-empty" style={{ marginTop: 4 }}>暂无交易记录，请添加第一笔交易</div>
           ) : (
@@ -318,13 +312,6 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
               </table>
             </div>
           )}
-        </div>
-
-        {/* Add Trade Button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button type="button" className="tag-editor-btn tag-editor-btn-save" onClick={() => { setForm(INITIAL_FORM); setShowAddModal(true); }}>
-            <Plus size={12} style={{ marginRight: 4 }} /> 新增交易
-          </button>
         </div>
       </div>
 
@@ -410,6 +397,26 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate }: Props
             </div>
           </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <section className="detail-view">
+      <div className="detail-header">
+        <button type="button" className="detail-back-btn" onClick={onBack}>
+          <ChevronLeft size={16} />
+        </button>
+        <h2 className="detail-title">
+          {name}
+          <span className="detail-subtitle">{code}</span>
+          <span className="detail-subtitle" style={{ marginLeft: 8, fontWeight: 400, fontSize: 12 }}>交易记录</span>
+        </h2>
+      </div>
+      {content}
     </section>
   );
 }

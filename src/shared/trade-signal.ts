@@ -55,10 +55,10 @@ export function levelLabel(level: TradeSignal['level']): string {
 
 export function levelColor(level: TradeSignal['level']): string {
   switch (level) {
-    case 'strong_buy': return '#22c55e';
-    case 'buy': return '#4ade80';
+    case 'strong_buy': return 'var(--up)';
+    case 'buy': return 'var(--up)';
     case 'hold': return '#facc15';
-    case 'reduce': return '#f97316';
+    case 'reduce': return 'var(--down)';
     case 'avoid': return '#ef4444';
   }
 }
