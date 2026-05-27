@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BarChart3, Bell, FileText, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './views/StockDetailView';
 import SectorDetailView from './views/SectorDetailView';
@@ -46,6 +46,7 @@ import type {
 } from './types';
 import { formatNumber, formatLooseNumber, formatMarketAmount, formatPercent, formatRatioPercent, toneClass, formatRelativeTime, getShanghaiDateKey, resolvePrevTurnover, deriveMarketStats } from './utils/format';
 import { applyPinnedOrder, insertAfterPinned, prioritizePinnedRows, reorderCodes, sortStockRows, sortFundRows } from './utils/sorting';
+import { adjustMenuRectToViewport, clampMenuPosition } from './utils/menu-position';
 import { STORAGE_KEYS, EMPTY_PORTFOLIO, parseStockHoldings, parseFundHoldings, loadPortfolioConfig, savePortfolioConfig } from './utils/portfolio-io';
 import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/search-suggestions';
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
@@ -60,6 +61,7 @@ import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
 import ConfirmModal from './components/ConfirmModal';
 import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
+import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig } from '../shared/display';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const MARKET_STATS_CACHE_KEY = 'marketStats';
@@ -123,6 +125,8 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     return normalizeThemeMode(window.localStorage.getItem(THEME_STORAGE_KEY));
   });
+  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
+  const displayLoadedRef = useRef(false);
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
     const saved = window.localStorage.getItem('popup-opacity');
@@ -323,6 +327,7 @@ export default function App() {
   const [tagEditorTarget, setTagEditorTarget] = useState<{ kind: 'stock' | 'fund'; code: string } | null>(null);
 
   const popupRootRef = useRef<HTMLDivElement | null>(null);
+  const rowContextMenuRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const scrollPosRef = useRef(0);
@@ -370,13 +375,14 @@ export default function App() {
       if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
       return sum + item.price * item.shares;
     }, 0);
+    const hidden = displayConfig.privacyHidden;
 
     return [
-      { label: '总市值', value: formatNumber(totalMarketValue, 2), tone: 'neutral' },
-      { label: '总盈亏', value: formatNumber(correctedStockFloating, 1), tone: toneClass(correctedStockFloating) },
-      { label: '当日盈亏', value: formatNumber(correctedStockDaily, 1), tone: toneClass(correctedStockDaily) },
+      { label: '总市值', value: hidden ? '***' : formatNumber(totalMarketValue, 2), tone: hidden ? 'neutral' : 'neutral' },
+      { label: '总盈亏', value: hidden ? '***' : formatNumber(correctedStockFloating, 1), tone: hidden ? 'neutral' : toneClass(correctedStockFloating) },
+      { label: '当日盈亏', value: hidden ? '***' : formatNumber(correctedStockDaily, 1), tone: hidden ? 'neutral' : toneClass(correctedStockDaily) },
     ] as const;
-  }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
+  }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, displayConfig.privacyHidden]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -394,12 +400,13 @@ export default function App() {
       return sum + item.estimatedProfit;
     }, 0);
 
+    const hidden = displayConfig.privacyHidden;
     return [
-      { label: '持有总额', value: formatNumber(holdingAmount, 2), tone: 'neutral' },
-      { label: '持有收益', value: formatNumber(holdingProfit, 2), tone: toneClass(holdingProfit) },
-      { label: '估算收益', value: formatNumber(estimated, 2), tone: toneClass(estimated) },
+      { label: '持有总额', value: hidden ? '***' : formatNumber(holdingAmount, 2), tone: 'neutral' },
+      { label: '持有收益', value: hidden ? '***' : formatNumber(holdingProfit, 2), tone: hidden ? 'neutral' : toneClass(holdingProfit) },
+      { label: '估算收益', value: hidden ? '***' : formatNumber(estimated, 2), tone: hidden ? 'neutral' : toneClass(estimated) },
     ] as const;
-  }, [fundPositions]);
+  }, [fundPositions, displayConfig.privacyHidden]);
 
   const accountMetrics = useMemo(() => {
     const stockMarketValue = stockPositions.reduce((sum, item) => {
@@ -426,13 +433,14 @@ export default function App() {
     const totalAssets = stockMarketValue + fundHoldingAmount;
     const totalHoldingProfit = stockTotalPnl + fundHoldingProfit;
     const previewProfit = stockDaily + fundEstimated;
+    const hidden = displayConfig.privacyHidden;
 
     return [
-      { label: '综合持仓收益', value: formatNumber(totalHoldingProfit, 2), tone: toneClass(totalHoldingProfit) },
-      { label: '综合预估收益', value: formatNumber(previewProfit, 2), tone: toneClass(previewProfit) },
-      { label: '股票当日盈亏', value: formatNumber(stockDaily, 2), tone: toneClass(stockDaily) },
+      { label: '综合持仓收益', value: hidden ? '***' : formatNumber(totalHoldingProfit, 2), tone: hidden ? 'neutral' : toneClass(totalHoldingProfit) },
+      { label: '综合预估收益', value: hidden ? '***' : formatNumber(previewProfit, 2), tone: hidden ? 'neutral' : toneClass(previewProfit) },
+      { label: '股票当日盈亏', value: hidden ? '***' : formatNumber(stockDaily, 2), tone: hidden ? 'neutral' : toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl]);
+  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, displayConfig.privacyHidden]);
 
   const metrics = activeTab === 'stocks'
     ? stockMetrics
@@ -769,41 +777,54 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-      chrome.storage.sync.get(THEME_STORAGE_KEY, (result: Record<string, unknown>) => {
-        setTheme(normalizeThemeMode(result[THEME_STORAGE_KEY]));
-      });
-    }
+    const syncDisplay = () => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+        chrome.storage.sync.get(DISPLAY_STORAGE_KEY, (result: Record<string, unknown>) => {
+          setDisplayConfig(normalizeDisplayConfig(result[DISPLAY_STORAGE_KEY]));
+          displayLoadedRef.current = true;
+        });
+      } else {
+        try {
+          const raw = window.localStorage.getItem(DISPLAY_STORAGE_KEY);
+          if (raw) setDisplayConfig(normalizeDisplayConfig(JSON.parse(raw)));
+        } catch {
+          setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
+        }
+        displayLoadedRef.current = true;
+      }
+    };
+    syncDisplay();
     if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
       const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-        if (area === 'sync' && changes[THEME_STORAGE_KEY]) {
-          setTheme(normalizeThemeMode(changes[THEME_STORAGE_KEY].newValue));
+        if (area === 'sync' && changes[DISPLAY_STORAGE_KEY]) {
+          const next = normalizeDisplayConfig(changes[DISPLAY_STORAGE_KEY].newValue);
+          setDisplayConfig((prev) => (
+            prev.colorScheme === next.colorScheme
+            && prev.decimalPlaces === next.decimalPlaces
+            && prev.privacyHidden === next.privacyHidden
+              ? prev
+              : next
+          ));
         }
       };
       chrome.storage.onChanged.addListener(listener);
       return () => chrome.storage.onChanged.removeListener(listener);
     }
+    return undefined;
   }, []);
 
   // 读取设置页的涨跌色配置
   useEffect(() => {
-    const applyColorScheme = () => {
-      if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-        chrome.storage.sync.get('displayConfig', (result: Record<string, unknown>) => {
-          const cfg = result.displayConfig as { colorScheme?: string } | undefined;
-          document.body.classList.toggle('color-scheme-us', cfg?.colorScheme === 'us');
-        });
-      }
-    };
-    applyColorScheme();
-    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-        if (area === 'sync' && changes.displayConfig) applyColorScheme();
-      };
-      chrome.storage.onChanged.addListener(listener);
-      return () => chrome.storage.onChanged.removeListener(listener);
+    document.body.classList.toggle('color-scheme-us', displayConfig.colorScheme === 'us');
+    if (displayConfig.privacyHidden) {
+      document.body.classList.add('privacy-hidden');
+    } else {
+      document.body.classList.remove('privacy-hidden');
     }
-  }, [theme]);
+    if (!displayLoadedRef.current) return;
+    window.localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(displayConfig));
+    try { chrome.storage.sync.set({ [DISPLAY_STORAGE_KEY]: displayConfig }); } catch { /* best effort */ }
+  }, [displayConfig]);
 
   useEffect(() => {
     window.localStorage.setItem('popup-opacity', String(popupOpacity));
@@ -1342,6 +1363,18 @@ function clearIntradayIfStale(
     current === 'dark' ? 'light' : 'dark'
   ));
 
+  const togglePrivacyHidden = useCallback(() => {
+    setDisplayConfig((current) => {
+      const next = { ...current, privacyHidden: !current.privacyHidden };
+      try {
+        chrome.storage.sync.set({ [DISPLAY_STORAGE_KEY]: next });
+      } catch {
+        try { window.localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(next)); } catch { /* best effort */ }
+      }
+      return next;
+    });
+  }, []);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     // 硬刷新：直接从 API 拉取基金数据，不走 background 缓存
@@ -1524,37 +1557,33 @@ function clearIntradayIfStale(
   const openRowContextMenu = (event: React.MouseEvent, kind: 'stock' | 'fund', code: string, name: string) => {
     event.preventDefault();
     event.stopPropagation();
-    const rootRect = popupRootRef.current?.getBoundingClientRect();
-    const rootTop = rootRect?.top ?? 0;
-    const rootLeft = rootRect?.left ?? 0;
-    const menuWidth = 132;
-    const menuHeight = 148;
-    const viewportH = window.innerHeight;
-
-    // 转换为 popup-root 坐标系
-    let calcY = event.clientY - rootTop;
-    let calcX = event.clientX - rootLeft;
-
-    // 紧贴底部，双重防溢出
-    const visibleBottom = Math.min(rootRect?.bottom ?? viewportH, viewportH) - rootTop;
-    const maxY = visibleBottom - menuHeight - 8;
-    if (calcY > maxY) calcY = Math.max(4, maxY);
-    if (calcY < 4) calcY = 4;
-
-    // 确保不超出右侧边界
-    const rootVisibleRight = (rootRect?.right ?? window.innerWidth) - rootLeft;
-    if (calcX + menuWidth + 8 > rootVisibleRight) {
-      calcX = Math.max(4, calcX - menuWidth - 8);
-    }
+    const { left, top } = clampMenuPosition(
+      event.clientX,
+      event.clientY,
+      132,
+      148,
+      window.innerWidth,
+      window.innerHeight,
+      14,
+    );
 
     setRowContextMenu({
       kind,
       code,
       name,
-      x: calcX,
-      y: calcY,
+      x: left,
+      y: top,
     });
   };
+
+  useLayoutEffect(() => {
+    if (!rowContextMenu || !rowContextMenuRef.current) return;
+    const rect = rowContextMenuRef.current.getBoundingClientRect();
+    const next = adjustMenuRectToViewport(rect, window.innerWidth, window.innerHeight, 14);
+    if (next.left !== rowContextMenu.x || next.top !== rowContextMenu.y) {
+      setRowContextMenu((prev) => (prev ? { ...prev, x: next.left, y: next.top } : prev));
+    }
+  }, [rowContextMenu]);
 
   const toggleStockPinned = (code: string) => {
     setStockHoldings((prev) => applyPinnedOrder(prev, code));
@@ -1879,7 +1908,9 @@ function clearIntradayIfStale(
           unreadCount={unreadCount}
           marketStats={marketStats}
           theme={theme}
-            toggleTheme={toggleTheme}
+          toggleTheme={toggleTheme}
+          privacyHidden={displayConfig.privacyHidden}
+          togglePrivacyHidden={togglePrivacyHidden}
           openSettings={openSettings}
           clearDetailTargets={() => { setStockDetailTarget(null); setFundDetailTarget(null); }}
         />
@@ -1924,10 +1955,10 @@ function clearIntradayIfStale(
                   <div className="account-header-copy">
                     <span className="account-header-eyebrow">账户总览</span>
                     <div className="account-header-pills">
-                      <span>{`股票持仓 ${accountSnapshot.heldStockCount} 只`}</span>
-                      <span>{`基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
-                      <span>{`仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
-                      <span>{`已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
+                      <span>{displayConfig.privacyHidden ? '股票持仓 ***' : `股票持仓 ${accountSnapshot.heldStockCount} 只`}</span>
+                      <span>{displayConfig.privacyHidden ? '基金持仓 ***' : `基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
+                      <span>{displayConfig.privacyHidden ? '仅自选 ***' : `仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
+                      <span>{displayConfig.privacyHidden ? '已披露净值 ***' : `已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
                     </div>
                   </div>
                 ) : (
@@ -2027,12 +2058,13 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'account' && !stockDetailTarget ? (
-              <AccountDashboard
-                snapshot={accountSnapshot}
-                stockPositions={stockPositions}
-                fundPositions={fundPositions}
-              />
-            ) : null}
+                <AccountDashboard
+                  snapshot={accountSnapshot}
+                  stockPositions={stockPositions}
+                  fundPositions={fundPositions}
+                  privacyHidden={displayConfig.privacyHidden}
+                />
+              ) : null}
 
             {/* ---- Notification Panel ---- */}
             {activeTab === 'notifications' && !stockDetailTarget && !fundDetailTarget ? (
@@ -2090,6 +2122,7 @@ function clearIntradayIfStale(
                 onRemoveStock={removeStockFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
+                privacyHidden={displayConfig.privacyHidden}
               />
             ) : null}
 
@@ -2115,6 +2148,7 @@ function clearIntradayIfStale(
                 onRemoveFund={removeFundFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
+                privacyHidden={displayConfig.privacyHidden}
               />
             ) : null}
 
@@ -2197,6 +2231,7 @@ function clearIntradayIfStale(
 
         {rowContextMenu ? (
           <div
+            ref={rowContextMenuRef}
             className="row-context-menu"
             style={{ left: rowContextMenu.x, top: rowContextMenu.y }}
             onMouseDown={(event) => event.stopPropagation()}

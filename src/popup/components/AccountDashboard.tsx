@@ -22,9 +22,11 @@ type Props = {
   snapshot: AccountSnapshot;
   stockPositions: StockPosition[];
   fundPositions: FundPosition[];
+  privacyHidden: boolean;
 };
 
-export default function AccountDashboard({ snapshot, stockPositions, fundPositions }: Props) {
+export default function AccountDashboard({ snapshot, stockPositions, fundPositions, privacyHidden }: Props) {
+  const hiddenText = '***';
   return (
     <div className="account-dashboard">
       <section className="account-hero-card">
@@ -63,20 +65,20 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
           <div className="account-stat-list">
             <div className="account-stat-row">
               <span>综合持仓收益</span>
-              <strong className={toneClass(snapshot.stockFloating + snapshot.fundHoldingProfit)}>
-                {formatNumber(snapshot.stockFloating + snapshot.fundHoldingProfit, 2)}
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockFloating + snapshot.fundHoldingProfit)}>
+                {privacyHidden ? hiddenText : formatNumber(snapshot.stockFloating + snapshot.fundHoldingProfit, 2)}
               </strong>
             </div>
             <div className="account-stat-row">
               <span>综合预估收益</span>
-              <strong className={toneClass(snapshot.stockDaily + snapshot.fundEstimated)}>
-                {formatNumber(snapshot.stockDaily + snapshot.fundEstimated, 2)}
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockDaily + snapshot.fundEstimated)}>
+                {privacyHidden ? hiddenText : formatNumber(snapshot.stockDaily + snapshot.fundEstimated, 2)}
               </strong>
             </div>
             <div className="account-stat-row">
               <span>股票当日盈亏</span>
-              <strong className={toneClass(snapshot.stockDaily)}>
-                {formatNumber(snapshot.stockDaily, 2)}
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockDaily)}>
+                {privacyHidden ? hiddenText : formatNumber(snapshot.stockDaily, 2)}
               </strong>
             </div>
           </div>
@@ -117,11 +119,11 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
             </div>
             <div className="account-detail-item">
               <span>持仓收益</span>
-              <strong className={toneClass(snapshot.stockFloating)}>{formatNumber(snapshot.stockFloating, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockFloating)}>{privacyHidden ? hiddenText : formatNumber(snapshot.stockFloating, 2)}</strong>
             </div>
             <div className="account-detail-item">
               <span>当日盈亏</span>
-              <strong className={toneClass(snapshot.stockDaily)}>{formatNumber(snapshot.stockDaily, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockDaily)}>{privacyHidden ? hiddenText : formatNumber(snapshot.stockDaily, 2)}</strong>
             </div>
           </div>
         </article>
@@ -143,11 +145,11 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
             </div>
             <div className="account-detail-item">
               <span>持有收益</span>
-              <strong className={toneClass(snapshot.fundHoldingProfit)}>{formatNumber(snapshot.fundHoldingProfit, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.fundHoldingProfit)}>{privacyHidden ? hiddenText : formatNumber(snapshot.fundHoldingProfit, 2)}</strong>
             </div>
             <div className="account-detail-item">
               <span>估算收益</span>
-              <strong className={toneClass(snapshot.fundEstimated)}>{formatNumber(snapshot.fundEstimated, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.fundEstimated)}>{privacyHidden ? hiddenText : formatNumber(snapshot.fundEstimated, 2)}</strong>
             </div>
           </div>
         </article>

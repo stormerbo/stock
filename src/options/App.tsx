@@ -24,10 +24,10 @@ import {
 } from '../shared/tags';
 import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
 import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
+import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig, type ColorScheme } from '../shared/display';
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
-const DISPLAY_STORAGE_KEY = 'displayConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
 const WORK_MODE_STORAGE_KEY = 'workModeConfig';
 
@@ -56,21 +56,12 @@ const BADGE_LABELS: Record<BadgeMode, string> = {
   off: '关闭角标',
 };
 
-type ColorScheme = 'cn' | 'us';
-
-type DisplayConfig = {
-  colorScheme: ColorScheme;
-  decimalPlaces: number;
-};
-
 type RefreshConfig = {
   stockRefreshSeconds: number;
   fundRefreshSeconds: number;
   indexRefreshSeconds: number;
   marketStatsRefreshSeconds: number;
 };
-
-const DEFAULT_DISPLAY: DisplayConfig = { colorScheme: 'cn', decimalPlaces: 2 };
 const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSeconds: 60, indexRefreshSeconds: 30, marketStatsRefreshSeconds: 30 };
 const BACKUP_SCHEMA_VERSION = 1;
 
@@ -461,26 +452,25 @@ export default function App() {
   }, []);
 
   // ---- Display (manual save) ----
-  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY);
-  const [displayDraft, setDisplayDraft] = useState<DisplayConfig>(DEFAULT_DISPLAY);
+  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
+  const [displayDraft, setDisplayDraft] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
       chrome.storage.sync.get(DISPLAY_STORAGE_KEY, (result: Record<string, unknown>) => {
-        const config = result[DISPLAY_STORAGE_KEY] as DisplayConfig | undefined;
-        const resolved = config || DEFAULT_DISPLAY;
+        const resolved = normalizeDisplayConfig(result[DISPLAY_STORAGE_KEY]);
         setDisplayConfig(resolved);
         setDisplayDraft(resolved);
       });
     } else {
       try {
         const raw = localStorage.getItem(DISPLAY_STORAGE_KEY);
-        const resolved = raw ? JSON.parse(raw) : DEFAULT_DISPLAY;
+        const resolved = raw ? normalizeDisplayConfig(JSON.parse(raw)) : DEFAULT_DISPLAY_CONFIG;
         setDisplayConfig(resolved);
         setDisplayDraft(resolved);
       } catch {
-        setDisplayConfig(DEFAULT_DISPLAY);
-        setDisplayDraft(DEFAULT_DISPLAY);
+        setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
+        setDisplayDraft(DEFAULT_DISPLAY_CONFIG);
       }
     }
   }, []);
@@ -1064,6 +1054,21 @@ export default function App() {
                   </label>
                 ))}
               </div>
+            </div>
+
+            <div className="config-row">
+              <div>
+                <span className="config-label">隐私模式</span>
+                <span className="config-hint">一键隐藏持仓、成本和收益相关信息</span>
+              </div>
+              <label className={`privacy-toggle ${displayDraft.privacyHidden ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={displayDraft.privacyHidden}
+                  onChange={(e) => setDisplayDraft((prev) => ({ ...prev, privacyHidden: e.target.checked }))}
+                />
+                <span>{displayDraft.privacyHidden ? '已隐藏' : '已显示'}</span>
+              </label>
             </div>
 
             <div className="config-row">

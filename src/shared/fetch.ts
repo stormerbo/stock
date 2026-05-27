@@ -50,6 +50,7 @@ export type FundPosition = {
   units: number;
   cost: number;
   latestNav: number;
+  prevDayNav: number;
   navDate: string;
   navDisclosedToday: boolean;
   estimatedNav: number;
@@ -142,6 +143,12 @@ function formatEastmoneyTime(raw: unknown): string {
 export function normalizeFundCode(code: string): string {
   const raw = code.trim();
   return /^\d{6}$/.test(raw) ? raw : '';
+}
+
+export function isEtfFundName(name?: string): boolean {
+  const text = (name ?? '').trim();
+  if (!text) return false;
+  return /ETF(?!联接)/i.test(text) || /交易型开放式指数基金/.test(text);
 }
 
 export function formatQuoteTime(raw: string): string {
@@ -815,6 +822,7 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       units: holding.units,
       cost: holding.cost,
       latestNav: Number.NaN,
+      prevDayNav: Number.NaN,
       navDate: '',
       navDisclosedToday: false,
       estimatedNav: Number.NaN,
@@ -924,6 +932,7 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       units,
       cost,
       latestNav,
+      prevDayNav: prevNav,
       navDate,
       navDisclosedToday,
       estimatedNav,
@@ -943,6 +952,7 @@ export async function fetchTiantianFundPosition(holding: FundHoldingConfig): Pro
       units: holding.units,
       cost: holding.cost,
       latestNav: Number.NaN,
+      prevDayNav: Number.NaN,
       navDate: '',
       navDisclosedToday: false,
       estimatedNav: Number.NaN,
@@ -1016,4 +1026,3 @@ export async function retry<T>(
 
   throw lastError;
 }
-

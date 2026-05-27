@@ -1780,7 +1780,7 @@ body.theme-light .data-table thead th {
 }
 
 .row-context-menu {
-  position: absolute;
+  position: fixed;
   z-index: 160;
   width: 132px;
   border-radius: 10px;
@@ -1790,6 +1790,8 @@ body.theme-light .data-table thead th {
   backdrop-filter: blur(12px) saturate(118%);
   -webkit-backdrop-filter: blur(12px) saturate(118%);
   padding: 4px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
 }
 .ctx-menu-title {
   padding: 6px 8px;
@@ -5412,6 +5414,7 @@ body.theme-light .analytics-section {
 .trend-tag.trend-sideways { color: var(--text-2); }
 .stop-page-footer { text-align: center; font-size: 10px; color: var(--text-3); padding: 8px 0 4px; }
 .stop-ctx-menu {
+  position: fixed;
   background: color-mix(in srgb, var(--bg-1) 96%, white 4%);
   border: 1px solid color-mix(in srgb, var(--glass-border) 58%, transparent);
   border-radius: 10px;
@@ -5420,6 +5423,8 @@ body.theme-light .analytics-section {
   backdrop-filter: blur(12px) saturate(118%);
   -webkit-backdrop-filter: blur(12px) saturate(118%);
   min-width: 140px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
 }
 .stop-ctx-title {
   padding: 6px 8px;

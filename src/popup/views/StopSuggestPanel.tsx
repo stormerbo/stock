@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { loadCachedStopSuggestions, trendMeta, type StopSuggest } from '../../shared/stop-suggest';
 import { type StockPosition, type StockHoldingConfig } from '../../shared/fetch';
 import { loadAlertConfig, saveAlertConfig, genRuleId, type AlertRule } from '../../shared/alerts';
+import { adjustMenuRectToViewport, clampMenuPosition } from '../utils/menu-position';
 
 type StopSuggestRow = StopSuggest & { changePct?: number };
 
@@ -49,6 +50,7 @@ export default function StopSuggestPanel() {
   const [refreshing, setRefreshing] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ row: StopSuggestRow; x: number; y: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = useCallback(async () => {
     const s = await loadCachedStopSuggestions();
@@ -93,8 +95,18 @@ export default function StopSuggestPanel() {
 
   const handleRowContext = useCallback((e: React.MouseEvent, row: StopSuggestRow) => {
     e.preventDefault();
-    setCtxMenu({ row, x: e.clientX, y: e.clientY });
+    const { left, top } = clampMenuPosition(e.clientX, e.clientY, 150, 72, window.innerWidth, window.innerHeight, 14);
+    setCtxMenu({ row, x: left, y: top });
   }, []);
+
+  useLayoutEffect(() => {
+    if (!ctxMenu || !ctxMenuRef.current) return;
+    const rect = ctxMenuRef.current.getBoundingClientRect();
+    const next = adjustMenuRectToViewport(rect, window.innerWidth, window.innerHeight, 14);
+    if (next.left !== ctxMenu.x || next.top !== ctxMenu.y) {
+      setCtxMenu((prev) => (prev ? { ...prev, x: next.left, y: next.top } : prev));
+    }
+  }, [ctxMenu]);
 
   // 点击其他地方关闭右键菜单
   useEffect(() => {
@@ -179,10 +191,10 @@ export default function StopSuggestPanel() {
       </div>
       {ctxMenu ? (
         <div className="stop-ctx-menu"
+          ref={ctxMenuRef}
           style={{
-            position: 'fixed',
-            left: Math.min(ctxMenu.x, window.innerWidth - 150),
-            top: Math.min(ctxMenu.y, window.innerHeight - 44),
+            left: ctxMenu.x,
+            top: ctxMenu.y,
             zIndex: 200,
           }}
           onMouseDown={(e) => e.stopPropagation()}

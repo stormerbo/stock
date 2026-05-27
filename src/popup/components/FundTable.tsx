@@ -2,7 +2,7 @@ import { Pin, Star, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import TagBadge from '../tags/TagBadge';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatLooseNumber, formatPercent, toneClass } from '../utils/format';
-import { isTradingHours } from '../../shared/fetch';
+import { isTradingHours, isEtfFundName } from '../../shared/fetch';
 import type { FundRow, FundSortKey, ColumnSort } from '../types';
 
 type EditingCell = {
@@ -21,6 +21,7 @@ type Props = {
   fundsLoading: boolean;
   fundsError: string;
   fundPositionsLength: number;
+  privacyHidden: boolean;
   // event handlers
   openFundDetail: (item: FundRow) => void;
   openRowContextMenu: (e: React.MouseEvent, kind: 'stock' | 'fund', code: string, name: string) => void;
@@ -60,8 +61,9 @@ export default function FundTable({
   fundsLoading, fundsError, fundPositionsLength,
   openFundDetail, openRowContextMenu, startEditing, updateEditingValue, finishEditing, cancelEditing,
   handleDragStart, handleDragEnd, handleFundDrop,
-  onRemoveFund, onRefresh, refreshing,
+  onRemoveFund, onRefresh, refreshing, privacyHidden,
 }: Props) {
+  const hiddenText = '***';
   return (
     <div className="table-panel">
       <table className="data-table fund-table">
@@ -82,6 +84,19 @@ export default function FundTable({
             const isPinned = item.pinned;
             const hasFundCost = item.cost > 0;
             const hasFundUnits = item.units > 0;
+            const isEtf = isEtfFundName(item.name);
+            const displayNav = isEtf
+              ? (Number.isFinite(item.estimatedNav) ? item.estimatedNav : item.latestNav)
+              : (() => {
+                  const tradingNow = isTradingHours();
+                  const showEst = tradingNow && !item.navDisclosedToday;
+                  return showEst ? item.estimatedNav : item.latestNav;
+                })();
+            const displayChangePct = isEtf
+              ? (Number.isFinite(item.prevDayNav) && Number.isFinite(displayNav) && item.prevDayNav > 0
+                ? ((displayNav - item.prevDayNav) / item.prevDayNav) * 100
+                : item.changePct)
+              : item.changePct;
             return (
             <tr
               onContextMenu={(event) => openRowContextMenu(event, 'fund', item.code, item.name)}
@@ -136,18 +151,11 @@ export default function FundTable({
                   <span className={hasFundCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
                     onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'cost'); }}
                   >
-                    {hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值'}
+                    {privacyHidden ? hiddenText : (hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值')}
                   </span>
                 )}
                 <span className="price-line">
-                  {(() => {
-                    const tradingNow = isTradingHours();
-                    // 交易时段且净值未公布 → 显示估算净值；其他情况（盘后/周末）显示实际净值
-                    const showEst = tradingNow && !item.navDisclosedToday;
-                    const navValue = showEst ? item.estimatedNav : item.latestNav;
-                    const navStr = Number.isFinite(navValue) ? navValue.toFixed(4) : '-';
-                    return <>{navStr}</>;
-                  })()}
+                  {Number.isFinite(displayNav) ? displayNav.toFixed(4) : '-'}
                 </span>
                 {Number.isFinite(item.addedNav) && item.addedNav! > 0 ? (
                   <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -165,28 +173,29 @@ export default function FundTable({
                     onBlur={finishEditing} autoFocus
                     onKeyDown={(e) => { if (e.key === 'Enter') finishEditing(); else if (e.key === 'Escape') cancelEditing(); }}
                   />
-                ) : (
+                  ) : (
                   <>
                     <span className={hasFundUnits ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
                       onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'units'); }}
                     >
-                      {hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额'}
+                      {privacyHidden ? hiddenText : (hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额')}
                     </span>
                     {hasFundUnits && Number.isFinite(item.holdingAmount) ? (
                       <div style={{ fontSize: 10, color: 'var(--text-2)', lineHeight: 1.4, marginTop: 1 }}>
-                        ≈{formatNumber(item.holdingAmount, 2)}
+                        {privacyHidden ? hiddenText : `≈${formatNumber(item.holdingAmount, 2)}`}
                       </div>
                     ) : null}
                   </>
                 )}
               </td>
-              <td className={toneClass(item.holdingProfit)}>{formatNumber(item.holdingProfit, 2)}</td>
-              <td className={toneClass(item.holdingProfitRate)}>{formatPercent(item.holdingProfitRate)}</td>
-              <td className={toneClass(item.changePct)}>{formatPercent(item.changePct)}</td>
-              <td className={toneClass(item.estimatedProfit)}>
+              <td className={privacyHidden ? '' : toneClass(item.holdingProfit)}>{privacyHidden ? hiddenText : formatNumber(item.holdingProfit, 2)}</td>
+              <td className={privacyHidden ? '' : toneClass(item.holdingProfitRate)}>{privacyHidden ? hiddenText : formatPercent(item.holdingProfitRate)}</td>
+              <td className={toneClass(displayChangePct)}>{formatPercent(displayChangePct)}</td>
+              <td className={privacyHidden ? '' : toneClass(item.estimatedProfit)}>
                 {(() => {
                   if (!Number.isFinite(item.estimatedProfit)) return '-';
                   // 净值已公布（含周末回退到周五）→ 显示实际日涨跌收益；交易时段且未公布 → 显示估算
+                  if (privacyHidden) return hiddenText;
                   if (item.navDisclosedToday || isTradingHours()) return formatNumber(item.estimatedProfit, 2);
                   return '-';
                 })()}

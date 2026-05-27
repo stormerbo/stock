@@ -721,6 +721,40 @@ body.theme-light .color-scheme-item.active {
   accent-color: var(--brand);
 }
 
+.privacy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--option-bg);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 12px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.privacy-toggle:hover {
+  background: var(--option-hover);
+}
+
+.privacy-toggle.active {
+  border-color: var(--brand);
+  background: rgba(107, 92, 246, 0.15);
+  color: var(--brand);
+}
+
+body.theme-light .privacy-toggle.active {
+  background: rgba(63, 103, 240, 0.1);
+}
+
+.privacy-toggle input {
+  margin: 0;
+  accent-color: var(--brand);
+}
+
 /* ---- Alert Add Stock Row ---- */
 
 .alert-add-stock-row {

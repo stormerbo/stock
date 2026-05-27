@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
-import { type FundPosition, type FundHoldingConfig } from '../../shared/fetch';
+import { type FundPosition, type FundHoldingConfig, getLastTradingDay, isEtfFundName } from '../../shared/fetch';
 import { getFundHoldingAddButtonState } from './fund-holdings';
 
 // Proxy fetch through background to avoid CORS
@@ -104,6 +104,7 @@ type FundDetailData = {
   yieldHistory: FundYieldPoint[];
   topHoldings: FundHoldingStock[];
   holdingReportDate: string;
+  navDisclosedToday: boolean;
   estimatedNav: number;
   estimatedChange: number;
   estimatedChangePct: number;
@@ -517,6 +518,8 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     rate: baseInfo.rate || '-',
   };
 
+  const navDisclosedToday = info.navDate === getLastTradingDay();
+
   const navHistory = nav1mResult.status === 'fulfilled' ? nav1mResult.value : [];
   const navHistory3m = nav3mResult.status === 'fulfilled' ? nav3mResult.value : [];
   const navHistory5y = nav5yResult.status === 'fulfilled' ? nav5yResult.value : [];
@@ -531,6 +534,7 @@ async function fetchFundDetail(code: string, holding?: FundHoldingConfig): Promi
     yieldHistory,
     topHoldings,
     holdingReportDate,
+    navDisclosedToday,
     ...estimate,
     prevDayNav: estimate.prevDayNav,
   };
@@ -963,12 +967,35 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
   }, [code, fundHolding, refreshAt]);
 
   // Derived display values
-  const displayNav = detail?.estimatedNav && Number.isFinite(detail.estimatedNav)
-    ? detail.estimatedNav
-    : (detail?.info.latestNav || Number.NaN);
+  const isEtf = detail ? isEtfFundName(detail.info.name) : false;
+  const etfRealtime = Number.isFinite(fundPosition?.estimatedNav)
+    ? fundPosition!.estimatedNav
+    : (Number.isFinite(detail?.estimatedNav) ? detail!.estimatedNav : Number.NaN);
+  const etfPrevClose = Number.isFinite(fundPosition?.prevDayNav)
+    ? fundPosition!.prevDayNav
+    : (Number.isFinite(detail?.prevDayNav) ? detail!.prevDayNav : Number.NaN);
+  const actualNav = Number.isFinite(fundPosition?.latestNav)
+    ? fundPosition!.latestNav
+    : (Number.isFinite(detail?.info.latestNav) ? detail!.info.latestNav : Number.NaN);
+  const actualNavDate = (fundPosition?.navDate && fundPosition.navDate.trim()) || detail?.info.navDate || '-';
+  const displayNav = detail
+    ? (isEtf
+      ? (Number.isFinite(etfRealtime) ? etfRealtime : (Number.isFinite(actualNav) ? actualNav : detail.info.latestNav))
+      : (detail.navDisclosedToday && Number.isFinite(detail.info.latestNav)
+        ? detail.info.latestNav
+        : (Number.isFinite(detail.estimatedNav) ? detail.estimatedNav : detail.info.latestNav)))
+    : Number.NaN;
 
-  const displayChangePct = detail?.estimatedChangePct && Number.isFinite(detail.estimatedChangePct)
-    ? detail.estimatedChangePct
+  const displayChangePct = detail
+    ? (isEtf
+      ? (Number.isFinite(etfPrevClose) && Number.isFinite(displayNav) && etfPrevClose > 0
+        ? ((displayNav - etfPrevClose) / etfPrevClose) * 100
+        : detail.estimatedChangePct)
+      : (detail.navDisclosedToday
+        ? (Number.isFinite(detail.prevDayNav) && Number.isFinite(detail.info.latestNav) && detail.prevDayNav > 0
+          ? ((detail.info.latestNav - detail.prevDayNav) / detail.prevDayNav) * 100
+          : detail.estimatedChangePct)
+        : detail.estimatedChangePct))
     : Number.NaN;
 
   const hasHolding = fundPosition && fundHolding && fundPosition.units > 0;
@@ -1260,8 +1287,8 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
                   <div className="fund-info-item">
                     <span className="fund-info-label">单位净值</span>
                     <span className="fund-info-value">
-                      {Number.isFinite(detail.info.latestNav) ? detail.info.latestNav.toFixed(4) : '-'}
-                      {detail.info.navDate !== '-' ? `（${detail.info.navDate}）` : ''}
+                      {Number.isFinite(actualNav) ? actualNav.toFixed(4) : '-'}
+                      {actualNavDate !== '-' ? `（${actualNavDate}）` : ''}
                     </span>
                   </div>
                   <div className="fund-info-item">

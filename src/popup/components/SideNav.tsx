@@ -1,4 +1,4 @@
-import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Shield, Sun, Target, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, Eye, EyeOff, FileText, Moon, PieChart, Settings, Shield, Sun, Target, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatNumber, formatMarketAmount } from '../utils/format';
@@ -10,12 +10,14 @@ type Props = {
   marketStats: MarketStats | null;
   theme: ThemeMode;
   toggleTheme: () => void;
+  privacyHidden: boolean;
+  togglePrivacyHidden: () => void;
   openSettings: () => void;
   clearDetailTargets: () => void;
 };
 
 export default function SideNav({
-  activeTab, setActiveTab, unreadCount, marketStats, theme, toggleTheme, openSettings, clearDetailTargets,
+  activeTab, setActiveTab, unreadCount, marketStats, theme, toggleTheme, privacyHidden, togglePrivacyHidden, openSettings, clearDetailTargets,
 }: Props) {
   return (
     <aside className="side-nav">
@@ -123,15 +125,24 @@ export default function SideNav({
           <Settings size={10} />
           <span>设置</span>
         </button>
-        <button
-          type="button"
-          className="nav-btn"
-          onClick={toggleTheme}
-        >
-          {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
-          <span>{theme === 'dark' ? '浅色' : '深色'}</span>
-        </button>
-      </div>
-    </aside>
-  );
+      <button
+        type="button"
+        className="nav-btn"
+        onClick={toggleTheme}
+      >
+        {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
+        <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+      </button>
+      <button
+        type="button"
+        className="nav-btn"
+        onClick={togglePrivacyHidden}
+        title={privacyHidden ? '显示持仓与收益' : '隐藏持仓与收益'}
+      >
+        {privacyHidden ? <Eye size={10} /> : <EyeOff size={10} />}
+        <span>{privacyHidden ? '显示' : '隐藏'}</span>
+      </button>
+    </div>
+  </aside>
+);
 }
