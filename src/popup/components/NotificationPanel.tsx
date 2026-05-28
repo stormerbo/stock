@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { formatRelativeTime } from '../utils/format';
 import type { NotificationRecord, PageTab } from '../types';
 import { formatShanghaiMonthDayTime } from '../../shared/shanghai-time';
+import { isAssessmentReportNotificationName } from '../../shared/stock-assessment.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TechReportStatus = any;
@@ -45,8 +46,8 @@ export default function NotificationPanel({
           )}
           {(() => {
             const currentList = notifSubTab === 'alerts'
-              ? notifications.filter(n => n.name !== '盘后技术报告')
-              : notifications.filter(n => n.name === '盘后技术报告');
+              ? notifications.filter((n) => !isAssessmentReportNotificationName(n.name))
+              : notifications.filter((n) => isAssessmentReportNotificationName(n.name));
             return currentList.length > 0 && (
               <button type="button" className="notif-btn danger" onClick={() => clearNotifications(notifSubTab)}>清空</button>
             );
@@ -67,7 +68,7 @@ export default function NotificationPanel({
           className={`notif-sub-tab ${notifSubTab === 'tech-report' ? 'active' : ''}`}
           onClick={() => setNotifSubTab('tech-report')}
         >
-          技术报告
+          评估报告
         </button>
       </div>
 
@@ -75,11 +76,11 @@ export default function NotificationPanel({
         <>
           <div className="tech-report-status">
             {techReportStatus === 'loading' ? (
-              <div className="tech-report-loading">盘后技术报告加载中...</div>
+              <div className="tech-report-loading">盘后评估报告加载中...</div>
             ) : techReportStatus ? (
               <>
                 <div className="tech-report-header">
-                  <span className="tech-report-title">盘后技术报告</span>
+                  <span className="tech-report-title">盘后评估报告</span>
                   <span className={`tech-report-enabled ${techReportStatus.enabled ? 'on' : 'off'}`}>
                     {techReportStatus.enabled ? '已启用' : '已禁用'}
                   </span>
@@ -96,7 +97,7 @@ export default function NotificationPanel({
                           {techReportStatus.lastRunDate && (
                             <span className={`tech-report-badge ${techReportStatus.status === 'success' ? 'ok' : techReportStatus.status === 'error' ? 'err' : 'idle'}`}>
                               {techReportStatus.status === 'success' ? `✓ ${techReportStatus.details}` : ''}
-                              {techReportStatus.status === 'no_signal' ? '○ 无新信号' : ''}
+                              {techReportStatus.status === 'no_signal' ? '○ 无新变化' : ''}
                               {techReportStatus.status === 'error' ? '✗ 出错' : ''}
                               {techReportStatus.status === 'pending' ? '⋯ 运行中' : ''}
                             </span>
@@ -137,7 +138,7 @@ export default function NotificationPanel({
                     </>
                   ) : (
                     <div className="tech-report-row">
-                      <span className="tech-report-value disabled">请在设置页面启用盘后技术指标报告</span>
+                      <span className="tech-report-value disabled">请在设置页面启用盘后评估报告</span>
                     </div>
                   )}
                 </div>
@@ -146,9 +147,9 @@ export default function NotificationPanel({
           </div>
 
           {(() => {
-            const techNotifs = notifications.filter((n) => n.name === '盘后技术报告');
+            const techNotifs = notifications.filter((n) => isAssessmentReportNotificationName(n.name));
             return techNotifs.length === 0 ? (
-              <div className="notification-empty">暂无技术报告</div>
+              <div className="notification-empty">暂无评估报告</div>
             ) : (
               <div className="notification-list">
                 {techNotifs.map((item) => (
@@ -166,7 +167,7 @@ export default function NotificationPanel({
                         {(() => {
                           const stockLines = item.message.split('\n').filter(l => /^\S+\(\d{6}\)/.test(l.trim()));
                           const first = stockLines[0]?.trim().replace(/\(.*$/, '') || '';
-                          return <>{'📊 '}<span className="tech-report-title-inline">盘后技术报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
+                          return <>{'📊 '}<span className="tech-report-title-inline">盘后评估报告</span>{first ? <span className="notification-code"> {first}{stockLines.length > 1 ? ` 等${stockLines.length}只` : ''}</span> : ''}</>;
                         })()}
                       </span>
                       <span className="notification-message">{renderNotificationMessage(item.message)}</span>
@@ -188,7 +189,7 @@ export default function NotificationPanel({
       {notifSubTab === 'alerts' && (
         <>
           {(() => {
-            const alertNotifs = notifications.filter((n) => n.name !== '盘后技术报告');
+            const alertNotifs = notifications.filter((n) => !isAssessmentReportNotificationName(n.name));
             return alertNotifs.length === 0 ? (
               <div className="notification-empty">暂无股票告警</div>
             ) : (

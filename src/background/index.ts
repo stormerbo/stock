@@ -59,6 +59,15 @@ import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleP
 import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
 import { calcAllTradeSignals, saveTradeSignalsCache, shouldRecalcTradeSignals } from '../shared/trade-signal';
 import { getNextShanghaiScheduledTime } from '../shared/shanghai-time';
+import {
+  ASSESSMENT_REPORT_NOTIFICATION_NAME,
+  buildAssessmentReportSnapshot,
+  buildStockAssessment,
+  buildAssessmentSignature,
+  sortStockAssessments,
+  type StockAssessment,
+} from '../shared/stock-assessment.ts';
+import { clearStockAssessmentCache, loadCachedStockAssessments, saveStockAssessmentCache, shouldRecalcStockAssessments } from '../shared/stock-assessment-cache.ts';
 
 export type BadgeMode =
   | 'off'
@@ -1166,122 +1175,50 @@ async function generateDailyTechnicalReport() {
   await saveTechReportStatus({ status: 'pending', lastRunDate: today });
 
   try {
-    // 加载持仓股票
-    const syncResult = await chrome.storage.sync.get(['stockHoldings']);
-    const holdings = (syncResult.stockHoldings || []) as StockHoldingConfig[];
-    const heldStocks = holdings;
-    if (heldStocks.length === 0) {
-      await saveTechReportStatus({ status: 'no_signal', stockCount: 0, signalCount: 0, lastRunTime: Date.now(), details: '无持仓股票' });
+    const assessments = sortStockAssessments(await loadCachedStockAssessments());
+    if (assessments.length === 0) {
+      await saveTechReportStatus({ status: 'no_signal', stockCount: 0, signalCount: 0, lastRunTime: Date.now(), details: '无可评估股票' });
       await chrome.storage.local.set({ [TECH_REPORT_DATE_KEY]: today });
       return;
     }
 
-    // 从实时行情数据补全股票名称（持仓配置可能没存 name）
-    const localData = await chrome.storage.local.get(['stockPositions']);
-    const stockPositions = (localData.stockPositions || []) as Array<{ code: string; name: string }>;
-    const nameByCode: Record<string, string> = {};
-    for (const sp of stockPositions) {
-      if (sp.name) nameByCode[sp.code] = sp.name;
-    }
-
-    // 如果缓存里查不到名称，尝试从 API 实时拉取
-    const holdingsMissingName = heldStocks.filter(
-      (h) => !h.name && !nameByCode[normalizeStockCode(h.code)],
-    );
-    if (holdingsMissingName.length > 0) {
-      try {
-        const namePositions = await fetchBatchStockQuotes(holdingsMissingName);
-        for (const pos of namePositions) {
-          if (pos.name) nameByCode[pos.code] = pos.name;
-        }
-      } catch { /* name lookup is best-effort */ }
-    }
-
-    // 获取每只持仓股票的 K 线数据
-    const klineResults = await pMap(
-      heldStocks,
-      async (holding) => {
-        const stockName = holding.name || nameByCode[normalizeStockCode(holding.code)] || holding.code;
-        try {
-          const kline = await fetchDayFqKline(holding.code, 60);
-          return { code: holding.code, name: stockName, kline };
-        } catch {
-          return { code: holding.code, name: stockName, kline: [] };
-        }
-      },
-      4,
-    );
-
     // 检测所有信号，按配置过滤，与上次状态比较去重
     const lastSignals = (local[TECH_REPORT_SIGNAL_KEY] as Record<string, string>) || {};
-    const newSignalsByStock: Record<string, Array<{ code: string; name: string; signal: import('../shared/technical-analysis').TechnicalSignal }>> = {};
+    const changedAssessments: StockAssessment[] = [];
     const signalDetailsByStock: Record<string, Array<{ label: string; severity: string }>> = {};
     const currentSignals: Record<string, string> = {};
-    let totalNewSignals = 0;
+    let totalChanges = 0;
 
-    for (const result of klineResults) {
-      if (result.kline.length < 30) {
-        currentSignals[result.code] = 'insufficient_data';
-        continue;
+    for (const assessment of assessments) {
+      signalDetailsByStock[assessment.code] = assessment.technical.signals.map((signal) => ({
+        label: signal.label,
+        severity: signal.severity,
+      }));
+      const signature = buildAssessmentSignature(assessment);
+      currentSignals[assessment.code] = signature;
+      if ((lastSignals[assessment.code] || '') !== signature) {
+        changedAssessments.push(assessment);
+        totalChanges += 1;
       }
-
-      // 检测全部信号
-      const signals = detectAllSignals(result.kline);
-      signalDetailsByStock[result.code] = signals.map((s) => ({ label: s.label, severity: s.severity }));
-
-      // 与上次状态比较去重
-      const prevList = (lastSignals[result.code] || '').split(';').filter(Boolean);
-      const prevSet = new Set(prevList);
-      const newForStock = signals.filter((s) => !prevSet.has(s.type));
-
-      if (newForStock.length > 0) {
-        newSignalsByStock[result.code] = newForStock.map((s) => ({
-          code: result.code,
-          name: result.name,
-          signal: s,
-        }));
-        totalNewSignals += newForStock.length;
-      }
-
-      // 更新当前状态（所有的 type 列表）
-      const allTypes = signals.map((s) => s.type);
-      currentSignals[result.code] = allTypes.join(';');
     }
 
     // 生成通知
-    if (totalNewSignals > 0) {
-    const stockCodes = Object.keys(newSignalsByStock);
-    const stockCount = stockCodes.length;
-
-    // 构建详细消息（按股票分组，带指导意义）
-    const detailLines: string[] = [`📊 技术信号 (${today})`, ''];
-    for (const code of stockCodes) {
-      const entries = newSignalsByStock[code];
-      if (entries.length === 0) continue;
-      const first = entries[0];
-      detailLines.push(`${first.name}(${code}):`);
-      for (const entry of entries) {
-        const sevTag = entry.signal.severity === 'positive' ? '[看多]'
-          : entry.signal.severity === 'negative' ? '[看空]' : '[中性]';
-        detailLines.push(`  • ${sevTag} ${entry.signal.label} — ${entry.signal.guidance}`);
-      }
-      detailLines.push('');
-    }
-    const detailMessage = detailLines.join('\n').trim();
+    if (totalChanges > 0) {
+    const snapshot = buildAssessmentReportSnapshot(changedAssessments, today);
+    const detailMessage = snapshot.details;
 
     // 系统通知（简短）
-    const firstEntry = newSignalsByStock[stockCodes[0]]?.[0];
-    const firstName = firstEntry?.name || stockCodes[0];
-    const summaryLine = stockCount === 1
-      ? `${firstName} 出现 ${totalNewSignals} 个技术信号`
-      : `${stockCount} 只股票出现 ${totalNewSignals} 个技术信号`;
+    const firstName = changedAssessments[0]?.name || changedAssessments[0]?.code || '';
+    const summaryLine = changedAssessments.length === 1
+      ? `${firstName} 评估出现新变化`
+      : snapshot.summaryLine;
 
     // 写入通知历史
     const existingNotifHistory = (local[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
     const record: NotificationRecord = {
       id: `tech_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       code: '',
-      name: '盘后技术报告',
+      name: ASSESSMENT_REPORT_NOTIFICATION_NAME,
       message: detailMessage,
       ruleType: 'change_pct',
       price: 0,
@@ -1296,7 +1233,7 @@ async function generateDailyTechnicalReport() {
     chrome.notifications.create(`tech_report_${Date.now()}`, {
       type: 'basic',
       iconUrl: chrome.runtime.getURL('public/icon48.png'),
-      title: '📊 盘后技术信号',
+      title: '📊 盘后评估报告',
       message: summaryLine,
       priority: 2,
     });
@@ -1310,13 +1247,16 @@ async function generateDailyTechnicalReport() {
 
   // 保存有信号的股票列表（用于 popup 列表打标）
   const signalStocks: Record<string, { name: string; signalCount: number; signals: Array<{ label: string; severity: string }>; score: number }> = {};
-  for (const result of klineResults) {
-    const types = currentSignals[result.code];
-    const details = signalDetailsByStock[result.code] || [];
-    if (types && types !== 'insufficient_data' && types.length > 0) {
-      // 综合打分：看多 +1，看空 -1，中性 0
-      const score = details.reduce((sum, s) => sum + (s.severity === 'positive' ? 1 : s.severity === 'negative' ? -1 : 0), 0);
-      signalStocks[result.code] = { name: result.name, signalCount: details.length, signals: details, score };
+  for (const assessment of assessments) {
+    const details = signalDetailsByStock[assessment.code] || [];
+    if (details.length > 0 || assessment.structure.tags.length > 0) {
+      const score = assessment.overall.score;
+      signalStocks[assessment.code] = {
+        name: assessment.name,
+        signalCount: details.length,
+        signals: details,
+        score,
+      };
     }
   }
   await chrome.storage.local.set({
@@ -1324,15 +1264,15 @@ async function generateDailyTechnicalReport() {
   });
 
   // Save success status
-  const stockSignalCount = Object.keys(newSignalsByStock).length;
+  const stockSignalCount = changedAssessments.length;
   await saveTechReportStatus({
-    status: totalNewSignals > 0 ? 'success' : 'no_signal',
+    status: totalChanges > 0 ? 'success' : 'no_signal',
     lastRunTime: Date.now(),
-    stockCount: heldStocks.length,
-    signalCount: totalNewSignals,
-    details: totalNewSignals > 0
-      ? `${stockSignalCount}只股票出现${totalNewSignals}个技术信号`
-      : '已检测，无新信号',
+    stockCount: assessments.length,
+    signalCount: totalChanges,
+    details: totalChanges > 0
+      ? `${stockSignalCount}只股票出现新的评估变化`
+      : '已检测，无新评估变化',
     errorMessage: '',
   });
   } catch (err) {
@@ -1586,10 +1526,12 @@ async function triggerStyleAndStopCalc() {
     );
 
     // 投资风格画像
-    const [shouldCalcStyle, shouldCalcStop, shouldCalcSignal] = await Promise.all([
+    const [shouldCalcStyle, shouldCalcStop, shouldCalcSignal, shouldCalcAssessments, cachedAssessments] = await Promise.all([
       shouldRecalcStyle(),
       shouldRecalcStop(),
       shouldRecalcTradeSignals(),
+      shouldRecalcStockAssessments(),
+      loadCachedStockAssessments(),
     ]);
     if (shouldCalcStyle) {
       const stockFloating = positions.reduce((s, p) => s + (Number.isFinite(p.floatingPnl) ? p.floatingPnl : 0), 0);
@@ -1603,6 +1545,34 @@ async function triggerStyleAndStopCalc() {
     if (shouldCalcStop) {
       const suggestions = calcStopSuggest(holdings, klineByCode, currentPrices, nameByCode);
       if (suggestions.length > 0) await saveStopSuggestionsCache(suggestions);
+    }
+
+    const assessmentCandidates = holdings
+      .map((holding, index) => {
+        const price = currentPrices[holding.code];
+        const kline = klineByCode[holding.code];
+        if (!Number.isFinite(price) || !kline || kline.length < 30) return null;
+        const position = positions.find((item) => item.code === holding.code) ?? null;
+        return buildStockAssessment({
+          holding,
+          currentPrice: price,
+          kline,
+          fallbackName: nameByCode[holding.code] || holding.name || holding.code,
+          previousOrder: index,
+          position,
+        });
+      })
+      .filter((item): item is StockAssessment => item !== null);
+
+    const cachedCodes = new Set(cachedAssessments.map((item) => item.code));
+    const nextCodes = new Set(assessmentCandidates.map((item) => item.code));
+    const assessmentUniverseChanged = cachedAssessments.length !== assessmentCandidates.length
+      || assessmentCandidates.some((item) => !cachedCodes.has(item.code))
+      || cachedAssessments.some((item) => !nextCodes.has(item.code));
+
+    if (shouldCalcAssessments || assessmentUniverseChanged) {
+      const assessments = assessmentCandidates;
+      await saveStockAssessmentCache(sortStockAssessments(assessments));
     }
 
     // 交易信号
@@ -2125,12 +2095,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       try {
         await Promise.all([refreshStocks(true), refreshFunds()]);
         // 同时清除缓存并触发画像/风控重算
-        await chrome.storage.local.remove([
-          '_lastStyleCalcTime',
-          '_lastStopCalcTime',
-          '_lastTradeSignalTime',
-          '_stopSuggestVersion',
-          'stopSuggestions',
+        await Promise.all([
+          chrome.storage.local.remove([
+            '_lastStyleCalcTime',
+            '_lastStopCalcTime',
+            '_lastTradeSignalTime',
+            '_stopSuggestVersion',
+            'stopSuggestions',
+          ]),
+          clearStockAssessmentCache(),
         ]);
         void triggerStyleAndStopCalc();
         sendResponse({ ok: true });

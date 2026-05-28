@@ -11,30 +11,17 @@ import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from 
 import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
 import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../shared/technical-analysis";
 import TradeHistoryView from "./TradeHistoryView";
-import StopSuggestBlock from "../components/StopSuggestBlock";
-import { loadCachedStopSuggestions, type StopSuggest } from "../../shared/stop-suggest";
-import { loadCachedTradeSignals, levelLabel, levelColor, type TradeSignal } from "../../shared/trade-signal";
-import type { StockPosition } from '../../shared/fetch';
-import { shouldShowMinuteOnlySignals } from "../components/kline-scale";
+import AssessmentSummaryBlock from "../components/AssessmentSummaryBlock";
+import { loadCachedStockAssessments, sanitizeStockAssessmentCache } from "../../shared/stock-assessment-cache.ts";
+import type { StockAssessment } from "../../shared/stock-assessment.ts";
 import { getStockLimitPct } from '../../shared/stock-limit';
 import { getQuickStatsCollapsedSummary, getQuickStatsToggleState } from './stock-detail-panels';
-
-async function fillStopName(sugg: StopSuggest | null): Promise<StopSuggest | null> {
-  if (!sugg || (sugg.name && sugg.name !== sugg.code)) return sugg;
-  try {
-    const result = await chrome.storage.local.get(['stockPositions']);
-    const positions = (result.stockPositions ?? []) as StockPosition[];
-    const pos = positions.find((p) => p.code === sugg.code);
-    return pos?.name ? { ...sugg, name: pos.name } : sugg;
-  } catch {
-    return sugg;
-  }
-}
 
 type Props = {
   code: string;
   fallbackName: string;
   onBack: () => void;
+  onOpenAssessment?: (code: string) => void;
   onSelectSector?: (sectorCode: string, sectorName: string) => void;
 };
 
@@ -76,7 +63,7 @@ const PERIOD_TABS: Array<{ label: string; value: TabValue }> = [
 
 // ─── Main Detail Panel ───
 
-export default function StockDetailView({ code, fallbackName, onBack, onSelectSector }: Props) {
+export default function StockDetailView({ code, fallbackName, onBack, onOpenAssessment, onSelectSector }: Props) {
   const [detail, setDetail] = useState<StockDetailData | null>(null);
   const [period, setPeriod] = useState<TabValue>("minute");
   const [loading, setLoading] = useState(true);
@@ -88,25 +75,26 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
   const [analysisSignals, setAnalysisSignals] = useState<TechnicalSignal[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
-  const [stopSugg, setStopSugg] = useState<StopSuggest | null>(null);
-  const [tradeSignal, setTradeSignal] = useState<TradeSignal | null>(null);
+  const [assessment, setAssessment] = useState<StockAssessment | null>(null);
   const [quickStatsExpanded, setQuickStatsExpanded] = useState(false);
 
   const hasTrades = trades.length > 0;
   const quickStatsSummary = getQuickStatsCollapsedSummary();
 
   useEffect(() => {
-    loadCachedTradeSignals().then((signals) => {
-      setTradeSignal(signals.find((s) => s.code === code) ?? null);
+    loadCachedStockAssessments().then((items) => {
+      setAssessment(items.find((item) => item.code === code) ?? null);
     });
   }, [code]);
 
-  // 加载止盈止损建议
   useEffect(() => {
-    loadCachedStopSuggestions().then(async (suggestions) => {
-      const found = suggestions.find((s) => s.code === code) ?? null;
-      setStopSugg(await fillStopName(found));
-    });
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'local' || !changes.stockAssessments) return;
+      const next = sanitizeStockAssessmentCache(changes.stockAssessments.newValue);
+      setAssessment(next.find((item) => item.code === code) ?? null);
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
   }, [code]);
 
   // 加载交易记录
@@ -304,33 +292,10 @@ export default function StockDetailView({ code, fallbackName, onBack, onSelectSe
                 })() : null}
               </div>
 
-              {shouldShowMinuteOnlySignals(period) ? (
-                <>
-                  {/* ─── Stop Suggest Block ─── */}
-                  <StopSuggestBlock suggestion={stopSugg} />
-
-                  {tradeSignal ? (
-                    <div className="trade-signal-card">
-                      <div className="trade-signal-header">
-                        <span className="trade-signal-dot" style={{ background: levelColor(tradeSignal.level) }} />
-                        <strong>{levelLabel(tradeSignal.level)}</strong>
-                        <span className="trade-signal-score">{tradeSignal.score} 分</span>
-                      </div>
-                      <div className="trade-signal-dims">
-                        <span>趋势 {tradeSignal.details.trendScore}</span>
-                        <span>动量 {tradeSignal.details.momentumScore}</span>
-                        <span>风险 {tradeSignal.details.riskScore}</span>
-                        <span>支撑 {tradeSignal.details.supportScore}</span>
-                      </div>
-                      {tradeSignal.reasons.length > 0 ? (
-                        <div className="trade-signal-reasons">
-                          {tradeSignal.reasons.map((r, i) => <span key={i}>{r}</span>)}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
+              <AssessmentSummaryBlock
+                assessment={assessment}
+                onOpenAssessment={onOpenAssessment}
+              />
             </div>
 
             {/* ─── Chart ─── */}

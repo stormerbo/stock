@@ -51,8 +51,8 @@ const FEATURES = [
   },
   {
     icon: <FileText size={20} />,
-    label: '盘后技术报告',
-    desc: 'MACD、RSI、KDJ 等技术指标每日收盘分析',
+    label: '统一评估中心',
+    desc: '把技术、量价结构和风控建议收成一套统一判断',
   },
 ];
 
@@ -66,7 +66,7 @@ const STEPS: StepContent[] = [
           <span className="demo-logo-icon">🤑</span>
         </div>
         <p className="demo-welcome-subtitle">
-          实时行情 · 智能告警 · 技术分析
+          实时行情 · 智能告警 · 统一评估
         </p>
         <p className="demo-welcome-desc">
           一站式管理你的投资组合，不错过每一个买卖时机

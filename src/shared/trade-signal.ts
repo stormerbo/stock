@@ -1,5 +1,5 @@
-import { calcMA, calcMACD, calcSAR, calcMOM, fetchDayFqKline, type KlinePoint, type MacdResult } from './technical-analysis';
-import { calcMaxDrawdown, calcVolatility } from './risk-metrics';
+import { calcMA, calcMACD, calcSAR, calcMOM, fetchDayFqKline, type KlinePoint, type MacdResult } from './technical-analysis.ts';
+import { calcMaxDrawdown, calcVolatility } from './risk-metrics.ts';
 
 export type TradeSignal = {
   code: string;

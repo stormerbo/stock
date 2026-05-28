@@ -77,7 +77,7 @@ export default function SideNav({
         onClick={() => { setActiveTab('risk'); clearDetailTargets(); }}
       >
         <Shield size={10} />
-        <span>风控</span>
+        <span>评估</span>
       </button>
       <div className="nav-spacer" />
 

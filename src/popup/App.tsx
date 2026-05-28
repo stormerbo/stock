@@ -56,12 +56,13 @@ import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
 import StyleProfile from './views/StyleProfile';
-import StopSuggestPanel from './views/StopSuggestPanel';
+import AssessmentCenter from './views/AssessmentCenter';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
 import ConfirmModal from './components/ConfirmModal';
 import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
 import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig } from '../shared/display';
+import { isAssessmentReportNotificationName } from '../shared/stock-assessment.ts';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const MARKET_STATS_CACHE_KEY = 'marketStats';
@@ -254,9 +255,9 @@ export default function App() {
     setNotifications((prev) => {
       let updated: NotificationRecord[];
       if (type === 'alerts') {
-        updated = prev.filter((n) => n.name === '盘后技术报告');
+        updated = prev.filter((n) => isAssessmentReportNotificationName(n.name));
       } else if (type === 'tech-report') {
-        updated = prev.filter((n) => n.name !== '盘后技术报告');
+        updated = prev.filter((n) => !isAssessmentReportNotificationName(n.name));
       } else {
         updated = [];
       }
@@ -304,6 +305,7 @@ export default function App() {
   const [stockDetailTarget, setStockDetailTarget] = useState<StockDetailTarget | null>(null);
   const [sectorDetailTarget, setSectorDetailTarget] = useState<{ code: string; name: string } | null>(null);
   const [fundDetailTarget, setFundDetailTarget] = useState<FundDetailTarget | null>(null);
+  const [assessmentFocusCode, setAssessmentFocusCode] = useState<string | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
   const [removeConfirm, setRemoveConfirm] = useState<{ code: string; kind: 'stock' | 'fund'; message: string } | null>(null);
   const [draggingCode, setDraggingCode] = useState<string | null>(null);
@@ -2019,6 +2021,12 @@ function clearIntradayIfStale(
                 code={stockDetailTarget.code}
                 fallbackName={stockDetailTarget.name}
                 onBack={closeStockDetail}
+                onOpenAssessment={(code) => {
+                  setAssessmentFocusCode(code);
+                  returnContextRef.current = null;
+                  setStockDetailTarget(null);
+                  setActiveTab('risk');
+                }}
                 onSelectSector={(sectorCode, sectorName) => setSectorDetailTarget({ code: sectorCode, name: sectorName })}
               />
             ) : null}
@@ -2157,13 +2165,16 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'risk' ? (
-              <StopSuggestPanel
+              <AssessmentCenter
+                focusCode={assessmentFocusCode}
                 onSelectStock={(code, name) => {
                   const normalizedCode = normalizeStockCode(code);
                   if (!normalizedCode) return;
                   const el = document.querySelector('.content-scroll');
                   if (el) scrollPosRef.current = el.scrollTop;
                   returnContextRef.current = { tab: 'risk' };
+                  setAssessmentFocusCode(normalizedCode);
+                  setActiveTab('stocks');
                   setStockDetailTarget({ code: normalizedCode, name: name || normalizedCode });
                 }}
               />
@@ -2180,11 +2191,11 @@ function clearIntradayIfStale(
           <div className="tech-report-detail-overlay" onClick={() => setTechReportDetail(null)}>
             <div className="tech-report-detail-modal" onClick={(e) => e.stopPropagation()}>
               <div className="tech-report-detail-header">
-                <span className="tech-report-detail-title">📊 盘后技术报告</span>
+                <span className="tech-report-detail-title">📊 盘后评估报告</span>
                 <div className="tech-report-detail-actions">
                   <button type="button" className="tech-report-detail-del" title="删除此报告" onClick={() => {
                     // 查找并删除对应的通知
-                    const match = notifications.find((n) => n.name === '盘后技术报告' && n.firedAt === techReportDetail.firedAt);
+                    const match = notifications.find((n) => isAssessmentReportNotificationName(n.name) && n.firedAt === techReportDetail.firedAt);
                     if (match) deleteNotification(match.id);
                     setTechReportDetail(null);
                   }}>删除</button>
