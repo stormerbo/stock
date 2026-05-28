@@ -16,7 +16,7 @@
 
 ```
 stock/
-├── manifest.json           # 扩展配置
+├── manifest.config.ts      # 扩展源码配置（构建时生成 dist/manifest.json）
 ├── package.json            # 依赖配置
 ├── vite.config.ts          # Vite 配置
 ├── tailwind.config.js      # Tailwind 配置
@@ -68,7 +68,7 @@ npm run build
 2. 打开 Chrome，访问 `chrome://extensions/`
 3. 开启「开发者模式」
 4. 点击「加载已解压的扩展程序」
-5. 选择项目的 `dist` 文件夹
+5. 选择项目的 `dist` 文件夹，不要直接选择仓库根目录
 
 ## 功能特性
 
@@ -103,10 +103,12 @@ MIT
 ### 发布新版本
 
 ```bash
-# 1. 更新 manifest.json 中的 version 字段
-# 2. 打 tag 并推送
+# 1. 更新 package.json 中的 version 字段
+# 2. 构建并确认产物
+npm run build
+# 3. 打 tag 并推送
 git tag v1.1.0
-git push origin v1.1.0
+git push origin main --tags
 ```
 
 GitHub Actions 会自动：
