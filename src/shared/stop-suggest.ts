@@ -1,5 +1,6 @@
-import { calcATR, calcMA, fetchDayFqKline, type KlinePoint } from './technical-analysis';
-import type { StockHoldingConfig, StockPosition } from './fetch';
+import { calcATR, calcMA, type KlinePoint } from './technical-analysis.ts';
+import { assessVolumePriceContext, describeVolumePriceAssessment, getVolumePriceTone, type VolumePriceTone } from './volume-price-context.ts';
+import type { StockHoldingConfig } from './fetch.ts';
 
 export type StopSuggest = {
   code: string;
@@ -11,6 +12,14 @@ export type StopSuggest = {
   atrPct: number;
   trendDirection: 'up' | 'down' | 'sideways';
   trendStrength: number;
+  directionScore: number;
+  riskScore: number;
+  volumeRatio: number;
+  stopFactor: number;
+  rewardFactor: number;
+  assessmentTags: ReturnType<typeof assessVolumePriceContext>['tags'];
+  assessmentLabel: string;
+  assessmentTone: VolumePriceTone;
   calculatedAt: number;
 };
 
@@ -24,7 +33,9 @@ export function trendMeta(dir: 'up' | 'down' | 'sideways'): TrendMeta {
 
 const STOP_CACHE_KEY = 'stopSuggestions';
 const STOP_LAST_CALC_KEY = '_lastStopCalcTime';
+const STOP_ENGINE_VERSION_KEY = '_stopSuggestVersion';
 const STOP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const STOP_ENGINE_VERSION = 2;
 const BASE_MULTIPLIER = 2.0;
 const ATR_PERIOD = 14;
 const MA_PERIOD = 20;
@@ -67,6 +78,47 @@ function roundPrice(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+function deriveStopFactor(directionScore: number, riskScore: number, tags: string[]): number {
+  const directionAdj = clampScore(directionScore) * 0.18;
+  const riskAdj = clampScore(riskScore) * 0.28;
+  const confirmationAdj = tags.includes('bull_confirmed') ? 0.12 : tags.includes('bear_confirmed') ? -0.12 : 0;
+  const divergenceAdj = tags.includes('bearish_divergence') ? -0.08 : tags.includes('bullish_divergence') ? 0.06 : 0;
+  return clampFactor(1 + directionAdj - riskAdj + confirmationAdj + divergenceAdj);
+}
+
+function deriveRewardFactor(directionScore: number, riskScore: number, tags: string[]): number {
+  const directionAdj = clampScore(directionScore) * 0.32;
+  const riskAdj = clampScore(riskScore) * 0.12;
+  const confirmationAdj = tags.includes('bull_confirmed') ? 0.14 : tags.includes('bear_confirmed') ? -0.14 : 0;
+  const divergenceAdj = tags.includes('bearish_divergence') ? -0.08 : tags.includes('bullish_divergence') ? 0.06 : 0;
+  return clampFactor(1 + directionAdj - riskAdj + confirmationAdj + divergenceAdj, 0.7, 1.5);
+}
+
+function clampScore(score: number): number {
+  return Math.max(-1, Math.min(1, score / 100));
+}
+
+function clampFactor(value: number, min = 0.75, max = 1.35): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function isStopSuggestCurrent(value: unknown): value is StopSuggest {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<StopSuggest>;
+  return typeof item.assessmentLabel === 'string'
+    && typeof item.assessmentTone === 'string'
+    && Array.isArray(item.assessmentTags)
+    && Number.isFinite(item.directionScore)
+    && Number.isFinite(item.riskScore)
+    && Number.isFinite(item.stopFactor)
+    && Number.isFinite(item.rewardFactor);
+}
+
+export function sanitizeStopSuggestionsCache(values: unknown): StopSuggest[] {
+  if (!Array.isArray(values)) return [];
+  return values.filter(isStopSuggestCurrent);
+}
+
 export function calcStopSuggest(
   holdings: StockHoldingConfig[],
   klineByCode: Record<string, KlinePoint[]>,
@@ -92,9 +144,12 @@ export function calcStopSuggest(
     const tf = trendFactor(slope, avgPrice);
     const dir = trendDirection(slope, avgPrice);
     const strength = Math.min(1, Math.abs(slope) / (avgPrice * 0.005));
+    const assessment = assessVolumePriceContext(kline);
+    const stopFactor = deriveStopFactor(assessment.directionScore, assessment.riskScore, assessment.tags);
+    const rewardFactor = deriveRewardFactor(assessment.directionScore, assessment.riskScore, assessment.tags);
 
-    const stopLoss = roundPrice(price - lastAtr * BASE_MULTIPLIER * tf);
-    const takeProfit = roundPrice(price + lastAtr * BASE_MULTIPLIER * (2 - tf));
+    const stopLoss = roundPrice(price - lastAtr * BASE_MULTIPLIER * tf * stopFactor);
+    const takeProfit = roundPrice(price + lastAtr * BASE_MULTIPLIER * (2 - tf) * rewardFactor);
 
     results.push({
       code: h.code,
@@ -106,6 +161,14 @@ export function calcStopSuggest(
       atrPct: roundPrice((lastAtr / price) * 100),
       trendDirection: dir,
       trendStrength: strength,
+      directionScore: assessment.directionScore,
+      riskScore: assessment.riskScore,
+      volumeRatio: assessment.volumeRatio,
+      stopFactor: roundPrice(stopFactor),
+      rewardFactor: roundPrice(rewardFactor),
+      assessmentTags: assessment.tags,
+      assessmentLabel: describeVolumePriceAssessment(assessment),
+      assessmentTone: getVolumePriceTone(assessment),
       calculatedAt: Date.now(),
     });
   }
@@ -114,8 +177,10 @@ export function calcStopSuggest(
 
 export async function loadCachedStopSuggestions(): Promise<StopSuggest[]> {
   try {
-    const result = await chrome.storage.local.get(STOP_CACHE_KEY);
-    return (result[STOP_CACHE_KEY] as StopSuggest[]) ?? [];
+    const result = await chrome.storage.local.get([STOP_CACHE_KEY, STOP_ENGINE_VERSION_KEY]);
+    const version = (result[STOP_ENGINE_VERSION_KEY] as number) ?? 0;
+    if (version !== STOP_ENGINE_VERSION) return [];
+    return sanitizeStopSuggestionsCache(result[STOP_CACHE_KEY]);
   } catch {
     return [];
   }
@@ -123,7 +188,11 @@ export async function loadCachedStopSuggestions(): Promise<StopSuggest[]> {
 
 export async function saveStopSuggestionsCache(suggestions: StopSuggest[]): Promise<void> {
   try {
-    await chrome.storage.local.set({ [STOP_CACHE_KEY]: suggestions, [STOP_LAST_CALC_KEY]: Date.now() });
+    await chrome.storage.local.set({
+      [STOP_CACHE_KEY]: suggestions,
+      [STOP_LAST_CALC_KEY]: Date.now(),
+      [STOP_ENGINE_VERSION_KEY]: STOP_ENGINE_VERSION,
+    });
   } catch {
     // best effort
   }
@@ -131,8 +200,10 @@ export async function saveStopSuggestionsCache(suggestions: StopSuggest[]): Prom
 
 export async function shouldRecalcStop(): Promise<boolean> {
   try {
-    const result = await chrome.storage.local.get(STOP_LAST_CALC_KEY);
+    const result = await chrome.storage.local.get([STOP_LAST_CALC_KEY, STOP_ENGINE_VERSION_KEY]);
     const lastCalc = (result[STOP_LAST_CALC_KEY] as number) ?? 0;
+    const version = (result[STOP_ENGINE_VERSION_KEY] as number) ?? 0;
+    if (version !== STOP_ENGINE_VERSION) return true;
     return Date.now() - lastCalc > STOP_CACHE_TTL_MS;
   } catch {
     return true;

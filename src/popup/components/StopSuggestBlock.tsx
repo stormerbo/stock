@@ -18,6 +18,10 @@ export default function StopSuggestBlock({ suggestion }: Props) {
       <span className="stop-block-item profit">止盈 ¥{suggestion.takeProfit.toFixed(2)}</span>
       <span className="stop-block-divider">|</span>
       <span className="stop-block-item">{meta.icon} {meta.label}</span>
+      <span className="stop-block-divider">|</span>
+      <span className={`stop-block-item stop-block-assessment ${suggestion.assessmentTone ? `stop-block-assessment-${suggestion.assessmentTone}` : ''}`}>
+        {suggestion.assessmentLabel ?? '量价中性'}
+      </span>
     </div>
   );
 }

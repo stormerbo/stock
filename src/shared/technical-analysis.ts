@@ -3,7 +3,8 @@
 // Shared between popup and background contexts
 // -----------------------------------------------------------
 
-import { normalizeStockCode, toTencentStockCode } from './fetch';
+import { normalizeStockCode, toTencentStockCode } from './fetch.ts';
+import { assessVolumePriceContext } from './volume-price-context.ts';
 
 export type KlinePoint = {
   date: string;
@@ -856,6 +857,79 @@ export function detectAllSignals(kline: KlinePoint[]): TechnicalSignal[] {
         });
       }
     }
+  }
+
+  const volumePrice = assessVolumePriceContext(kline);
+  if (volumePrice.tags.includes('bull_confirmed')) {
+    signals.push({
+      type: 'volume_price_bull_confirmed',
+      indicator: 'volume_price',
+      label: '量价共振看多',
+      guidance: `放量上攻且趋势评分 ${volumePrice.directionScore}，量价配合良好，可把它视为上涨确认而非单点异动`,
+      severity: 'positive',
+    });
+  } else if (volumePrice.tags.includes('bear_confirmed')) {
+    signals.push({
+      type: 'volume_price_bear_confirmed',
+      indicator: 'volume_price',
+      label: '量价共振转弱',
+      guidance: `放量下行且风险评分 ${volumePrice.riskScore}，抛压释放更明确，宜把风控放在前面`,
+      severity: 'negative',
+    });
+  } else if (volumePrice.tags.includes('bull_unconfirmed')) {
+    signals.push({
+      type: 'volume_price_bull_unconfirmed',
+      indicator: 'volume_price',
+      label: '缩量上涨待确认',
+      guidance: `价格走强但量能仅为 5 日均量的 ${volumePrice.volumeRatio.toFixed(2)} 倍，冲高延续性仍待确认`,
+      severity: 'info',
+    });
+  } else if (volumePrice.tags.includes('bear_unconfirmed')) {
+    signals.push({
+      type: 'volume_price_bear_unconfirmed',
+      indicator: 'volume_price',
+      label: '缩量回落观察',
+      guidance: `价格回落但量能未明显放大，弱势成立度一般，先观察是否继续放量`,
+      severity: 'info',
+    });
+  }
+
+  if (volumePrice.tags.includes('bearish_divergence')) {
+    signals.push({
+      type: 'volume_price_bearish_divergence',
+      indicator: 'volume_price',
+      label: '量价背离预警',
+      guidance: '价格仍在上冲，但 OBV 未同步转强，量价出现背离，注意冲高回落风险',
+      severity: 'negative',
+    });
+  } else if (volumePrice.tags.includes('bullish_divergence')) {
+    signals.push({
+      type: 'volume_price_bullish_divergence',
+      indicator: 'volume_price',
+      label: '量价背离修复',
+      guidance: '价格仍偏弱，但量能和 OBV 已先行改善，存在弱转强修复的可能',
+      severity: 'positive',
+    });
+  }
+
+  if (volumePrice.tags.includes('trend_follow_through')) {
+    signals.push({
+      type: 'volume_price_follow_through',
+      indicator: 'volume_price',
+      label: '连续量价确认',
+      guidance: '最近数日上涨过程中量能持续配合，趋势不是单日脉冲，更接近阶段性共振推进',
+      severity: 'positive',
+    });
+  }
+
+  if (volumePrice.tags.includes('healthy_pullback')) {
+    signals.push({
+      type: 'volume_price_healthy_pullback',
+      indicator: 'volume_price',
+      label: '缩量回踩健康',
+      guidance: '上升趋势中的回踩伴随量能递减，筹码松动有限，若再度放量上攻更值得关注',
+      severity: 'info',
+    });
   }
 
   return signals;

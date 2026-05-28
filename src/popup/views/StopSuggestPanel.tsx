@@ -6,6 +6,9 @@ import { loadAlertConfig, saveAlertConfig, genRuleId, type AlertRule } from '../
 import { adjustMenuRectToViewport, clampMenuPosition } from '../utils/menu-position';
 
 type StopSuggestRow = StopSuggest & { changePct?: number };
+type Props = {
+  onSelectStock?: (code: string, name: string) => void;
+};
 
 function toneClass(value: number | undefined): string {
   if (value == null || !Number.isFinite(value)) return '';
@@ -44,7 +47,7 @@ async function enrichRows(suggestions: StopSuggest[]): Promise<StopSuggestRow[]>
   return rows;
 }
 
-export default function StopSuggestPanel() {
+export default function StopSuggestPanel({ onSelectStock }: Props) {
   const [suggestions, setSuggestions] = useState<StopSuggestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -141,8 +144,8 @@ export default function StopSuggestPanel() {
           </button>
         </div>
         <p className="stop-page-intro">
-          根据 ATR(14) 真实波幅 + MA20 趋势强度，为每只持仓智能计算动态止损止盈价位。
-          止损 = 现价 − ATR × 倍数 × 趋势因子，止盈同理。趋势越强，止损越宽。
+          根据 ATR(14) 真实波幅 + MA20 趋势强度 + 量价评分，为每只持仓智能计算动态止损止盈价位。
+          放量上涨会适度放宽止损并抬高止盈，放量下跌和背离会主动收紧风控。
           {lastTime ? <span className="stop-page-time"> · 更新于 {lastTime}</span> : null}
         </p>
       </div>
@@ -171,8 +174,15 @@ export default function StopSuggestPanel() {
             return (
               <tr key={s.code} onContextMenu={(e) => handleRowContext(e, s)}>
                 <td className="text-left">
-                  <span className="stop-cell-name">{s.name}</span>
-                  <span className="stop-cell-code">{s.code}</span>
+                  <button
+                    type="button"
+                    className={`stop-cell-link ${onSelectStock ? 'is-clickable' : ''}`}
+                    onClick={() => onSelectStock?.(s.code, s.name)}
+                    title={onSelectStock ? `查看 ${s.name} 详情` : undefined}
+                  >
+                    <span className="stop-cell-name">{s.name}</span>
+                    <span className="stop-cell-code">{s.code}</span>
+                  </button>
                 </td>
                 <td className={toneClass(s.changePct)}>{s.currentPrice.toFixed(2)}</td>
                 <td className="down">{s.stopLoss.toFixed(2)}</td>
@@ -180,6 +190,9 @@ export default function StopSuggestPanel() {
                 <td>{s.atr.toFixed(2)}<span className="stop-atr-pct">({s.atrPct}%)</span></td>
                 <td className="text-left">
                   <span className={`trend-tag trend-${meta.dir}`}>{meta.icon} {meta.label}</span>
+                  <div className={`stop-assessment stop-assessment-${s.assessmentTone ?? 'info'}`}>
+                    {s.assessmentLabel ?? '量价中性'}
+                  </div>
                 </td>
               </tr>
             );

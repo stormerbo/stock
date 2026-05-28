@@ -5405,6 +5405,26 @@ body.theme-light .analytics-section {
 .stop-table.data-table thead th { font-size: 11px; padding: 5px 6px; }
 .stop-table.data-table tbody td { font-size: 11px; padding: 4px 6px; }
 .stop-table.data-table .text-left { text-align: left; }
+.stop-cell-link {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.stop-cell-link.is-clickable { cursor: pointer; }
+.stop-cell-link.is-clickable:hover .stop-cell-name,
+.stop-cell-link.is-clickable:focus-visible .stop-cell-name {
+  color: var(--brand);
+}
+.stop-cell-link.is-clickable:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--brand) 50%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .stop-cell-name { font-weight: 600; }
 .stop-cell-code { display: block; font-size: 10px; color: var(--text-3); font-weight: 400; }
 .stop-atr-pct { font-size: 10px; color: var(--text-3); margin-left: 2px; }
@@ -5412,6 +5432,10 @@ body.theme-light .analytics-section {
 .trend-tag.trend-up { color: var(--up); }
 .trend-tag.trend-down { color: var(--down); }
 .trend-tag.trend-sideways { color: var(--text-2); }
+.stop-assessment { margin-top: 2px; font-size: 10px; }
+.stop-assessment-positive { color: var(--up); }
+.stop-assessment-negative { color: var(--down); }
+.stop-assessment-info { color: var(--text-2); }
 .stop-page-footer { text-align: center; font-size: 10px; color: var(--text-3); padding: 8px 0 4px; }
 .stop-ctx-menu {
   position: fixed;
@@ -5471,6 +5495,9 @@ body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
 .stop-block-item { color: var(--text-1); }
 .stop-block-item.loss { color: var(--down); }
 .stop-block-item.profit { color: var(--up); }
+.stop-block-item.stop-block-assessment-positive { color: var(--up); }
+.stop-block-item.stop-block-assessment-negative { color: var(--down); }
+.stop-block-item.stop-block-assessment-info { color: var(--text-2); }
 .stop-block-divider { color: var(--border); margin: 0 2px; }
 
 /* ─── Trade Signal Dot ─── */

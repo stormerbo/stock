@@ -414,7 +414,7 @@ export default function App() {
       return sum + item.price * item.shares;
     }, 0);
 
-    const stockTotalPnl = correctedStockFloating + totalRealizedPnl;
+    const stockTotalPnl = correctedStockFloating;
     const stockDaily = correctedStockDaily;
     const fundHoldingAmount = fundPositions.reduce((sum, item) => {
       if (!Number.isFinite(item.holdingAmount)) return sum;
@@ -465,7 +465,7 @@ export default function App() {
     const stockMarketValue = stockPositions.reduce((sum, item) => (
       Number.isFinite(item.price) && item.shares > 0 ? sum + item.price * item.shares : sum
     ), 0);
-    const stockFloating = correctedStockFloating + totalRealizedPnl;
+    const stockFloating = correctedStockFloating;
     const stockDaily = correctedStockDaily;
 
     const fundHoldingAmount = fundPositions.reduce((sum, item) => (
@@ -2157,7 +2157,16 @@ function clearIntradayIfStale(
             ) : null}
 
             {activeTab === 'risk' ? (
-              <StopSuggestPanel />
+              <StopSuggestPanel
+                onSelectStock={(code, name) => {
+                  const normalizedCode = normalizeStockCode(code);
+                  if (!normalizedCode) return;
+                  const el = document.querySelector('.content-scroll');
+                  if (el) scrollPosRef.current = el.scrollTop;
+                  returnContextRef.current = { tab: 'risk' };
+                  setStockDetailTarget({ code: normalizedCode, name: name || normalizedCode });
+                }}
+              />
             ) : null}
 
             {activeTab === 'trades' ? (
