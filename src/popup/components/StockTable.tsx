@@ -133,6 +133,7 @@ export default function StockTable({
             const hasShares = item.shares > 0;
             const hasCost = item.cost > 0;
             const hasPosition = hasShares && hasCost;
+            const rowPrivacyHidden = privacyHidden && hasShares;
             const isPinned = item.pinned;
             const holdingAmount = hasPosition && Number.isFinite(item.price)
               ? item.price * item.shares
@@ -230,12 +231,12 @@ export default function StockTable({
                   />
                 </td>
                 <td className="dual-value">
-                  <span className={privacyHidden ? '' : toneClass(item.floatingPnl)}>{privacyHidden ? hiddenText : formatNumber(item.floatingPnl, 2)}</span>
-                  <span className={privacyHidden ? '' : toneClass(holdingRate)}>{privacyHidden ? hiddenText : formatPercent(holdingRate)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneClass(item.floatingPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.floatingPnl, 2)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneClass(holdingRate)}>{rowPrivacyHidden ? hiddenText : formatPercent(holdingRate)}</span>
                 </td>
                 <td className="dual-value">
-                  <span className={privacyHidden ? '' : toneClass(item.dailyPnl)}>{privacyHidden ? hiddenText : formatNumber(item.dailyPnl, 2)}</span>
-                  <span className={privacyHidden ? '' : toneClass(item.dailyChangePct)}>{privacyHidden ? hiddenText : formatPercent(item.dailyChangePct)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneClass(item.dailyPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.dailyPnl, 2)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneClass(item.dailyChangePct)}>{rowPrivacyHidden ? hiddenText : formatPercent(item.dailyChangePct)}</span>
                 </td>
                 <td className="dual-value price-cell">
                   {editingCell?.kind === 'stock' && editingCell.code === item.code && editingCell.field === 'cost' ? (
@@ -249,7 +250,7 @@ export default function StockTable({
                       onClick={(e) => { e.stopPropagation(); startEditing('stock', item.code, 'cost'); }}
                       title="点击编辑成本价"
                     >
-                      {privacyHidden ? hiddenText : (hasCost ? formatNumber(item.cost, 3) : '输入成本价')}
+                      {rowPrivacyHidden ? hiddenText : (hasCost ? formatNumber(item.cost, 3) : '输入成本价')}
                     </span>
                   )}
                   <span className="price-line">{formatNumber(item.price, 2)}<span style={{ display: 'inline', marginLeft: 6 }} className={toneClass(item.price - item.prevClose)}>{formatPercent(item.prevClose > 0 ? (item.price - item.prevClose) / item.prevClose * 100 : 0)}</span></span>
@@ -275,17 +276,17 @@ export default function StockTable({
                         onClick={(e) => { e.stopPropagation(); startEditing('stock', item.code, 'shares'); }}
                         title="点击编辑股数"
                       >
-                        {privacyHidden ? hiddenText : (hasShares ? formatNumber(item.shares, 0) : '输入股数')}
+                        {rowPrivacyHidden ? hiddenText : (hasShares ? formatNumber(item.shares, 0) : '输入股数')}
                       </span>
                       {hasPosition && Number.isFinite(holdingAmount) ? (
                         <span style={{ fontSize: 10, color: 'var(--text-1)', opacity: 0.55, display: 'block', marginTop: 2 }}>
-                          {privacyHidden ? hiddenText : `≈¥${formatNumber(holdingAmount, 1)}`}
+                          {rowPrivacyHidden ? hiddenText : `≈¥${formatNumber(holdingAmount, 1)}`}
                         </span>
                       ) : null}
                     </>
                   )}
                 </td>
-                <td>{privacyHidden ? hiddenText : formatRatioPercent(positionRatio)}</td>
+                <td>{rowPrivacyHidden ? hiddenText : formatRatioPercent(positionRatio)}</td>
               </tr>
             );
           })}

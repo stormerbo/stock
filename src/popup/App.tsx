@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { BarChart3, Bell, FileText, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
+import { BarChart3, Bell, Eye, EyeOff, FileText, Moon, PieChart, Pin, RefreshCw, Search, Settings, Star, Sun, WalletCards, X } from 'lucide-react';
 import StockDetailView from './views/StockDetailView';
 import SectorDetailView from './views/SectorDetailView';
 import IndexDetailModal from './views/IndexDetailModal';
@@ -55,7 +55,6 @@ import IntradayChart from './components/IntradayChart';
 import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
-import StyleProfile from './views/StyleProfile';
 import AssessmentCenter from './views/AssessmentCenter';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
@@ -128,6 +127,9 @@ export default function App() {
   });
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
   const displayLoadedRef = useRef(false);
+  const stockPrivacyHidden = displayConfig.stockPrivacyHidden;
+  const fundPrivacyHidden = displayConfig.fundPrivacyHidden;
+  const accountPrivacyHidden = stockPrivacyHidden || fundPrivacyHidden;
 
   const [popupOpacity, setPopupOpacity] = useState<number>(() => {
     const saved = window.localStorage.getItem('popup-opacity');
@@ -377,14 +379,14 @@ export default function App() {
       if (!Number.isFinite(item.price) || item.shares <= 0) return sum;
       return sum + item.price * item.shares;
     }, 0);
-    const hidden = displayConfig.privacyHidden;
+    const hidden = stockPrivacyHidden;
 
     return [
       { label: '总市值', value: hidden ? '***' : formatNumber(totalMarketValue, 2), tone: hidden ? 'neutral' : 'neutral' },
       { label: '总盈亏', value: hidden ? '***' : formatNumber(correctedStockFloating, 1), tone: hidden ? 'neutral' : toneClass(correctedStockFloating) },
       { label: '当日盈亏', value: hidden ? '***' : formatNumber(correctedStockDaily, 1), tone: hidden ? 'neutral' : toneClass(correctedStockDaily) },
     ] as const;
-  }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, displayConfig.privacyHidden]);
+  }, [stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, stockPrivacyHidden]);
 
   const fundMetrics = useMemo(() => {
     const holdingAmount = fundPositions.reduce((sum, item) => {
@@ -402,13 +404,13 @@ export default function App() {
       return sum + item.estimatedProfit;
     }, 0);
 
-    const hidden = displayConfig.privacyHidden;
+    const hidden = fundPrivacyHidden;
     return [
       { label: '持有总额', value: hidden ? '***' : formatNumber(holdingAmount, 2), tone: 'neutral' },
       { label: '持有收益', value: hidden ? '***' : formatNumber(holdingProfit, 2), tone: hidden ? 'neutral' : toneClass(holdingProfit) },
       { label: '估算收益', value: hidden ? '***' : formatNumber(estimated, 2), tone: hidden ? 'neutral' : toneClass(estimated) },
     ] as const;
-  }, [fundPositions, displayConfig.privacyHidden]);
+  }, [fundPositions, fundPrivacyHidden]);
 
   const accountMetrics = useMemo(() => {
     const stockMarketValue = stockPositions.reduce((sum, item) => {
@@ -435,14 +437,14 @@ export default function App() {
     const totalAssets = stockMarketValue + fundHoldingAmount;
     const totalHoldingProfit = stockTotalPnl + fundHoldingProfit;
     const previewProfit = stockDaily + fundEstimated;
-    const hidden = displayConfig.privacyHidden;
+    const hidden = accountPrivacyHidden;
 
     return [
       { label: '综合持仓收益', value: hidden ? '***' : formatNumber(totalHoldingProfit, 2), tone: hidden ? 'neutral' : toneClass(totalHoldingProfit) },
       { label: '综合预估收益', value: hidden ? '***' : formatNumber(previewProfit, 2), tone: hidden ? 'neutral' : toneClass(previewProfit) },
       { label: '股票当日盈亏', value: hidden ? '***' : formatNumber(stockDaily, 2), tone: hidden ? 'neutral' : toneClass(stockDaily) },
     ] as const;
-  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, displayConfig.privacyHidden]);
+  }, [fundPositions, stockPositions, correctedStockFloating, correctedStockDaily, totalRealizedPnl, accountPrivacyHidden]);
 
   const metrics = activeTab === 'stocks'
     ? stockMetrics
@@ -804,6 +806,8 @@ export default function App() {
             prev.colorScheme === next.colorScheme
             && prev.decimalPlaces === next.decimalPlaces
             && prev.privacyHidden === next.privacyHidden
+            && prev.stockPrivacyHidden === next.stockPrivacyHidden
+            && prev.fundPrivacyHidden === next.fundPrivacyHidden
               ? prev
               : next
           ));
@@ -818,7 +822,7 @@ export default function App() {
   // 读取设置页的涨跌色配置
   useEffect(() => {
     document.body.classList.toggle('color-scheme-us', displayConfig.colorScheme === 'us');
-    if (displayConfig.privacyHidden) {
+    if (displayConfig.stockPrivacyHidden || displayConfig.fundPrivacyHidden) {
       document.body.classList.add('privacy-hidden');
     } else {
       document.body.classList.remove('privacy-hidden');
@@ -1365,9 +1369,31 @@ function clearIntradayIfStale(
     current === 'dark' ? 'light' : 'dark'
   ));
 
-  const togglePrivacyHidden = useCallback(() => {
+  const toggleStockPrivacyHidden = useCallback(() => {
     setDisplayConfig((current) => {
-      const next = { ...current, privacyHidden: !current.privacyHidden };
+      const nextStockHidden = !current.stockPrivacyHidden;
+      const next = {
+        ...current,
+        stockPrivacyHidden: nextStockHidden,
+        privacyHidden: nextStockHidden || current.fundPrivacyHidden,
+      };
+      try {
+        chrome.storage.sync.set({ [DISPLAY_STORAGE_KEY]: next });
+      } catch {
+        try { window.localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(next)); } catch { /* best effort */ }
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleFundPrivacyHidden = useCallback(() => {
+    setDisplayConfig((current) => {
+      const nextFundHidden = !current.fundPrivacyHidden;
+      const next = {
+        ...current,
+        fundPrivacyHidden: nextFundHidden,
+        privacyHidden: current.stockPrivacyHidden || nextFundHidden,
+      };
       try {
         chrome.storage.sync.set({ [DISPLAY_STORAGE_KEY]: next });
       } catch {
@@ -1911,14 +1937,12 @@ function clearIntradayIfStale(
           marketStats={marketStats}
           theme={theme}
           toggleTheme={toggleTheme}
-          privacyHidden={displayConfig.privacyHidden}
-          togglePrivacyHidden={togglePrivacyHidden}
           openSettings={openSettings}
           clearDetailTargets={() => { setStockDetailTarget(null); setFundDetailTarget(null); }}
         />
 
         <main className={`main-area ${stockDetailTarget || fundDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'style' && activeTab !== 'risk' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
           <section className="index-strip">
             <div className="index-grid">
               {marketIndexes.map((item) => (
@@ -1941,12 +1965,38 @@ function clearIntradayIfStale(
           </section>
           ) : null}
 
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'style' && activeTab !== 'risk' ? (
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
             <header className={`page-header ${activeTab === 'account' ? 'account-page-header' : ''}`}>
               <section className={`metrics inline ${activeTab === 'account' ? 'account' : ''}`}>
                 {metrics.map((item) => (
                   <article className="metric-card compact" key={item.label}>
-                    <p>{item.label}</p>
+                    <p className="metric-title-row">
+                      <span>{item.label}</span>
+                      {((activeTab === 'stocks' && item.label === '总市值') || (activeTab === 'funds' && item.label === '持有总额')) ? (
+                        <button
+                          type="button"
+                          className="metric-privacy-btn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (activeTab === 'stocks') {
+                              toggleStockPrivacyHidden();
+                            } else if (activeTab === 'funds') {
+                              toggleFundPrivacyHidden();
+                            }
+                          }}
+                          title={activeTab === 'stocks'
+                            ? (stockPrivacyHidden ? '显示股票持仓与收益' : '隐藏股票持仓与收益')
+                            : (fundPrivacyHidden ? '显示基金持仓与收益' : '隐藏基金持仓与收益')}
+                          aria-label={activeTab === 'stocks'
+                            ? (stockPrivacyHidden ? '显示股票持仓与收益' : '隐藏股票持仓与收益')
+                            : (fundPrivacyHidden ? '显示基金持仓与收益' : '隐藏基金持仓与收益')}
+                        >
+                          {activeTab === 'stocks'
+                            ? (stockPrivacyHidden ? <Eye size={11} /> : <EyeOff size={11} />)
+                            : (fundPrivacyHidden ? <Eye size={11} /> : <EyeOff size={11} />)}
+                        </button>
+                      ) : null}
+                    </p>
                     <strong className={item.tone === 'neutral' ? '' : item.tone}>{item.value}</strong>
                   </article>
                 ))}
@@ -1957,10 +2007,10 @@ function clearIntradayIfStale(
                   <div className="account-header-copy">
                     <span className="account-header-eyebrow">账户总览</span>
                     <div className="account-header-pills">
-                      <span>{displayConfig.privacyHidden ? '股票持仓 ***' : `股票持仓 ${accountSnapshot.heldStockCount} 只`}</span>
-                      <span>{displayConfig.privacyHidden ? '基金持仓 ***' : `基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
-                      <span>{displayConfig.privacyHidden ? '仅自选 ***' : `仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
-                      <span>{displayConfig.privacyHidden ? '已披露净值 ***' : `已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
+                      <span>{accountPrivacyHidden ? '股票持仓 ***' : `股票持仓 ${accountSnapshot.heldStockCount} 只`}</span>
+                      <span>{accountPrivacyHidden ? '基金持仓 ***' : `基金持仓 ${accountSnapshot.heldFundCount} 只`}</span>
+                      <span>{accountPrivacyHidden ? '仅自选 ***' : `仅自选 ${accountSnapshot.watchStockCount + accountSnapshot.watchFundCount} 只`}</span>
+                      <span>{accountPrivacyHidden ? '已披露净值 ***' : `已披露净值 ${accountSnapshot.disclosedFundCount} 只`}</span>
                     </div>
                   </div>
                 ) : (
@@ -2070,7 +2120,7 @@ function clearIntradayIfStale(
                   snapshot={accountSnapshot}
                   stockPositions={stockPositions}
                   fundPositions={fundPositions}
-                  privacyHidden={displayConfig.privacyHidden}
+                  privacyHidden={accountPrivacyHidden}
                 />
               ) : null}
 
@@ -2130,7 +2180,7 @@ function clearIntradayIfStale(
                 onRemoveStock={removeStockFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
-                privacyHidden={displayConfig.privacyHidden}
+                privacyHidden={stockPrivacyHidden}
               />
             ) : null}
 
@@ -2156,12 +2206,8 @@ function clearIntradayIfStale(
                 onRemoveFund={removeFundFromPortfolio}
                 onRefresh={handleRefresh}
                 refreshing={refreshing}
-                privacyHidden={displayConfig.privacyHidden}
+                privacyHidden={fundPrivacyHidden}
               />
-            ) : null}
-
-            {activeTab === 'style' ? (
-              <StyleProfile />
             ) : null}
 
             {activeTab === 'risk' ? (

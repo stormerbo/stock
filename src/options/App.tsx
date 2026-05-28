@@ -26,6 +26,8 @@ import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from
 import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
 import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig, type ColorScheme } from '../shared/display';
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
+import { loadCachedStyleProfile, type StyleProfile } from '../shared/investment-style';
+import RadarChart from '../popup/components/RadarChart';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
@@ -95,6 +97,27 @@ const COLOR_SCHEME_OPTIONS: Array<{ value: ColorScheme; label: string }> = [
   { value: 'cn', label: '红涨绿跌（A 股）' },
   { value: 'us', label: '绿涨红跌（美股）' },
 ];
+
+const STYLE_DIM_LABELS: Record<string, string> = {
+  concentration: '集中度',
+  turnover: '换手率',
+  holdPeriod: '持仓周期',
+  winRate: '胜率',
+  profitLossRatio: '盈亏比',
+  riskAppetite: '风险偏好',
+};
+
+const STYLE_DIM_ORDER = ['concentration', 'turnover', 'holdPeriod', 'winRate', 'profitLossRatio', 'riskAppetite'];
+
+function renderStyleScoreBar(value: number) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <span className="options-style-score-bar">
+      <span className="options-style-score-fill" style={{ width: `${clamped}%` }} />
+      <span className="options-style-score-value">{clamped}</span>
+    </span>
+  );
+}
 
 // -----------------------------------------------------------
 // Stock Alert Editor Sub-component
@@ -549,7 +572,7 @@ export default function App() {
   const [showDonate, setShowDonate] = useState(false);
 
   // ---- Settings Tabs ----
-  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'trading' | 'tech-report' | 'overlay' | 'other'>('basic');
+  const [settingsTab, setSettingsTab] = useState<'basic' | 'alerts' | 'trading' | 'style' | 'tech-report' | 'overlay' | 'other'>('basic');
 
   // ---- Work Mode Config ----
   const [workModeConfig, setWorkModeConfig] = useState<WorkModeConfig>(DEFAULT_WORK_MODE);
@@ -599,6 +622,9 @@ export default function App() {
 
   const [techReportConfig, setTechReportConfig] = useState<TechReportConfig>(DEFAULT_TECH_REPORT);
   const [techReportDraft, setTechReportDraft] = useState<TechReportConfig>(DEFAULT_TECH_REPORT);
+  const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
+  const [styleProfileLoading, setStyleProfileLoading] = useState(true);
+  const [styleProfileRefreshing, setStyleProfileRefreshing] = useState(false);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -609,6 +635,19 @@ export default function App() {
         setTechReportDraft(resolved);
       });
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCachedStyleProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        setStyleProfile(profile);
+      })
+      .finally(() => {
+        if (!cancelled) setStyleProfileLoading(false);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const techReportDirty = JSON.stringify(techReportDraft) !== JSON.stringify(techReportConfig);
@@ -948,6 +987,20 @@ export default function App() {
     }
   }, []);
 
+  const refreshStyleProfile = useCallback(async () => {
+    setStyleProfileRefreshing(true);
+    try {
+      await chrome.runtime.sendMessage({ type: 'force-refresh' });
+      window.setTimeout(() => {
+        loadCachedStyleProfile()
+          .then((profile) => setStyleProfile(profile))
+          .finally(() => setStyleProfileRefreshing(false));
+      }, 3200);
+    } catch {
+      setStyleProfileRefreshing(false);
+    }
+  }, []);
+
   return (
     <div className="options-root">
       <div className="options-container">
@@ -969,6 +1022,7 @@ export default function App() {
           <button type="button" className={`settings-tab ${settingsTab === 'basic' ? 'active' : ''}`} onClick={() => setSettingsTab('basic')}>基本</button>
           <button type="button" className={`settings-tab ${settingsTab === 'alerts' ? 'active' : ''}`} onClick={() => setSettingsTab('alerts')}>告警</button>
           <button type="button" className={`settings-tab ${settingsTab === 'trading' ? 'active' : ''}`} onClick={() => setSettingsTab('trading')}>交易</button>
+          <button type="button" className={`settings-tab ${settingsTab === 'style' ? 'active' : ''}`} onClick={() => setSettingsTab('style')}>画像</button>
           <button type="button" className={`settings-tab ${settingsTab === 'tech-report' ? 'active' : ''}`} onClick={() => setSettingsTab('tech-report')}>技术报告</button>
           <button type="button" className={`settings-tab ${settingsTab === 'overlay' ? 'active' : ''}`} onClick={() => setSettingsTab('overlay')}>悬浮窗</button>
           <button type="button" className={`settings-tab ${settingsTab === 'other' ? 'active' : ''}`} onClick={() => setSettingsTab('other')}>其他</button>
@@ -1058,16 +1112,45 @@ export default function App() {
 
             <div className="config-row">
               <div>
-                <span className="config-label">隐私模式</span>
-                <span className="config-hint">一键隐藏持仓、成本和收益相关信息</span>
+                <span className="config-label">股票隐私</span>
+                <span className="config-hint">隐藏股票页的持仓、成本和收益相关信息</span>
               </div>
-              <label className={`privacy-toggle ${displayDraft.privacyHidden ? 'active' : ''}`}>
+              <label className={`privacy-toggle ${displayDraft.stockPrivacyHidden ? 'active' : ''}`}>
                 <input
                   type="checkbox"
-                  checked={displayDraft.privacyHidden}
-                  onChange={(e) => setDisplayDraft((prev) => ({ ...prev, privacyHidden: e.target.checked }))}
+                  checked={displayDraft.stockPrivacyHidden}
+                  onChange={(e) => setDisplayDraft((prev) => {
+                    const nextStockHidden = e.target.checked;
+                    return {
+                      ...prev,
+                      stockPrivacyHidden: nextStockHidden,
+                      privacyHidden: nextStockHidden || prev.fundPrivacyHidden,
+                    };
+                  })}
                 />
-                <span>{displayDraft.privacyHidden ? '已隐藏' : '已显示'}</span>
+                <span>{displayDraft.stockPrivacyHidden ? '已隐藏' : '已显示'}</span>
+              </label>
+            </div>
+
+            <div className="config-row">
+              <div>
+                <span className="config-label">基金隐私</span>
+                <span className="config-hint">隐藏基金页的持仓、成本和收益相关信息</span>
+              </div>
+              <label className={`privacy-toggle ${displayDraft.fundPrivacyHidden ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={displayDraft.fundPrivacyHidden}
+                  onChange={(e) => setDisplayDraft((prev) => {
+                    const nextFundHidden = e.target.checked;
+                    return {
+                      ...prev,
+                      fundPrivacyHidden: nextFundHidden,
+                      privacyHidden: prev.stockPrivacyHidden || nextFundHidden,
+                    };
+                  })}
+                />
+                <span>{displayDraft.fundPrivacyHidden ? '已隐藏' : '已显示'}</span>
               </label>
             </div>
 
@@ -1461,6 +1544,78 @@ export default function App() {
             )}
           </div>
         </section>)}
+
+        {/* ---- 投资画像 ---- */}
+        {settingsTab === 'style' && (
+          <section className="options-section">
+            <h2>投资画像</h2>
+            <p className="section-desc">统一展示你的持仓结构、交易习惯和风险偏好，画像数据来自后台最新评估缓存。</p>
+            <div className="config-card options-style-card">
+              <div className="options-style-header">
+                <div>
+                  <span className="options-style-title">{styleProfile?.label ?? '暂无画像'}</span>
+                  <p className="options-style-desc">{styleProfile?.description ?? '先刷新一次行情和评估数据，即可生成画像。'}</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => { void refreshStyleProfile(); }}
+                  disabled={styleProfileRefreshing}
+                >
+                  {styleProfileRefreshing ? '刷新中...' : '刷新画像'}
+                </button>
+              </div>
+
+              {styleProfileLoading ? (
+                <div className="options-style-empty">画像加载中...</div>
+              ) : null}
+
+              {!styleProfileLoading && !styleProfile ? (
+                <div className="options-style-empty">暂无画像数据</div>
+              ) : null}
+
+              {styleProfile ? (
+                <>
+                  <div className="options-style-layout">
+                    <div className="options-style-radar">
+                      <RadarChart
+                        dimensions={STYLE_DIM_ORDER.reduce<Record<string, number>>((acc, key) => {
+                          acc[key] = (styleProfile.dimensions as Record<string, number>)[key] ?? 0;
+                          return acc;
+                        }, {})}
+                        labels={STYLE_DIM_LABELS}
+                        size={210}
+                      />
+                    </div>
+                    <div className="options-style-dims">
+                      {STYLE_DIM_ORDER.map((key) => (
+                        <div key={key} className="options-style-dim-row">
+                          <span className="options-style-dim-label">{STYLE_DIM_LABELS[key]}</span>
+                          {renderStyleScoreBar((styleProfile.dimensions as Record<string, number>)[key] ?? 0)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="options-style-data-grid">
+                    <div className="options-style-data-item"><span>持仓数量</span><strong>{styleProfile.dataPoints.stockCount}只股票 + {styleProfile.dataPoints.fundCount}只基金</strong></div>
+                    <div className="options-style-data-item"><span>前3集中度</span><strong>{(styleProfile.dataPoints.top3Weight * 100).toFixed(0)}%</strong></div>
+                    <div className="options-style-data-item"><span>月均交易</span><strong>{styleProfile.dataPoints.monthlyTrades}笔</strong></div>
+                    <div className="options-style-data-item"><span>平均持仓</span><strong>{styleProfile.dataPoints.avgHoldDays}天</strong></div>
+                    <div className="options-style-data-item"><span>胜率</span><strong>{(styleProfile.dataPoints.winRate * 100).toFixed(0)}%</strong></div>
+                    <div className="options-style-data-item"><span>年化波动率</span><strong>{styleProfile.dataPoints.avgAnnualVolatility.toFixed(1)}%</strong></div>
+                  </div>
+
+                  {styleProfile.calculatedAt ? (
+                    <div className="options-style-footer">
+                      数据截止：{new Date(styleProfile.calculatedAt).toLocaleString('zh-CN')}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </section>
+        )}
 
         {/* ---- 盘后技术指标报告 ---- */}
         {settingsTab === 'tech-report' && (<section className="options-section">

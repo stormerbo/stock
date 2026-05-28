@@ -735,6 +735,31 @@ body.theme-light .index-tooltip {
   color: var(--text-1);
 }
 
+.metric-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-privacy-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.metric-privacy-btn:hover {
+  color: var(--text-0);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+
 .metric-card strong {
   display: block;
   margin-top: 4px;

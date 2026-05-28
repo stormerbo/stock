@@ -84,6 +84,7 @@ export default function FundTable({
             const isPinned = item.pinned;
             const hasFundCost = item.cost > 0;
             const hasFundUnits = item.units > 0;
+            const rowPrivacyHidden = privacyHidden && hasFundUnits;
             const isEtf = isEtfFundName(item.name);
             const displayNav = isEtf
               ? (Number.isFinite(item.estimatedNav) ? item.estimatedNav : item.latestNav)
@@ -151,7 +152,7 @@ export default function FundTable({
                   <span className={hasFundCost ? 'cost-line editable-trigger' : 'editable-trigger placeholder-hint'}
                     onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'cost'); }}
                   >
-                    {privacyHidden ? hiddenText : (hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值')}
+                    {rowPrivacyHidden ? hiddenText : (hasFundCost ? formatLooseNumber(item.cost, 4) : '输入持仓净值')}
                   </span>
                 )}
                 <span className="price-line">
@@ -178,24 +179,24 @@ export default function FundTable({
                     <span className={hasFundUnits ? 'editable-trigger' : 'editable-trigger placeholder-hint'}
                       onClick={(e) => { e.stopPropagation(); startEditing('fund', item.code, 'units'); }}
                     >
-                      {privacyHidden ? hiddenText : (hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额')}
+                      {rowPrivacyHidden ? hiddenText : (hasFundUnits ? formatLooseNumber(item.units, 4) : '输入持有额')}
                     </span>
                     {hasFundUnits && Number.isFinite(item.holdingAmount) ? (
                       <div style={{ fontSize: 10, color: 'var(--text-2)', lineHeight: 1.4, marginTop: 1 }}>
-                        {privacyHidden ? hiddenText : `≈${formatNumber(item.holdingAmount, 2)}`}
+                        {rowPrivacyHidden ? hiddenText : `≈${formatNumber(item.holdingAmount, 2)}`}
                       </div>
                     ) : null}
                   </>
                 )}
               </td>
-              <td className={privacyHidden ? '' : toneClass(item.holdingProfit)}>{privacyHidden ? hiddenText : formatNumber(item.holdingProfit, 2)}</td>
-              <td className={privacyHidden ? '' : toneClass(item.holdingProfitRate)}>{privacyHidden ? hiddenText : formatPercent(item.holdingProfitRate)}</td>
+              <td className={rowPrivacyHidden ? '' : toneClass(item.holdingProfit)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.holdingProfit, 2)}</td>
+              <td className={rowPrivacyHidden ? '' : toneClass(item.holdingProfitRate)}>{rowPrivacyHidden ? hiddenText : formatPercent(item.holdingProfitRate)}</td>
               <td className={toneClass(displayChangePct)}>{formatPercent(displayChangePct)}</td>
-              <td className={privacyHidden ? '' : toneClass(item.estimatedProfit)}>
+              <td className={rowPrivacyHidden ? '' : toneClass(item.estimatedProfit)}>
                 {(() => {
                   if (!Number.isFinite(item.estimatedProfit)) return '-';
                   // 净值已公布（含周末回退到周五）→ 显示实际日涨跌收益；交易时段且未公布 → 显示估算
-                  if (privacyHidden) return hiddenText;
+                  if (rowPrivacyHidden) return hiddenText;
                   if (item.navDisclosedToday || isTradingHours()) return formatNumber(item.estimatedProfit, 2);
                   return '-';
                 })()}

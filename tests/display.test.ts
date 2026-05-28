@@ -13,6 +13,25 @@ test('normalizeDisplayConfig fills defaults for missing fields', () => {
 test('normalizeDisplayConfig preserves privacy toggle and clamps decimal places', () => {
   assert.deepEqual(
     normalizeDisplayConfig({ colorScheme: 'us', decimalPlaces: 9, privacyHidden: true }),
-    { colorScheme: 'us', decimalPlaces: 4, privacyHidden: true },
+    {
+      colorScheme: 'us',
+      decimalPlaces: 4,
+      privacyHidden: true,
+      stockPrivacyHidden: true,
+      fundPrivacyHidden: true,
+    },
+  );
+});
+
+test('normalizeDisplayConfig keeps stock and fund privacy switches independent', () => {
+  assert.deepEqual(
+    normalizeDisplayConfig({ colorScheme: 'cn', decimalPlaces: 2, stockPrivacyHidden: true, fundPrivacyHidden: false }),
+    {
+      colorScheme: 'cn',
+      decimalPlaces: 2,
+      privacyHidden: true,
+      stockPrivacyHidden: true,
+      fundPrivacyHidden: false,
+    },
   );
 });
