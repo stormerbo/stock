@@ -1,13 +1,10 @@
 import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Shield, Sun, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
-import type { MarketStats } from '../../shared/fetch';
-import { formatNumber, formatMarketAmount } from '../utils/format';
 
 type Props = {
   activeTab: PageTab;
   setActiveTab: (tab: PageTab) => void;
   unreadCount: number;
-  marketStats: MarketStats | null;
   theme: ThemeMode;
   toggleTheme: () => void;
   openSettings: () => void;
@@ -15,7 +12,7 @@ type Props = {
 };
 
 export default function SideNav({
-  activeTab, setActiveTab, unreadCount, marketStats, theme, toggleTheme, openSettings, clearDetailTargets,
+  activeTab, setActiveTab, unreadCount, theme, toggleTheme, openSettings, clearDetailTargets,
 }: Props) {
   return (
     <aside className="side-nav">
@@ -72,41 +69,6 @@ export default function SideNav({
       <div className="nav-spacer" />
 
       <div className="side-nav-footer">
-        <div className="market-stats-panel" aria-label="市场统计">
-          <div className="market-stats-entry">
-            <span className="market-stats-label">上涨</span>
-            <span className="market-stats-value up">{marketStats ? formatNumber(marketStats.upCount, 0) : '--'}</span>
-          </div>
-          <div className="market-stats-entry">
-            <span className="market-stats-label">平盘</span>
-            <span className="market-stats-value flat">{marketStats ? formatNumber(marketStats.flatCount, 0) : '--'}</span>
-          </div>
-          <div className="market-stats-entry">
-            <span className="market-stats-label">下跌</span>
-            <span className="market-stats-value down">{marketStats ? formatNumber(marketStats.downCount, 0) : '--'}</span>
-          </div>
-          <div className="market-stats-entry">
-            <span className="market-stats-label">成交额</span>
-            <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.turnover) : '--'}</span>
-          </div>
-          <div className="market-stats-entry">
-            <span className="market-stats-label">
-              {marketStats && Number.isFinite(marketStats.volumeChange)
-                ? (marketStats.volumeChange >= 0 ? '放量' : '缩量')
-                : '缩量'}
-            </span>
-            <span className={`market-stats-value ${marketStats && Number.isFinite(marketStats.volumeChange) ? (marketStats.volumeChange >= 0 ? 'up' : 'down') : ''}`}>
-              {marketStats && Number.isFinite(marketStats.volumeChange)
-                ? formatMarketAmount(Math.abs(marketStats.volumeChange))
-                : '--'}
-            </span>
-          </div>
-          <div className="market-stats-entry">
-            <span className="market-stats-label">昨成交</span>
-            <span className="market-stats-value">{marketStats ? formatMarketAmount(marketStats.prevTurnover) : '--'}</span>
-          </div>
-        </div>
-
         <button
           type="button"
           className="nav-btn"
@@ -115,15 +77,15 @@ export default function SideNav({
           <Settings size={10} />
           <span>设置</span>
         </button>
-      <button
-        type="button"
-        className="nav-btn"
-        onClick={toggleTheme}
-      >
-        {theme === 'dark' ? <Sun size={10} /> : theme === 'light' ? <Sun size={10} /> : <Moon size={10} />}
-        <span>{theme === 'dark' ? '浅色' : theme === 'light' ? '白色' : '深色'}</span>
-      </button>
-    </div>
-  </aside>
-);
+        <button
+          type="button"
+          className="nav-btn"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? <Sun size={10} /> : theme === 'light' ? <Sun size={10} /> : <Moon size={10} />}
+          <span>{theme === 'dark' ? '浅色' : theme === 'light' ? '白色' : '深色'}</span>
+        </button>
+      </div>
+    </aside>
+  );
 }

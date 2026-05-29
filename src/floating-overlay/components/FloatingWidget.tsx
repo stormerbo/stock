@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Button } from '../../popup/components/ui';
 
 type Position = { x: number; y: number };
 
@@ -242,7 +243,26 @@ export default function FloatingWidget({
         </div>
         <div className="float-header-actions">
           <div className="float-opacity-wrap" ref={opacityRef}>
-            <button className="float-btn" onClick={(e) => { e.stopPropagation(); setShowOpacity((v) => !v); }} title="透明度" type="button" style={{ opacity: opacity < 0.8 ? opacity + 0.2 : 1 }}>◐</button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="float-btn"
+              onClick={(e) => { e.stopPropagation(); setShowOpacity((v) => !v); }}
+              title="透明度"
+              aria-label="透明度"
+              style={{
+                width: 20,
+                height: 20,
+                minHeight: 20,
+                borderRadius: 5,
+                padding: 0,
+                color: 'var(--text-tertiary)',
+                opacity: opacity < 0.8 ? opacity + 0.2 : 1,
+              }}
+            >
+              ◐
+            </Button>
             {showOpacity && (
               <div className="float-opacity-popup">
                 <input type="range" min={0.5} max={1} step={0.05} value={opacity} onChange={(e) => onOpacityChange(parseFloat(e.target.value))} className="float-opacity-slider" />
@@ -250,9 +270,42 @@ export default function FloatingWidget({
               </div>
             )}
           </div>
-          <button className="float-btn" onClick={onRefresh} title="刷新" type="button">↻</button>
-          <button className="float-btn" onClick={onToggleCollapse} title="折叠" type="button">─</button>
-          <button className="float-btn" onClick={onClose} title="关闭" type="button">✕</button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="float-btn"
+            onClick={onRefresh}
+            title="刷新"
+            aria-label="刷新"
+            style={{ width: 20, height: 20, minHeight: 20, borderRadius: 5, padding: 0, color: 'var(--text-tertiary)' }}
+          >
+            ↻
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="float-btn"
+            onClick={onToggleCollapse}
+            title="折叠"
+            aria-label="折叠"
+            style={{ width: 20, height: 20, minHeight: 20, borderRadius: 5, padding: 0, color: 'var(--text-tertiary)' }}
+          >
+            ─
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="float-btn"
+            onClick={onClose}
+            title="关闭"
+            aria-label="关闭"
+            style={{ width: 20, height: 20, minHeight: 20, borderRadius: 5, padding: 0, color: 'var(--text-tertiary)' }}
+          >
+            ✕
+          </Button>
         </div>
       </div>
 

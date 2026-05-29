@@ -11,6 +11,7 @@ import { TRADE_HISTORY_KEY, getTradesForStock, type StockTradeRecord } from "../
 import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../shared/technical-analysis";
 import TradeHistoryView from "./TradeHistoryView";
 import AssessmentSummaryBlock from "../components/AssessmentSummaryBlock";
+import { Button } from "../components/ui";
 import { loadCachedStockAssessments, sanitizeStockAssessmentCache } from "../../shared/stock-assessment-cache.ts";
 import type { StockAssessment } from "../../shared/stock-assessment.ts";
 import { getStockLimitPct } from '../../shared/stock-limit';
@@ -173,14 +174,14 @@ export default function StockDetailView({ code, fallbackName, onBack, onStockTra
     <section className="stock-detail-panel">
       {/* ─── Top Bar ─── */}
       <header className="detail-header">
-        <button type="button" className="detail-back-btn" onClick={onBack}>
+        <Button type="button" variant="secondary" size="sm" onClick={onBack}>
           <ChevronLeft size={14} />
           返回
-        </button>
-        <button type="button" className="detail-refresh-btn" onClick={() => setRefreshAt((prev) => prev + 1)} disabled={loading || fundamentalsLoading}>
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setRefreshAt((prev) => prev + 1)} disabled={loading || fundamentalsLoading}>
           {(loading || fundamentalsLoading) ? <Loader2 size={13} className="spinning" /> : <RefreshCw size={13} />}
           刷新
-        </button>
+        </Button>
       </header>
 
       {/* ─── Content Body (scrollable for text tabs, flex for K-line) ─── */}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, Plus, Trash2, X } from 'lucide-react';
+import { Button } from '../components/ui';
 import {
   type StockTradeRecord,
   type TradeType,
@@ -407,9 +408,9 @@ export default function TradeHistoryView({ code, name, onBack, onUpdate, embedde
   return (
     <section className="detail-view">
       <div className="detail-header">
-        <button type="button" className="detail-back-btn" onClick={onBack}>
+        <Button type="button" variant="secondary" size="icon" onClick={onBack}>
           <ChevronLeft size={16} />
-        </button>
+        </Button>
         <h2 className="detail-title">
           {name}
           <span className="detail-subtitle">{code}</span>

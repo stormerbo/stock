@@ -73,6 +73,7 @@ export const semanticThemeTokens: Readonly<
     | 'color-text-faint'
     | 'color-accent'
     | 'color-accent-soft'
+    | 'color-on-accent'
     | 'color-warning'
     | 'color-success'
     | 'color-danger'
@@ -101,6 +102,7 @@ export const semanticThemeTokens: Readonly<
     'color-text-faint': '#7a829e',
     'color-accent': primitiveTokens.color.violet600,
     'color-accent-soft': primitiveTokens.color.violetSoft,
+    'color-on-accent': primitiveTokens.color.white,
     'color-warning': primitiveTokens.color.amber500,
     'color-success': primitiveTokens.color.emerald500,
     'color-danger': primitiveTokens.color.danger500,
@@ -128,6 +130,7 @@ export const semanticThemeTokens: Readonly<
     'color-text-faint': primitiveTokens.color.ink500,
     'color-accent': primitiveTokens.color.blue600,
     'color-accent-soft': 'rgba(63, 103, 240, 0.15)',
+    'color-on-accent': primitiveTokens.color.white,
     'color-warning': primitiveTokens.color.amber500,
     'color-success': primitiveTokens.color.emerald500,
     'color-danger': primitiveTokens.color.danger500,
@@ -155,6 +158,7 @@ export const semanticThemeTokens: Readonly<
     'color-text-faint': primitiveTokens.color.ink500,
     'color-accent': primitiveTokens.color.blue600,
     'color-accent-soft': 'rgba(63, 103, 240, 0.15)',
+    'color-on-accent': primitiveTokens.color.white,
     'color-warning': primitiveTokens.color.amber500,
     'color-success': primitiveTokens.color.emerald500,
     'color-danger': primitiveTokens.color.danger500,
@@ -252,6 +256,7 @@ export function getThemeColorTokens(themeMode: TokenThemeMode, colorScheme: Colo
     '--color-text-faint': semantic['color-text-faint'],
     '--color-accent': semantic['color-accent'],
     '--color-accent-soft': semantic['color-accent-soft'],
+    '--color-on-accent': semantic['color-on-accent'],
     '--color-up': up,
     '--color-down': down,
     '--color-warning': semantic['color-warning'],

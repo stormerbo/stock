@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
 import { type FundPosition, type FundHoldingConfig, getLastTradingDay, isEtfFundName } from '../../shared/fetch';
 import { getFundHoldingAddButtonState } from './fund-holdings';
+import { Button } from '../components/ui';
 
 // Proxy fetch through background to avoid CORS
 // Uses a long-lived port connection to keep the Service Worker alive during fetch
@@ -1013,14 +1014,14 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
   return (
     <section className="fund-detail-panel">
       <header className="detail-header">
-        <button type="button" className="detail-back-btn" onClick={onBack}>
+        <Button type="button" variant="secondary" size="sm" onClick={onBack}>
           <ChevronLeft size={14} />
           返回
-        </button>
-        <button type="button" className="detail-refresh-btn" onClick={() => setRefreshAt((prev) => prev + 1)} disabled={loading}>
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setRefreshAt((prev) => prev + 1)} disabled={loading}>
           {loading ? <Loader2 size={13} className="spinning" /> : <RefreshCw size={13} />}
           刷新
-        </button>
+        </Button>
       </header>
 
       {loading && !detail ? (

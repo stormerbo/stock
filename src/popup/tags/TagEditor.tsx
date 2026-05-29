@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import TagBadge from './TagBadge';
+import { Button, Input } from '../components/ui';
 import {
   type TagDefinition,
   MAX_TAGS_PER_HOLDING,
@@ -114,15 +115,17 @@ export default function TagEditor({
               <span className="tag-editor-label">可选标签</span>
               <div className="tag-editor-available">
                 {availableTags.map(name => (
-                  <button
+                  <Button
                     key={name}
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     className="tag-editor-option"
                     onClick={() => handleToggleTag(name)}
                     disabled={selectedTags.length >= MAX_TAGS_PER_HOLDING}
                   >
                     {name}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -131,7 +134,7 @@ export default function TagEditor({
           {/* Create new tag */}
           {showNewInput ? (
             <div className="tag-editor-new-form">
-              <input
+              <Input
                 ref={inputRef}
                 className="tag-editor-new-input"
                 value={newTagName}
@@ -142,33 +145,38 @@ export default function TagEditor({
                 }}
                 placeholder="输入标签名，回车确认"
                 maxLength={MAX_TAG_NAME_LENGTH}
+                compact
               />
-              <button type="button" className="tag-editor-confirm-btn" onClick={handleCreateTag}>
+              <Button type="button" variant="primary" size="sm" className="tag-editor-confirm-btn" onClick={handleCreateTag}>
                 确定
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               className="tag-editor-add-btn"
               onClick={() => setShowNewInput(true)}
             >
               <Plus size={12} /> 新建标签
-            </button>
+            </Button>
           )}
         </div>
 
         <div className="tag-editor-footer">
-          <button type="button" className="tag-editor-btn tag-editor-btn-cancel" onClick={onClose}>
+          <Button type="button" variant="secondary" size="md" className="tag-editor-btn tag-editor-btn-cancel" onClick={onClose}>
             取消
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             className="tag-editor-btn tag-editor-btn-save"
             onClick={() => onSave(selectedTags)}
           >
             保存
-          </button>
+          </Button>
         </div>
       </div>
     </div>

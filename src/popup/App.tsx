@@ -52,6 +52,7 @@ import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/sear
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
 import DetailErrorBoundary from './components/DetailErrorBoundary';
 import IntradayChart from './components/IntradayChart';
+import MarketStatsStrip from './components/MarketStatsStrip';
 import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
@@ -59,7 +60,7 @@ import AssessmentCenter from './views/AssessmentCenter';
 import StockTable from './components/StockTable';
 import FundTable from './components/FundTable';
 import ConfirmModal from './components/ConfirmModal';
-import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
+import { THEME_STORAGE_KEY, applyThemeVariables, normalizeThemeMode } from '../shared/theme';
 import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig } from '../shared/display';
 import { isAssessmentReportNotificationName } from '../shared/stock-assessment.ts';
 
@@ -796,6 +797,11 @@ export default function App() {
   }, [theme, applyThemeClass]);
 
   useEffect(() => {
+    if (!displayLoadedRef.current) return;
+    applyThemeVariables(document, theme, displayConfig.colorScheme);
+  }, [theme, displayConfig.colorScheme]);
+
+  useEffect(() => {
     const syncDisplay = () => {
       if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
         chrome.storage.sync.get(DISPLAY_STORAGE_KEY, (result: Record<string, unknown>) => {
@@ -836,7 +842,6 @@ export default function App() {
 
   // 读取设置页的涨跌色配置
   useEffect(() => {
-    document.body.classList.toggle('color-scheme-us', displayConfig.colorScheme === 'us');
     if (displayConfig.stockPrivacyHidden || displayConfig.fundPrivacyHidden) {
       document.body.classList.add('privacy-hidden');
     } else {
@@ -1958,7 +1963,6 @@ function clearIntradayIfStale(
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           unreadCount={unreadCount}
-          marketStats={marketStats}
           theme={theme}
           toggleTheme={toggleTheme}
           openSettings={openSettings}
@@ -1966,6 +1970,10 @@ function clearIntradayIfStale(
         />
 
         <main className={`main-area ${stockDetailTarget || fundDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
+          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
+            <MarketStatsStrip marketStats={marketStats} />
+          ) : null}
+
           {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
           <section className="index-strip">
             <div className="index-grid">

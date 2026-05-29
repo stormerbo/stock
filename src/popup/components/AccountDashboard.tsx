@@ -27,34 +27,43 @@ type Props = {
 
 export default function AccountDashboard({ snapshot, stockPositions, fundPositions, privacyHidden }: Props) {
   const hiddenText = '***';
+  const maskedNumber = (value: number, digits = 2) => (privacyHidden ? hiddenText : formatNumber(value, digits));
+  const maskedRatio = (value: number) => (privacyHidden ? hiddenText : `${value.toFixed(1)}%`);
+  const allocationWidth = (value: number) => (privacyHidden ? 0 : Math.max(value, 0));
   return (
     <div className="account-dashboard">
       <section className="account-hero-card">
         <div className="account-hero-main">
           <span className="account-section-label">总投资资产</span>
-          <strong>{formatNumber(snapshot.totalAssets, 2)}</strong>
+          <strong className={privacyHidden ? '' : toneClass(snapshot.totalAssets)}>
+            {maskedNumber(snapshot.totalAssets, 2)}
+          </strong>
           <p>当前账户由股票市值与基金持有金额共同构成，下面是两类资产的实时占比。</p>
         </div>
         <div className="account-allocation">
           <div className="allocation-row">
             <div className="allocation-meta">
               <span>股票资产</span>
-              <strong>{formatNumber(snapshot.stockMarketValue, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.stockMarketValue)}>
+                {maskedNumber(snapshot.stockMarketValue, 2)}
+              </strong>
             </div>
-            <span className="allocation-ratio">{`${snapshot.stockRatio.toFixed(1)}%`}</span>
+            <span className="allocation-ratio">{maskedRatio(snapshot.stockRatio)}</span>
           </div>
           <div className="allocation-bar">
-            <span className="stock" style={{ width: `${Math.max(snapshot.stockRatio, 0)}%` }} />
+            <span className="stock" style={{ width: `${allocationWidth(snapshot.stockRatio)}%` }} />
           </div>
           <div className="allocation-row">
             <div className="allocation-meta">
               <span>基金资产</span>
-              <strong>{formatNumber(snapshot.fundHoldingAmount, 2)}</strong>
+              <strong className={privacyHidden ? '' : toneClass(snapshot.fundHoldingAmount)}>
+                {maskedNumber(snapshot.fundHoldingAmount, 2)}
+              </strong>
             </div>
-            <span className="allocation-ratio">{`${snapshot.fundRatio.toFixed(1)}%`}</span>
+            <span className="allocation-ratio">{maskedRatio(snapshot.fundRatio)}</span>
           </div>
           <div className="allocation-bar">
-            <span className="fund" style={{ width: `${Math.max(snapshot.fundRatio, 0)}%` }} />
+            <span className="fund" style={{ width: `${allocationWidth(snapshot.fundRatio)}%` }} />
           </div>
         </div>
       </section>
@@ -115,7 +124,7 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
             </div>
             <div className="account-detail-item">
               <span>股票市值</span>
-              <strong>{formatNumber(snapshot.stockMarketValue, 2)}</strong>
+              <strong>{maskedNumber(snapshot.stockMarketValue, 2)}</strong>
             </div>
             <div className="account-detail-item">
               <span>持仓收益</span>
@@ -141,7 +150,7 @@ export default function AccountDashboard({ snapshot, stockPositions, fundPositio
             </div>
             <div className="account-detail-item">
               <span>持有金额</span>
-              <strong>{formatNumber(snapshot.fundHoldingAmount, 2)}</strong>
+              <strong>{maskedNumber(snapshot.fundHoldingAmount, 2)}</strong>
             </div>
             <div className="account-detail-item">
               <span>持有收益</span>

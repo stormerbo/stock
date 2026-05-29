@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { Button } from './ui';
 
 export default function FloatingRefreshBtn({ onRefresh, spinning }: { onRefresh: () => void; spinning: boolean }) {
-  const btnRef = useRef<HTMLButtonElement>(null);
   const dragging = useRef(false);
   const dragOrigin = useRef({ x: 0, y: 0 });
   const posOrigin = useRef({ right: 12, bottom: 12 });
@@ -38,9 +38,10 @@ export default function FloatingRefreshBtn({ onRefresh, spinning }: { onRefresh:
   };
 
   return (
-    <button
-      ref={btnRef}
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
       className="floating-refresh-btn"
       style={{ right: pos.right, bottom: pos.bottom }}
       onMouseDown={onMouseDown}
@@ -48,6 +49,6 @@ export default function FloatingRefreshBtn({ onRefresh, spinning }: { onRefresh:
       title="刷新数据"
     >
       <RefreshCw size={14} className={spinning ? 'spinning' : ''} />
-    </button>
+    </Button>
   );
 }

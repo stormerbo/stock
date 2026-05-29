@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import IntradayChart from '../../popup/components/IntradayChart';
+import { Button } from '../../popup/components/ui';
 
 type Props = {
   name: string;
@@ -61,7 +62,18 @@ export default function StockDetail({
     <div className="stock-detail">
       {/* Header */}
       <div className="stock-detail-header">
-        <button className="float-btn stock-detail-back" onClick={onBack} type="button">←</button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="stock-detail-back"
+          onClick={onBack}
+          title="返回"
+          aria-label="返回"
+          style={{ width: 20, height: 20, minHeight: 20, borderRadius: 5, padding: 0, color: 'var(--text-tertiary)' }}
+        >
+          ←
+        </Button>
         <div className="stock-detail-title">
           <span className="stock-detail-name">{name}</span>
           <span className="stock-detail-code">{code}</span>

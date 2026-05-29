@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import type { StockPosition } from '../shared/fetch';
+import { normalizeThemeMode, THEME_STORAGE_KEY } from '../shared/theme';
 import {
   CONFIG_KEY, STATE_KEY, DEFAULT_CONFIG, DEFAULT_STATE,
   type FloatingOverlayConfig, type FloatingOverlayState,
@@ -20,9 +21,13 @@ type StockDisplay = {
   intraday: { data: Array<{ time: string; price: number }>; prevClose: number };
 };
 
-export default function App() {
+type AppProps = {
+  initialTheme?: 'dark' | 'light' | 'white';
+};
+
+export default function App({ initialTheme = 'dark' }: AppProps) {
   const [config, setConfig] = useState<FloatingOverlayConfig>(DEFAULT_CONFIG);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light' | 'white'>(initialTheme);
   const [uiState, setUiState] = useState<FloatingOverlayState>(DEFAULT_STATE);
   const [positions, setPositions] = useState<StockPosition[]>([]);
   const [ready, setReady] = useState(false);
@@ -34,7 +39,7 @@ export default function App() {
     chrome.storage.sync.get([CONFIG_KEY, 'popup-theme'], (result) => {
       const savedConfig = (result[CONFIG_KEY] as FloatingOverlayConfig) ?? DEFAULT_CONFIG;
       setConfig(savedConfig);
-      setTheme((result['popup-theme'] as string) === 'light' ? 'light' : 'dark');
+      setTheme(normalizeThemeMode(result[THEME_STORAGE_KEY]));
       // 如果开启了但被隐藏了，复位 hidden
       if (savedConfig.enabled) {
         chrome.storage.local.get(STATE_KEY, (sr) => {
@@ -74,7 +79,7 @@ export default function App() {
           setConfig(changes[CONFIG_KEY].newValue as FloatingOverlayConfig);
         }
         if (changes['popup-theme']) {
-          setTheme(changes['popup-theme'].newValue === 'light' ? 'light' : 'dark');
+          setTheme(normalizeThemeMode(changes['popup-theme'].newValue));
         }
       }
     };
@@ -193,7 +198,7 @@ export default function App() {
   if (uiState.hidden) return null;
 
   return (
-      <div className={theme === 'light' ? 'theme-light' : ''}>
+      <div className={theme === 'light' ? 'theme-light' : theme === 'white' ? 'theme-white' : ''}>
       <FloatingWidget
         initialPosition={uiState.position}
         collapsed={uiState.collapsed}

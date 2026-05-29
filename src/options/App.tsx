@@ -23,12 +23,13 @@ import {
   type TagDefinition,
 } from '../shared/tags';
 import { loadFeeConfig, saveFeeConfig, type FeeConfig, DEFAULT_FEE_CONFIG } from '../shared/fee-config';
-import { THEME_STORAGE_KEY, normalizeThemeMode } from '../shared/theme';
+import { THEME_STORAGE_KEY, applyThemeVariables, normalizeThemeMode } from '../shared/theme';
 import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig, type ColorScheme } from '../shared/display';
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 import { loadCachedStyleProfile, type StyleProfile } from '../shared/investment-style';
 import RadarChart from '../popup/components/RadarChart';
 import type { ThemeMode } from '../popup/types';
+import { Button } from '../popup/components/ui';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
@@ -174,13 +175,13 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove, onSave, saved
             {config.rules.filter(r => r.enabled).length} 条规则
           </span>
           {onSave && (
-            <button type="button" className={`btn-small ${saved ? 'active' : 'primary'}`} onClick={onSave}>
+            <Button type="button" variant={saved ? 'secondary' : 'primary'} size="sm" onClick={onSave}>
               {saved ? '已保存' : '保存'}
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn-small danger" onClick={onRemove}>
+          <Button type="button" variant="danger" size="sm" onClick={onRemove}>
             移除
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -372,25 +373,26 @@ function StockAlertEditor({ config, stockName, onUpdate, onRemove, onSave, saved
                 <span>秒</span>
               </div>
 
-              <button type="button" className="btn-tiny danger" onClick={() => removeRule(ri)}>
+              <Button type="button" variant="danger" size="sm" onClick={() => removeRule(ri)}>
                 删除规则
-              </button>
+              </Button>
             </div>
           ))}
 
           {/* Add rule button */}
           <div className="alert-add-rule">
             {(['price_up', 'price_down', 'change_pct', 'volatility', 'drawdown', 'trailing_stop', 'batch_buy', 'grid_trading'] as AlertRuleType[]).map((type) => (
-              <button
+              <Button
                 key={type}
                 type="button"
-                className="btn-tiny"
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   onUpdate({ ...config, rules: [...config.rules, createAlertRule(type)] });
                 }}
               >
                 + {RULE_TYPE_LABELS[type]}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -493,6 +495,7 @@ export default function App() {
   // ---- Display (manual save) ----
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
   const [displayDraft, setDisplayDraft] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG);
+  const displayLoadedRef = useRef(false);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -500,6 +503,7 @@ export default function App() {
         const resolved = normalizeDisplayConfig(result[DISPLAY_STORAGE_KEY]);
         setDisplayConfig(resolved);
         setDisplayDraft(resolved);
+        displayLoadedRef.current = true;
       });
     } else {
       try {
@@ -511,6 +515,7 @@ export default function App() {
         setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
         setDisplayDraft(DEFAULT_DISPLAY_CONFIG);
       }
+      displayLoadedRef.current = true;
     }
   }, []);
 
@@ -561,6 +566,11 @@ export default function App() {
     applyThemeClass(theme);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme, applyThemeClass]);
+
+  useEffect(() => {
+    if (!displayLoadedRef.current) return;
+    applyThemeVariables(document, theme, displayDraft.colorScheme);
+  }, [theme, displayDraft.colorScheme]);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -1410,10 +1420,9 @@ export default function App() {
             </div>
 
             {JSON.stringify(feeDraft) !== JSON.stringify(feeConfig) && (
-              <button type="button" onClick={async () => { await saveFeeConfig(feeDraft); setFeeConfig(feeDraft); }}
-                style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <Button type="button" variant="primary" size="sm" onClick={async () => { await saveFeeConfig(feeDraft); setFeeConfig(feeDraft); }}>
                 保存费率配置
-              </button>
+              </Button>
             )}
           </section>
         )}
@@ -1423,9 +1432,9 @@ export default function App() {
           <h2>
             告警设置
             <span className={`dirty-tag ${alertDirty ? 'dirty' : ''}`}>{alertDirty ? '未保存' : '已保存'}</span>
-            <button type="button" className="btn-tiny" style={{ marginLeft: 'auto' }} onClick={sendTestNotification}>
+            <Button type="button" variant="secondary" size="sm" style={{ marginLeft: 'auto' }} onClick={sendTestNotification}>
               🔔 发送测试通知
-            </button>
+            </Button>
           </h2>
           <div className="config-card">
             <div className="config-row">
@@ -2089,9 +2098,9 @@ function TagRow({ tag, onRename, onDelete }: TagRowProps) {
           {tag.name}
         </span>
       )}
-      <button type="button" className="btn-tiny danger" onClick={() => onDelete(tag.name)} title="删除标签">
+      <Button type="button" variant="danger" size="sm" onClick={() => onDelete(tag.name)} title="删除标签">
         删除
-      </button>
+      </Button>
     </div>
   );
 }

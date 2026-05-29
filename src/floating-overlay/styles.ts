@@ -9,7 +9,7 @@ export const OVERLAY_CSS = `
   all: initial;
   ${darkThemeVariables}
   --bg-surface: var(--color-surface);
-  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), rgba(59, 130, 246, 0.08));
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), color-mix(in srgb, var(--color-accent) 10%, transparent));
   --bg-card: color-mix(in srgb, var(--surface-glass) 80%, transparent);
   --bg-card-hover: color-mix(in srgb, var(--surface-glass-strong) 78%, transparent);
   --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
@@ -365,7 +365,7 @@ export const OVERLAY_CSS = `
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
   border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-  box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   font-family: var(--font);
   user-select: none;
   -webkit-user-select: none;
@@ -596,7 +596,7 @@ export const OVERLAY_CSS = `
 .theme-light {
   ${lightThemeVariables}
   --bg-surface: var(--color-surface);
-  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), rgba(99, 102, 241, 0.04));
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), color-mix(in srgb, var(--color-accent) 8%, transparent));
   --bg-card: color-mix(in srgb, var(--state-muted-bg) 88%, transparent);
   --bg-card-hover: var(--state-hover-bg);
   --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
@@ -611,7 +611,7 @@ export const OVERLAY_CSS = `
 .theme-white {
   ${whiteThemeVariables}
   --bg-surface: var(--color-surface);
-  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 88%, transparent), rgba(99, 102, 241, 0.03));
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 88%, transparent), color-mix(in srgb, var(--color-accent) 6%, transparent));
   --bg-card: color-mix(in srgb, var(--state-muted-bg) 96%, transparent);
   --bg-card-hover: var(--state-hover-bg);
   --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
@@ -641,7 +641,7 @@ export const OVERLAY_CSS = `
 .theme-light .float-collapsed-tab,
 .theme-white .float-collapsed-tab {
   border-color: color-mix(in srgb, var(--color-border) 90%, transparent);
-  box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 /* =================================================================
@@ -652,7 +652,7 @@ export const OVERLAY_CSS = `
   --bg-card: color-mix(in srgb, var(--surface-glass) 60%, transparent);
   --bg-card-hover: color-mix(in srgb, var(--surface-glass-strong) 64%, transparent);
   --border-color: color-mix(in srgb, var(--surface-glass-border) 70%, transparent);
-  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 72%, transparent), rgba(59, 130, 246, 0.04));
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 72%, transparent), color-mix(in srgb, var(--color-accent) 10%, transparent));
 }
 
 .theme-glass .float-panel,
