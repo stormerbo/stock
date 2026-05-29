@@ -138,6 +138,12 @@ export default function App() {
 
   const [badgeConfig, setBadgeConfig] = useState<{ enabled: boolean; mode: string } | null>(null);
 
+  const applyThemeClass = useCallback((mode: ThemeMode) => {
+    document.body.classList.remove('theme-light', 'theme-white');
+    if (mode === 'light') document.body.classList.add('theme-light');
+    if (mode === 'white') document.body.classList.add('theme-white');
+  }, []);
+
   // ---- Market Stats (trading hours only) ----
   const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
   const marketStatsHistoryRef = useRef<Record<string, number>>({});
@@ -784,11 +790,10 @@ export default function App() {
   }, [portfolioReady, stockHoldings, fundHoldings]);
 
   useEffect(() => {
-    document.body.classList.remove('theme-light');
-    if (theme === 'light') document.body.classList.add('theme-light');
+    applyThemeClass(theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     try { chrome.storage.sync.set({ [THEME_STORAGE_KEY]: theme }); } catch { /* best effort */ }
-  }, [theme]);
+  }, [theme, applyThemeClass]);
 
   useEffect(() => {
     const syncDisplay = () => {
@@ -1376,7 +1381,7 @@ function clearIntradayIfStale(
   };
 
   const toggleTheme = () => setTheme((current) => (
-    current === 'dark' ? 'light' : 'dark'
+    current === 'dark' ? 'light' : current === 'light' ? 'white' : 'dark'
   ));
 
   const toggleStockPrivacyHidden = useCallback(() => {

@@ -28,6 +28,7 @@ import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, ty
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 import { loadCachedStyleProfile, type StyleProfile } from '../shared/investment-style';
 import RadarChart from '../popup/components/RadarChart';
+import type { ThemeMode } from '../popup/types';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
@@ -546,15 +547,20 @@ export default function App() {
   const [saved, setSaved] = useState(false);
 
   // ---- Theme ----
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
     return normalizeThemeMode(localStorage.getItem(THEME_STORAGE_KEY));
   });
 
+  const applyThemeClass = useCallback((mode: ThemeMode) => {
+    document.body.classList.remove('theme-light', 'theme-white');
+    if (mode === 'light') document.body.classList.add('theme-light');
+    if (mode === 'white') document.body.classList.add('theme-white');
+  }, []);
+
   useEffect(() => {
-    document.body.classList.remove('theme-light');
-    if (theme === 'light') document.body.classList.add('theme-light');
+    applyThemeClass(theme);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+  }, [theme, applyThemeClass]);
 
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
@@ -575,13 +581,12 @@ export default function App() {
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
-      document.body.classList.remove('theme-light');
-      if (next === 'light') document.body.classList.add('theme-light');
+      const next: ThemeMode = prev === 'dark' ? 'light' : prev === 'light' ? 'white' : 'dark';
+      applyThemeClass(next);
       try { chrome.storage.sync.set({ [THEME_STORAGE_KEY]: next }); } catch { /* best effort */ }
       return next;
     });
-  }, []);
+  }, [applyThemeClass]);
 
   // ---- Donate ----
   const [showDonate, setShowDonate] = useState(false);
@@ -1060,7 +1065,7 @@ export default function App() {
           <p className="desc">角标设置即时生效，其余配置需手动保存</p>
           <div className="header-actions">
             <button type="button" className="theme-btn" onClick={toggleTheme}>
-              {theme === 'dark' ? '🌞 浅色' : theme === 'light' ? '🌙 深色' : '🫧 玻璃'}
+              {theme === 'dark' ? '🌞 浅色' : theme === 'light' ? '🤍 白色' : '🌙 深色'}
             </button>
             <button type="button" className="donate-btn" onClick={() => setShowDonate(true)}>
               ☕ 打赏

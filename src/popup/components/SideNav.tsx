@@ -120,8 +120,8 @@ export default function SideNav({
         className="nav-btn"
         onClick={toggleTheme}
       >
-        {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
-        <span>{theme === 'dark' ? '浅色' : '深色'}</span>
+        {theme === 'dark' ? <Sun size={10} /> : theme === 'light' ? <Sun size={10} /> : <Moon size={10} />}
+        <span>{theme === 'dark' ? '浅色' : theme === 'light' ? '白色' : '深色'}</span>
       </button>
     </div>
   </aside>

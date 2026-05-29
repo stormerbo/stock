@@ -33,6 +33,22 @@ body.theme-light {
   --option-hover: rgba(0, 0, 0, 0.04);
 }
 
+body.theme-white {
+  --bg-0: #ffffff;
+  --bg-1: #ffffff;
+  --bg-2: #f6f9ff;
+  --text-0: #1d2740;
+  --text-1: #5c6889;
+  --line: rgba(28, 45, 89, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-bg-strong: rgba(255, 255, 255, 0.98);
+  --glass-border: rgba(28, 45, 89, 0.08);
+  --toggle-bg: #d1d5db;
+  --input-bg: rgba(255, 255, 255, 0.5);
+  --option-bg: rgba(255, 255, 255, 0.3);
+  --option-hover: rgba(0, 0, 0, 0.04);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -58,6 +74,10 @@ body.theme-light {
     radial-gradient(1000px 520px at -6% -32%, #b8c9ff 0%, transparent 48%),
     radial-gradient(820px 380px at 108% 0%, #9bc2ff 0%, transparent 42%),
     linear-gradient(160deg, var(--bg-0), var(--bg-1) 58%, #e0e9ff);
+}
+
+body.theme-white {
+  background: linear-gradient(180deg, #ffffff, #ffffff);
 }
 
 .options-root {
@@ -486,7 +506,8 @@ body.theme-light {
   background: rgba(107, 92, 246, 0.15);
 }
 
-body.theme-light .badge-option.active {
+body.theme-light .badge-option.active ,
+body.theme-white .badge-option.active  {
   background: rgba(63, 103, 240, 0.1);
 }
 
@@ -615,7 +636,8 @@ body.theme-light .badge-option.active {
   color: var(--brand);
 }
 
-body.theme-light .scope-tab-btn.active {
+body.theme-light .scope-tab-btn.active ,
+body.theme-white .scope-tab-btn.active  {
   background: rgba(63, 103, 240, 0.1);
 }
 
@@ -742,7 +764,8 @@ body.theme-light .scope-tab-btn.active {
   color: var(--brand);
 }
 
-body.theme-light .badge-compact-item.active {
+body.theme-light .badge-compact-item.active ,
+body.theme-white .badge-compact-item.active  {
   background: rgba(63, 103, 240, 0.1);
 }
 
@@ -783,7 +806,8 @@ body.theme-light .badge-compact-item.active {
   color: var(--brand);
 }
 
-body.theme-light .color-scheme-item.active {
+body.theme-light .color-scheme-item.active ,
+body.theme-white .color-scheme-item.active  {
   background: rgba(63, 103, 240, 0.1);
 }
 
@@ -817,7 +841,8 @@ body.theme-light .color-scheme-item.active {
   color: var(--brand);
 }
 
-body.theme-light .privacy-toggle.active {
+body.theme-light .privacy-toggle.active ,
+body.theme-white .privacy-toggle.active  {
   background: rgba(63, 103, 240, 0.1);
 }
 

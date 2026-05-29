@@ -8,7 +8,7 @@ import type {
 } from '../shared/fetch';
 
 export type PageTab = 'stocks' | 'funds' | 'notifications' | 'trades' | 'account' | 'risk';
-export type ThemeMode = 'dark' | 'light';
+export type ThemeMode = 'dark' | 'light' | 'white';
 
 export type IndexDetailTarget = {
   code: string;

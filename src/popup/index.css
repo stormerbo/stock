@@ -72,6 +72,30 @@ body.theme-light {
   --down: var(--_green);
 }
 
+body.theme-white {
+  --bg-0: #ffffff;
+  --bg-1: #ffffff;
+  --bg-2: #f6f9ff;
+  --text-0: #1d2740;
+  --text-1: #4b5778;
+  --text-2: #6b7799;
+  --text-3: #9098b5;
+  --border-1: rgba(28, 45, 89, 0.14);
+  --border-2: rgba(28, 45, 89, 0.08);
+  --line: rgba(28, 45, 89, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-bg-strong: rgba(255, 255, 255, 0.98);
+  --glass-border: rgba(28, 45, 89, 0.08);
+  --glass-shadow: 0 8px 20px rgba(24, 41, 82, 0.08);
+  --glass-blur: blur(18px) saturate(125%);
+  --brand: #3f67f0;
+  --brand-soft: rgba(63, 103, 240, 0.15);
+  --_red: #cf2e2e;
+  --_green: #13964b;
+  --up: var(--_red);
+  --down: var(--_green);
+}
+
 /* 绿涨红跌（美股模式） */
 body.color-scheme-us {
   --up: var(--_green);
@@ -107,6 +131,15 @@ body.theme-light .popup-root::before {
     radial-gradient(1000px 520px at -6% -32%, #b8c9ff 0%, transparent 48%),
     radial-gradient(820px 380px at 108% 0%, #9bc2ff 0%, transparent 42%),
     linear-gradient(160deg, var(--bg-0), var(--bg-1) 58%, #e0e9ff);
+}
+
+body.theme-white .popup-root::before {
+  background: linear-gradient(180deg, #ffffff, #ffffff);
+}
+
+body.theme-light .search-input::placeholder ,
+body.theme-white .search-input::placeholder  {
+  color: #7b86a4;
 }
 
 .grid-overlay {
@@ -548,18 +581,21 @@ body.theme-light .popup-root::before {
   transform-origin: top left;
 }
 
-body.theme-light .index-modal-overlay {
+body.theme-light .index-modal-overlay ,
+body.theme-white .index-modal-overlay  {
   background: rgba(94, 120, 178, 0.18);
 }
 
-body.theme-light .index-modal-panel {
+body.theme-light .index-modal-panel ,
+body.theme-white .index-modal-panel  {
   background:
     radial-gradient(420px 180px at 0% 0%, rgba(121, 145, 255, 0.14) 0%, transparent 72%),
     radial-gradient(360px 220px at 100% 0%, rgba(139, 196, 255, 0.16) 0%, transparent 74%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(240, 246, 255, 0.82));
 }
 
-body.theme-light .index-tooltip {
+body.theme-light .index-tooltip ,
+body.theme-white .index-tooltip  {
   background: rgba(239, 245, 255, 0.9);
 }
 
@@ -1103,21 +1139,21 @@ body.theme-light .index-tooltip {
   -webkit-backdrop-filter: none;
 }
 
-body.theme-light .search-input::placeholder {
-  color: #7b86a4;
-}
-
 body.theme-light .search-box,
-body.theme-light .search-suggestions {
+body.theme-light .search-suggestions ,
+body.theme-white .search-box,
+body.theme-white .search-suggestions  {
   background: rgba(246, 250, 255, 0.95);
   border-color: rgba(101, 123, 168, 0.16);
 }
 
-body.theme-light .suggestion-item:hover {
+body.theme-light .suggestion-item:hover ,
+body.theme-white .suggestion-item:hover  {
   background: rgba(33, 55, 102, 0.08);
 }
 
-body.theme-light .data-table thead th {
+body.theme-light .data-table thead th ,
+body.theme-white .data-table thead th  {
   background: color-mix(in srgb, var(--glass-bg-strong) 45%, transparent);
   color: #334464;
 }
@@ -1855,7 +1891,8 @@ body.theme-light .data-table thead th {
   color: #ff6676;
 }
 
-body.theme-light .row-context-menu {
+body.theme-light .row-context-menu ,
+body.theme-white .row-context-menu  {
   background: rgba(248, 251, 255, 0.98);
 }
 
@@ -3097,11 +3134,13 @@ body.theme-light .row-context-menu {
   opacity: 0.85;
 }
 
-body.theme-light .fund-holding-card {
+body.theme-light .fund-holding-card ,
+body.theme-white .fund-holding-card  {
   background: rgba(63, 103, 240, 0.08);
 }
 
-body.theme-light .fund-nav-tooltip {
+body.theme-light .fund-nav-tooltip ,
+body.theme-white .fund-nav-tooltip  {
   background: rgba(242, 246, 255, 0.92);
 }
 
@@ -3182,7 +3221,8 @@ body.theme-light .fund-nav-tooltip {
   color: #7767ff;
 }
 
-body.theme-light .market-stats-panel {
+body.theme-light .market-stats-panel ,
+body.theme-white .market-stats-panel  {
   background: rgba(255, 255, 255, 0.34);
 }
 
@@ -3445,15 +3485,18 @@ body.theme-light .market-stats-panel {
   font-size: 12px;
 }
 
-body.theme-light .notification-item:hover {
+body.theme-light .notification-item:hover ,
+body.theme-white .notification-item:hover  {
   background: rgba(0, 0, 0, 0.02);
 }
 
-body.theme-light .notification-item.unread {
+body.theme-light .notification-item.unread ,
+body.theme-white .notification-item.unread  {
   background: rgba(63, 103, 240, 0.04);
 }
 
-body.theme-light .notification-dot.unread {
+body.theme-light .notification-dot.unread ,
+body.theme-white .notification-dot.unread  {
   box-shadow: 0 0 4px rgba(207, 46, 46, 0.3);
 }
 
@@ -3465,7 +3508,8 @@ body.theme-light .notification-dot.unread {
   background: rgba(255, 255, 255, 0.05);
 }
 
-body.theme-light .notification-item.clickable:hover {
+body.theme-light .notification-item.clickable:hover ,
+body.theme-white .notification-item.clickable:hover  {
   background: rgba(0, 0, 0, 0.03);
 }
 
@@ -4467,7 +4511,8 @@ body.theme-light .notification-item.clickable:hover {
   padding: 14px;
 }
 
-body.theme-light .analytics-section {
+body.theme-light .analytics-section ,
+body.theme-white .analytics-section  {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--glass-bg-strong) 42%, transparent), color-mix(in srgb, var(--glass-bg) 40%, transparent)),
     linear-gradient(180deg, rgba(255,255,255,0.5), transparent 26%);
@@ -5823,7 +5868,8 @@ body.theme-light .analytics-section {
   text-align: left;
 }
 .stop-ctx-menu button:hover { background: color-mix(in srgb, var(--brand-soft) 40%, transparent); }
-body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
+body.theme-light .stop-ctx-menu ,
+body.theme-white .stop-ctx-menu  { background: rgba(248,251,255,.98); }
 .stop-toast {
   position: fixed;
   bottom: 20px;
