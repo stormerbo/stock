@@ -1,23 +1,30 @@
+import { getDesignTokenVariables, serializeCssVariables } from '../shared/design-tokens';
+
+const darkThemeVariables = serializeCssVariables(getDesignTokenVariables('dark'));
+const lightThemeVariables = serializeCssVariables(getDesignTokenVariables('light'));
+const whiteThemeVariables = serializeCssVariables(getDesignTokenVariables('white'));
+
 export const OVERLAY_CSS = `
 :host {
   all: initial;
-  --bg-surface: #111318;
-  --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.18), rgba(59, 130, 246, 0.08));
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-card-hover: rgba(255, 255, 255, 0.07);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --up: #f87171;
-  --up-bg: rgba(248, 113, 113, 0.12);
-  --down: #34d399;
-  --down-bg: rgba(52, 211, 153, 0.12);
-  --brand: #818cf8;
-  --brand-glow: rgba(129, 140, 248, 0.25);
+  ${darkThemeVariables}
+  --bg-surface: var(--color-surface);
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), rgba(59, 130, 246, 0.08));
+  --bg-card: color-mix(in srgb, var(--surface-glass) 80%, transparent);
+  --bg-card-hover: color-mix(in srgb, var(--surface-glass-strong) 78%, transparent);
+  --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-faint);
+  --up: var(--color-up);
+  --up-bg: color-mix(in srgb, var(--color-up) 12%, transparent);
+  --down: var(--color-down);
+  --down-bg: color-mix(in srgb, var(--color-down) 12%, transparent);
+  --brand: var(--color-accent);
+  --brand-glow: color-mix(in srgb, var(--color-accent) 25%, transparent);
   --radius: 14px;
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --font: 'PingFang SC', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --shadow: var(--shadow-lg);
+  --font: var(--font-sans);
 }
 
 :host * {
@@ -37,13 +44,13 @@ export const OVERLAY_CSS = `
   min-width: 200px;
   max-width: min(380px, calc(100vw - 24px));
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
   background: var(--bg-surface);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border: 1px solid var(--surface-glass-border);
+  border-top: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 26%, transparent);
   font-family: var(--font);
   font-size: 12px;
   line-height: 1.4;
@@ -135,7 +142,7 @@ export const OVERLAY_CSS = `
 
 .float-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--state-hover-bg);
 }
 
 /* Opacity control */
@@ -156,9 +163,9 @@ export const OVERLAY_CSS = `
   border-radius: 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
   white-space: nowrap;
 }
 
@@ -168,7 +175,7 @@ export const OVERLAY_CSS = `
   width: 72px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  background: color-mix(in srgb, var(--color-line) 90%, transparent);
   outline: none;
   cursor: pointer;
 }
@@ -244,7 +251,7 @@ export const OVERLAY_CSS = `
 }
 
 .float-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--color-line) 90%, transparent);
   border-radius: 2px;
 }
 
@@ -256,7 +263,7 @@ export const OVERLAY_CSS = `
   align-items: center;
   gap: 0;
   padding: 7px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 44%, transparent);
   transition: background 0.1s;
   position: relative;
 }
@@ -355,9 +362,9 @@ export const OVERLAY_CSS = `
   height: 26px;
   border-radius: 50%;
   background: var(--bg-surface);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.3);
   font-family: var(--font);
   user-select: none;
@@ -406,7 +413,7 @@ export const OVERLAY_CSS = `
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card);
 }
 
 .float-empty-text {
@@ -521,12 +528,12 @@ export const OVERLAY_CSS = `
 }
 
 .stock-detail-grid-line {
-  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  border-top: 1px dashed color-mix(in srgb, var(--color-line) 86%, transparent);
   height: 0;
 }
 
 .stock-detail-grid-mid {
-  border-top-color: rgba(255, 255, 255, 0.15);
+  border-top-color: color-mix(in srgb, var(--color-line) 100%, transparent);
   position: relative;
 }
 
@@ -587,33 +594,53 @@ export const OVERLAY_CSS = `
    Light theme overrides
    ================================================================= */
 .theme-light {
-  --bg-surface: #f2f5ff;
-  --bg-header: linear-gradient(135deg, rgba(129, 140, 248, 0.10), rgba(99, 102, 241, 0.04));
-  --bg-card: rgba(0, 0, 0, 0.02);
-  --bg-card-hover: rgba(0, 0, 0, 0.04);
-  --border-color: rgba(148, 163, 184, 0.2);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
-  --up: #dc2626;
-  --down: #16a34a;
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  ${lightThemeVariables}
+  --bg-surface: var(--color-surface);
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 90%, transparent), rgba(99, 102, 241, 0.04));
+  --bg-card: color-mix(in srgb, var(--state-muted-bg) 88%, transparent);
+  --bg-card-hover: var(--state-hover-bg);
+  --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-faint);
+  --up: var(--color-up);
+  --down: var(--color-down);
+  --shadow: var(--shadow-md);
 }
 
-.theme-light .stock-card {
-  border-bottom-color: rgba(0, 0, 0, 0.04);
+.theme-white {
+  ${whiteThemeVariables}
+  --bg-surface: var(--color-surface);
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 88%, transparent), rgba(99, 102, 241, 0.03));
+  --bg-card: color-mix(in srgb, var(--state-muted-bg) 96%, transparent);
+  --bg-card-hover: var(--state-hover-bg);
+  --border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-faint);
+  --up: var(--color-up);
+  --down: var(--color-down);
+  --shadow: var(--shadow-md);
 }
 
-.theme-light .float-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+.theme-light .stock-card,
+.theme-white .stock-card {
+  border-bottom-color: color-mix(in srgb, var(--color-line) 44%, transparent);
 }
 
-.theme-light .float-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+.theme-light .float-body::-webkit-scrollbar-thumb,
+.theme-white .float-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-line) 90%, transparent);
 }
 
-.theme-light .float-collapsed-tab {
-  border-color: rgba(0, 0, 0, 0.12);
+.theme-light .float-btn:hover,
+.theme-white .float-btn:hover {
+  background: var(--state-hover-bg);
+}
+
+.theme-light .float-collapsed-tab,
+.theme-white .float-collapsed-tab {
+  border-color: color-mix(in srgb, var(--color-border) 90%, transparent);
   box-shadow: -1px 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -621,22 +648,22 @@ export const OVERLAY_CSS = `
    Glass theme overrides
    ================================================================= */
 .theme-glass {
-  --bg-surface: rgba(17, 19, 24, 0.2);
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --border-color: rgba(255, 255, 255, 0.04);
-  --bg-header: linear-gradient(135deg, rgba(107, 92, 246, 0.12), rgba(59, 130, 246, 0.04));
+  --bg-surface: color-mix(in srgb, var(--color-surface) 24%, transparent);
+  --bg-card: color-mix(in srgb, var(--surface-glass) 60%, transparent);
+  --bg-card-hover: color-mix(in srgb, var(--surface-glass-strong) 64%, transparent);
+  --border-color: color-mix(in srgb, var(--surface-glass-border) 70%, transparent);
+  --bg-header: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 72%, transparent), rgba(59, 130, 246, 0.04));
 }
 
 .theme-glass .float-panel,
 .theme-glass .float-collapsed-tab {
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
 }
 
 .theme-glass .float-opacity-popup {
-  background: rgba(17, 19, 24, 0.3);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  background: color-mix(in srgb, var(--color-surface) 30%, transparent);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
 }
 `;

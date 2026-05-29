@@ -1,52 +1,74 @@
 :root {
-  --bg-0: #0f1118;
-  --bg-1: #171a26;
-  --bg-2: #23283a;
-  --text-0: #f4f6ff;
-  --text-1: #c5cbe2;
-  --line: rgba(255, 255, 255, 0.09);
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-strong: rgba(255, 255, 255, 0.09);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --brand: #6b5cf6;
+  --color-bg: #0f1118;
+  --color-surface: #171a26;
+  --color-surface-strong: #23283a;
+  --color-text: #f4f6ff;
+  --color-text-muted: #c5cbe2;
+  --color-text-faint: #7a829e;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-strong: rgba(255, 255, 255, 0.09);
+  --surface-glass-border: rgba(255, 255, 255, 0.06);
+  --color-accent: #6b5cf6;
+  --color-warning: #f59e0b;
+  --color-success: #22c55e;
+  --state-hover-bg: rgba(255, 255, 255, 0.06);
+  --state-active-bg: rgba(107, 92, 246, 0.15);
+  --bg-0: var(--color-bg);
+  --bg-1: var(--color-surface);
+  --bg-2: var(--color-surface-strong);
+  --text-0: var(--color-text);
+  --text-1: var(--color-text-muted);
+  --text-2: var(--color-text-faint);
+  --line: var(--color-line);
+  --glass-bg: var(--surface-glass);
+  --glass-bg-strong: var(--surface-glass-strong);
+  --glass-border: var(--surface-glass-border);
+  --brand: var(--color-accent);
   --toggle-bg: #334155;
   --input-bg: rgba(0, 0, 0, 0.25);
   --option-bg: rgba(0, 0, 0, 0.15);
-  --option-hover: rgba(255, 255, 255, 0.06);
-  --dirty-color: #f59e0b;
-  --saved-color: #22c55e;
+  --option-hover: var(--state-hover-bg);
+  --dirty-color: var(--color-warning);
+  --saved-color: var(--color-success);
 }
 
 body.theme-light {
-  --bg-0: #f2f6ff;
-  --bg-1: #e8efff;
-  --bg-2: #d8e4ff;
-  --text-0: #1d2740;
-  --text-1: #5c6889;
-  --line: rgba(34, 56, 102, 0.16);
-  --glass-bg: rgba(255, 255, 255, 0.35);
-  --glass-bg-strong: rgba(255, 255, 255, 0.55);
-  --glass-border: rgba(101, 123, 168, 0.12);
+  --color-bg: #f2f6ff;
+  --color-surface: #e8efff;
+  --color-surface-strong: #d8e4ff;
+  --color-text: #1d2740;
+  --color-text-muted: #5c6889;
+  --color-text-faint: #6b7799;
+  --color-line: rgba(34, 56, 102, 0.16);
+  --surface-glass: rgba(255, 255, 255, 0.35);
+  --surface-glass-strong: rgba(255, 255, 255, 0.55);
+  --surface-glass-border: rgba(101, 123, 168, 0.12);
+  --color-accent: #3f67f0;
+  --state-hover-bg: rgba(0, 0, 0, 0.04);
+  --state-active-bg: rgba(63, 103, 240, 0.1);
   --toggle-bg: #d1d5db;
   --input-bg: rgba(255, 255, 255, 0.5);
   --option-bg: rgba(255, 255, 255, 0.3);
-  --option-hover: rgba(0, 0, 0, 0.04);
 }
 
 body.theme-white {
-  --bg-0: #ffffff;
-  --bg-1: #ffffff;
-  --bg-2: #f6f9ff;
-  --text-0: #1d2740;
-  --text-1: #5c6889;
-  --line: rgba(28, 45, 89, 0.12);
-  --glass-bg: rgba(255, 255, 255, 0.9);
-  --glass-bg-strong: rgba(255, 255, 255, 0.98);
-  --glass-border: rgba(28, 45, 89, 0.08);
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-strong: #f6f9ff;
+  --color-text: #1d2740;
+  --color-text-muted: #5c6889;
+  --color-text-faint: #6b7799;
+  --color-line: rgba(28, 45, 89, 0.12);
+  --surface-glass: rgba(255, 255, 255, 0.9);
+  --surface-glass-strong: rgba(255, 255, 255, 0.98);
+  --surface-glass-border: rgba(28, 45, 89, 0.08);
+  --color-accent: #3f67f0;
+  --state-hover-bg: rgba(0, 0, 0, 0.04);
+  --state-active-bg: rgba(63, 103, 240, 0.1);
   --toggle-bg: #d1d5db;
   --input-bg: rgba(255, 255, 255, 0.5);
   --option-bg: rgba(255, 255, 255, 0.3);
-  --option-hover: rgba(0, 0, 0, 0.04);
 }
 
 * {
@@ -144,7 +166,7 @@ body.theme-white {
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--accent, #4f8cff);
+  background: var(--color-accent);
   border-radius: 1px 1px 0 0;
 }
 
@@ -202,7 +224,7 @@ body.theme-white {
 }
 
 .donate-modal {
-  background: var(--bg-1);
+  background: var(--color-surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 20px;
@@ -503,12 +525,12 @@ body.theme-white {
 
 .badge-option.active {
   border-color: var(--brand);
-  background: rgba(107, 92, 246, 0.15);
+  background: var(--state-active-bg);
 }
 
 body.theme-light .badge-option.active ,
 body.theme-white .badge-option.active  {
-  background: rgba(63, 103, 240, 0.1);
+  background: var(--state-active-bg);
 }
 
 .badge-option:hover {
