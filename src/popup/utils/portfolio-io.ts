@@ -35,7 +35,9 @@ export function parseStockHoldings(input: unknown): StockHoldingConfig[] {
       };
       const addedPrice = toNumber((item as StockHoldingConfig)?.addedPrice);
       const addedAt = String((item as StockHoldingConfig)?.addedAt ?? '').trim();
-      if (Number.isFinite(addedPrice) && addedPrice > 0) parsed.addedPrice = addedPrice;
+      if (Number.isFinite(addedPrice) && addedPrice > 0) {
+        parsed.addedPrice = Math.round(addedPrice * 100) / 100;
+      }
       if (addedAt) parsed.addedAt = addedAt;
       const positionOpenedAt = String((item as StockHoldingConfig)?.positionOpenedAt ?? '').trim();
       if (positionOpenedAt) parsed.positionOpenedAt = positionOpenedAt;

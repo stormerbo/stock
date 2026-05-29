@@ -36,7 +36,7 @@ import {
 } from '../shared/fetch';
 import { fetchDayFqKline } from '../shared/technical-analysis';
 import { calcMaxDrawdownFromKline, calcVolatilityFromKline } from '../shared/risk-metrics';
-import { loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, totalFees, type StockTradeRecord } from '../shared/trade-history';
+import { TRADE_HISTORY_KEY, loadTradeHistory, getTradesForStock, computePositionFromTrades, computeDailyPnlFromTrades, totalFees, type StockTradeRecord } from '../shared/trade-history';
 import type {
   PageTab, ThemeMode, IndexDetailTarget, SearchStock,
   RowContextMenuState, StockDetailTarget, FundDetailTarget,
@@ -692,7 +692,7 @@ export default function App() {
       changed = true;
       return {
         ...holding,
-        addedPrice: Math.round(price * 1000) / 1000,
+        addedPrice: Math.round(price * 100) / 100,
         addedAt: holding.addedAt || now,
       };
     });
@@ -767,6 +767,16 @@ export default function App() {
   useEffect(() => {
     loadTradeHistory().then((history) => setTradeHistoryForPnl(history));
   }, [portfolioReady, refreshSig]);
+
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return;
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'sync' || !changes[TRADE_HISTORY_KEY]) return;
+      void loadTradeHistory().then((history) => setTradeHistoryForPnl(history));
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
 
   useEffect(() => {
     if (!portfolioReady) return;
@@ -1433,6 +1443,15 @@ function clearIntradayIfStale(
         delete next[code];
         return next;
       });
+      setStockHoldings((prev) =>
+        prev.map((h) => (h.code === code ? { ...h, shares: 0, cost: 0 } : h))
+      );
+      setStockPositions((prev) =>
+        prev.map((p) => {
+          if (p.code !== code) return p;
+          return { ...p, shares: 0, cost: 0, floatingPnl: Number.NaN };
+        })
+      );
       return;
     }
     const pos = computePositionFromTrades(trades);
@@ -1533,7 +1552,7 @@ function clearIntradayIfStale(
           pinned: false,
           special: false,
           addedAt,
-          addedPrice: Number.isFinite(addedPrice) && addedPrice > 0 ? Math.round(addedPrice * 1000) / 1000 : undefined,
+          addedPrice: Number.isFinite(addedPrice) && addedPrice > 0 ? Math.round(addedPrice * 100) / 100 : undefined,
         }
       );
     });
@@ -2071,6 +2090,7 @@ function clearIntradayIfStale(
                 code={stockDetailTarget.code}
                 fallbackName={stockDetailTarget.name}
                 onBack={closeStockDetail}
+                onStockTradesChanged={handleStockTradesChanged}
                 onOpenAssessment={(code) => {
                   setAssessmentFocusCode(code);
                   returnContextRef.current = null;

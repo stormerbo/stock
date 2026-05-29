@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, ChevronLeft, X, Search, RotateCcw, Clock3 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, ChevronLeft, X, RotateCcw, Clock3 } from 'lucide-react';
 import {
+  TRADE_HISTORY_KEY,
   loadTradeHistory, addTrade, deleteTrade, computePositionFromTrades,
   type StockTradeRecord, type TradeType,
 } from '../../shared/trade-history';
@@ -36,8 +37,8 @@ type ModalState = {
   submitting: boolean;
 };
 
-const emptyModal = (stockCodes: string[]): ModalState => ({
-  code: stockCodes[0] || '',
+const emptyModal = (): ModalState => ({
+  code: '',
   date: getShanghaiToday(),
   type: 'buy',
   shares: '', price: '', total: '',
@@ -64,6 +65,24 @@ const inputCls = (w = 1): React.CSSProperties => ({
   outline: 'none', minWidth: 0,
 });
 
+const modalFieldCls = (w = 1): React.CSSProperties => ({
+  flex: w,
+  height: 42,
+  padding: '0 12px',
+  fontSize: 12,
+  border: '1px solid var(--line)',
+  borderRadius: 10,
+  background: 'var(--bg-0)',
+  color: 'var(--text-0)',
+  outline: 'none',
+  minWidth: 0,
+});
+
+const modalSelectCls = (w = 1): React.CSSProperties => ({
+  ...modalFieldCls(w),
+  cursor: 'pointer',
+});
+
 const toolbarIconBtn = (_variant: 'brand' | 'ghost' = 'ghost', disabled = false): React.CSSProperties => ({
   display: 'inline-flex',
   alignItems: 'center',
@@ -85,9 +104,8 @@ const toolbarIconBtn = (_variant: 'brand' | 'ghost' = 'ghost', disabled = false)
 export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTradesChanged }: Props) {
   const [stockHistory, setStockHistory] = useState<Record<string, StockTradeRecord[]>>({});
   const [showModal, setShowModal] = useState(false);
-  const [modal, setModal] = useState<ModalState>(() => emptyModal(allStockCodes));
+  const [modal, setModal] = useState<ModalState>(() => emptyModal());
   const [feeCfg, setFeeCfg] = useState<FeeConfig>(DEFAULT_FEE_CONFIG);
-  const [stockSearch, setStockSearch] = useState('');
   const [assetSnapshots, setAssetSnapshots] = useState<Record<string, DailyAssetSnapshot>>({});
   const [recalcDate, setRecalcDate] = useState(() => {
     const d = new Date();
@@ -123,6 +141,16 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
   useEffect(() => { void loadAll(); }, []);
 
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return;
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'sync' || !changes[TRADE_HISTORY_KEY]) return;
+      void loadAll();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
   const [recalcError, setRecalcError] = useState('');
   const [recalcProgress, setRecalcProgress] = useState<RecalcProgress | null>(null);
   const handleRecalcSnapshot = async () => {
@@ -134,14 +162,13 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
       if (recalcDate > yesterday) throw new Error('起始日期不能晚于昨天');
 
       // 读取数据
-      const [posResult, tradeResult, holdingResult] = await Promise.all([
+      const [posResult, allTrades, holdingResult] = await Promise.all([
         chrome.storage.local.get(['stockPositions', 'fundPositions']),
-        chrome.storage.local.get('stockTradeHistory'),
+        loadTradeHistory(),
         loadHoldingHistory(),
       ]);
       const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
       const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
-      const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
       const holdingHistory = holdingResult;
 
       // 预加载 K 线数据（缓存优先）
@@ -270,7 +297,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
     await refreshStock(modal.code);
     onStockTradesChanged?.(modal.code);
     setShowModal(false);
-    setModal(emptyModal(allStockCodes));
+    setModal(emptyModal());
   };
 
   // ─── 删除交易 ───
@@ -287,9 +314,27 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
   // ─── 模态框内选择股票 ───
 
-  const filteredStockCodes = stockSearch
-    ? allStockCodes.filter((c) => c.includes(stockSearch) || (stockNames[c] || '').includes(stockSearch))
-    : allStockCodes;
+  const stockOptions = useMemo(() => {
+    return [...new Set(allStockCodes)]
+      .map((code) => ({ code, name: stockNames[code] || code }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.code.localeCompare(b.code));
+  }, [allStockCodes, stockNames]);
+
+  const getHoldingSharesFromTrades = (code: string): number => {
+    if (!code) return 0;
+    const trades = stockHistory[code] ?? [];
+    if (trades.length === 0) return 0;
+    const pos = computePositionFromTrades(trades);
+    const shares = Math.round(pos.shares);
+    return Number.isFinite(shares) && shares > 0 ? shares : 0;
+  };
+
+  const fillSellSharesIfNeeded = (code: string, type: TradeType, currentShares: string): string => {
+    if (type !== 'sell') return currentShares;
+    const holdingShares = getHoldingSharesFromTrades(code);
+    if (holdingShares <= 0) return currentShares;
+    return String(holdingShares);
+  };
   const toolbarActions = getTradeHistoryToolbarActions(recalculating);
 
   // ─── 渲染 ───
@@ -339,7 +384,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
             type="button"
             className="trade-toolbar-icon-btn"
             style={toolbarIconBtn('brand')}
-            onClick={() => { setModal(emptyModal(allStockCodes)); setShowModal(true); }}
+            onClick={() => { setModal(emptyModal()); setShowModal(true); }}
             title={toolbarActions[2].title}
             aria-label={toolbarActions[2].ariaLabel}
           >
@@ -411,7 +456,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.45)',
         }} onClick={() => setShowModal(false)}>
-          <div style={{
+          <div className="trade-add-modal" style={{
             background: 'var(--bg-1)', borderRadius: 12, padding: 20,
             width: 440, maxHeight: '90vh', overflow: 'auto',
             display: 'flex', flexDirection: 'column', gap: 10,
@@ -423,30 +468,35 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
             </div>
 
             {/* 股票选择 */}
-            <div style={{ position: 'relative' }}>
-              <input type="text" style={{ ...inputCls(), width: '100%' }} placeholder="搜索股票代码或名称..."
-                value={stockSearch} onChange={(e) => setStockSearch(e.target.value)} />
-              {stockSearch && (
-                <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                  maxHeight: 160, overflow: 'auto',
-                  background: 'var(--bg-1)', border: '1px solid var(--line)', borderRadius: 6, marginTop: 2,
-                }}>
-                  {filteredStockCodes.map((c) => (
-                    <button key={c} type="button" style={{
-                      display: 'block', width: '100%', padding: '6px 10px', border: 'none', background: modal.code === c ? 'var(--brand-soft)' : 'transparent',
-                      color: 'var(--text-0)', fontSize: 12, cursor: 'pointer', textAlign: 'left',
-                    }} onClick={() => { setModal((m) => ({ ...m, code: c })); setStockSearch(''); }}>
-                      {stockNames[c] || c} <span style={{ color: 'var(--text-2)' }}>{c}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {!stockSearch && (
-                <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>
-                  已选: <b style={{ color: 'var(--text-0)' }}>{modal.code ? `${stockNames[modal.code] || modal.code} (${modal.code})` : '未选择'}</b>
-                </div>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>选择股票</span>
+              <select
+                className="trade-modal-control"
+                style={{ ...modalSelectCls(), width: '100%', cursor: stockOptions.length > 0 ? 'pointer' : 'not-allowed' }}
+                value={modal.code}
+                disabled={stockOptions.length === 0}
+                onChange={(e) => setModal((m) => {
+                  const nextCode = e.target.value;
+                  return {
+                    ...m,
+                    code: nextCode,
+                    shares: fillSellSharesIfNeeded(nextCode, m.type, m.shares),
+                    error: '',
+                  };
+                })}
+              >
+                <option value="">请选择股票</option>
+                {stockOptions.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: 'var(--text-2)' }}>
+                {modal.code
+                  ? <>当前选择：<b style={{ color: 'var(--text-0)' }}>{stockNames[modal.code] || modal.code} ({modal.code})</b></>
+                  : '请先从自选或持仓股票中选择一只'}
+              </div>
             </div>
 
             {/* 日期 + 类型 */}
@@ -455,9 +505,18 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
                 label="交易日期"
                 value={modal.date}
                 onChange={(date) => setModal((m) => ({ ...m, date }))}
+                compact
+                placeholder="交易日期"
               />
-              <select style={inputCls()} value={modal.type}
-                onChange={(e) => setModal((m) => ({ ...m, type: e.target.value as TradeType }))}>
+              <select className="trade-modal-control" style={modalSelectCls()} value={modal.type}
+                onChange={(e) => setModal((m) => {
+                  const nextType = e.target.value as TradeType;
+                  return {
+                    ...m,
+                    type: nextType,
+                    shares: fillSellSharesIfNeeded(m.code, nextType, m.shares),
+                  };
+                })}>
                 <option value="buy">买入</option>
                 <option value="sell">卖出</option>
                 <option value="dividend">分红</option>
@@ -467,9 +526,9 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
             {/* 股数 + 价格 */}
             {modal.type !== 'dividend' && (
               <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" step="1" min="1" style={inputCls()} placeholder="股数"
+                <input className="trade-modal-control" type="number" step="1" min="1" style={modalFieldCls()} placeholder="股数"
                   value={modal.shares} onChange={(e) => setModal((m) => ({ ...m, shares: e.target.value }))} />
-                <input type="number" step="0.001" min="0" style={inputCls()} placeholder="成交价"
+                <input className="trade-modal-control" type="number" step="0.001" min="0" style={modalFieldCls()} placeholder="成交价"
                   value={modal.price} onChange={(e) => setModal((m) => ({ ...m, price: e.target.value }))} />
               </div>
             )}
@@ -490,18 +549,18 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
 
             {/* 金额输入 */}
             <div style={{ display: 'flex', gap: 8 }}>
-              <input type="number" step="0.01" min="0" style={inputCls()} placeholder={modal.type === 'dividend' ? '金额' : '总金额（选填）'}
+              <input className="trade-modal-control" type="number" step="0.01" min="0" style={modalFieldCls()} placeholder={modal.type === 'dividend' ? '金额' : '总金额（选填）'}
                 value={modal.total} onChange={(e) => setModal((m) => ({ ...m, total: e.target.value }))} />
-              <input type="number" step="0.01" min="0" style={inputCls()} placeholder="佣金"
+              <input className="trade-modal-control" type="number" step="0.01" min="0" style={modalFieldCls()} placeholder="佣金"
                 value={modal.commission} onChange={(e) => setModal((m) => ({ ...m, commission: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input type="number" step="0.01" min="0" style={inputCls()} placeholder={modal.type === 'sell' ? '印花税（卖出万5）' : '印花税（仅卖出）'}
+              <input className="trade-modal-control" type="number" step="0.01" min="0" style={modalFieldCls()} placeholder={modal.type === 'sell' ? '印花税（卖出万5）' : '印花税（仅卖出）'}
                 value={modal.stampTax} onChange={(e) => setModal((m) => ({ ...m, stampTax: e.target.value }))} />
-              <input type="number" step="0.01" min="0" style={inputCls()} placeholder="过户费"
+              <input className="trade-modal-control" type="number" step="0.01" min="0" style={modalFieldCls()} placeholder="过户费"
                 value={modal.transferFee} onChange={(e) => setModal((m) => ({ ...m, transferFee: e.target.value }))} />
             </div>
-            <input type="text" style={inputCls()} placeholder="备注（选填）"
+            <input className="trade-modal-control" type="text" style={modalFieldCls()} placeholder="备注（选填）"
               value={modal.note} onChange={(e) => setModal((m) => ({ ...m, note: e.target.value }))} />
 
             {modal.error && <div style={{ fontSize: 11, color: '#ef4444' }}>{modal.error}</div>}

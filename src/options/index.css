@@ -254,6 +254,77 @@ body.theme-light {
   flex-wrap: wrap;
 }
 
+.sync-usage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sync-usage-card {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--option-bg);
+}
+
+.sync-usage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sync-usage-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-usage-metric span {
+  font-size: 12px;
+  color: var(--text-1);
+}
+
+.sync-usage-metric strong {
+  font-size: 14px;
+  color: var(--text-0);
+}
+
+.sync-usage-progress {
+  margin-top: 10px;
+  height: 8px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--glass-bg-strong);
+}
+
+.sync-usage-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.sync-usage-progress-fill.ok {
+  background: #16a34a;
+}
+
+.sync-usage-progress-fill.warn {
+  background: #f59e0b;
+}
+
+.sync-usage-progress-fill.danger {
+  background: #ef4444;
+}
+
+.sync-usage-time {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-1);
+}
+
 .backup-file-input {
   display: none;
 }

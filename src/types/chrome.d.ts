@@ -10,9 +10,12 @@ declare namespace chrome {
       get(callback?: (items: Record<string, unknown>) => void): void;
       get(keys: null, callback: (items: Record<string, unknown>) => void): void;
       get(keys: string | string[], callback: (items: Record<string, unknown>) => void): void;
+      getBytesInUse(keys?: string | string[] | null): Promise<number>;
       set(items: Record<string, unknown>): Promise<void>;
       remove(keys: string | string[]): Promise<void>;
       clear(): Promise<void>;
+      QUOTA_BYTES: number;
+      QUOTA_BYTES_PER_ITEM: number;
     };
 
     type StorageAreaLocal = {
@@ -20,9 +23,11 @@ declare namespace chrome {
       get(callback?: (items: Record<string, unknown>) => void): void;
       get(keys: null, callback: (items: Record<string, unknown>) => void): void;
       get(keys: string | string[], callback: (items: Record<string, unknown>) => void): void;
+      getBytesInUse(keys?: string | string[] | null): Promise<number>;
       set(items: Record<string, unknown>): Promise<void>;
       remove(keys: string | string[]): Promise<void>;
       clear(): Promise<void>;
+      QUOTA_BYTES: number;
     };
 
     const sync: StorageAreaSync;

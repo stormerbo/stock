@@ -75,6 +75,14 @@ type BackupPayload = {
   local: Record<string, unknown>;
 };
 
+type SyncStorageUsage = {
+  usedBytes: number;
+  quotaBytes: number;
+  remainingBytes: number;
+  usedRatio: number;
+  checkedAt: number;
+};
+
 const RULE_TYPE_LABELS: Record<AlertRuleType, string> = {
   price_up: '涨破目标价',
   price_down: '跌破目标价',
@@ -403,6 +411,13 @@ function ensureRecord(value: unknown): Record<string, unknown> {
     return {};
   }
   return value as Record<string, unknown>;
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '-';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${Math.round(bytes)} B`;
 }
 
 // -----------------------------------------------------------
@@ -880,6 +895,42 @@ export default function App() {
   const [updateStatus, setUpdateStatus] = useState('');
   const [backupMessage, setBackupMessage] = useState('');
   const [backupError, setBackupError] = useState('');
+  const [syncUsage, setSyncUsage] = useState<SyncStorageUsage | null>(null);
+  const [syncUsageLoading, setSyncUsageLoading] = useState(false);
+  const [syncUsageError, setSyncUsageError] = useState('');
+
+  const refreshSyncUsage = useCallback(async () => {
+    setSyncUsageLoading(true);
+    setSyncUsageError('');
+    try {
+      if (typeof chrome === 'undefined' || !chrome.storage?.sync) {
+        throw new Error('当前环境不支持 chrome.storage.sync');
+      }
+      const used = await chrome.storage.sync.getBytesInUse(null);
+      const quota = Number.isFinite(chrome.storage.sync.QUOTA_BYTES) && chrome.storage.sync.QUOTA_BYTES > 0
+        ? chrome.storage.sync.QUOTA_BYTES
+        : 102400;
+      const remaining = Math.max(0, quota - used);
+      const usedRatio = quota > 0 ? used / quota : 0;
+      setSyncUsage({
+        usedBytes: used,
+        quotaBytes: quota,
+        remainingBytes: remaining,
+        usedRatio,
+        checkedAt: Date.now(),
+      });
+    } catch (error) {
+      setSyncUsageError(error instanceof Error ? error.message : '读取 sync 容量失败');
+    } finally {
+      setSyncUsageLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (settingsTab === 'other' && !syncUsage && !syncUsageLoading) {
+      void refreshSyncUsage();
+    }
+  }, [settingsTab, syncUsage, syncUsageLoading, refreshSyncUsage]);
 
   const exportAllData = useCallback(async () => {
     setBackupBusy(true);
@@ -1815,6 +1866,54 @@ export default function App() {
           <h2>数据迁移</h2>
           <p className="section-desc">用于跨扩展 ID 迁移全部数据（自选、持仓、告警、通知、收益明细、显示设置等）。</p>
           <div className="config-card">
+            <div className="sync-usage-header">
+              <div>
+                <div className="config-label">Sync 容量占用</div>
+                <div className="config-hint">读取 `chrome.storage.sync` 配额和已用空间</div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => void refreshSyncUsage()}
+                disabled={syncUsageLoading}
+              >
+                {syncUsageLoading ? '读取中...' : '刷新容量'}
+              </button>
+            </div>
+
+            {syncUsage ? (
+              <div className="sync-usage-card">
+                <div className="sync-usage-metrics">
+                  <div className="sync-usage-metric">
+                    <span>已用</span>
+                    <strong>{formatBytes(syncUsage.usedBytes)}</strong>
+                  </div>
+                  <div className="sync-usage-metric">
+                    <span>剩余</span>
+                    <strong>{formatBytes(syncUsage.remainingBytes)}</strong>
+                  </div>
+                  <div className="sync-usage-metric">
+                    <span>总额</span>
+                    <strong>{formatBytes(syncUsage.quotaBytes)}</strong>
+                  </div>
+                  <div className="sync-usage-metric">
+                    <span>占比</span>
+                    <strong>{(syncUsage.usedRatio * 100).toFixed(1)}%</strong>
+                  </div>
+                </div>
+                <div className="sync-usage-progress">
+                  <div
+                    className={`sync-usage-progress-fill ${(syncUsage.usedRatio >= 0.9 ? 'danger' : syncUsage.usedRatio >= 0.75 ? 'warn' : 'ok')}`}
+                    style={{ width: `${Math.min(100, Math.max(0, syncUsage.usedRatio * 100))}%` }}
+                  />
+                </div>
+                <div className="sync-usage-time">
+                  更新时间：{new Date(syncUsage.checkedAt).toLocaleString('zh-CN')}
+                </div>
+              </div>
+            ) : null}
+            {syncUsageError ? <div className="backup-status error">{syncUsageError}</div> : null}
+
             <div className="backup-actions-row">
               <button
                 type="button"

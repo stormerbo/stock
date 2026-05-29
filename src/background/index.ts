@@ -50,7 +50,7 @@ import {
   type SpikeGlobalConfig,
 } from '../shared/alerts';
 import { calcMaxDrawdown } from '../shared/risk-metrics';
-import { TRADE_HISTORY_KEY, computeDailyPnlFromTrades, computePositionFromTrades, migrateTradeHistoryToLocal, type StockTradeRecord } from '../shared/trade-history';
+import { computeDailyPnlFromTrades, computePositionFromTrades, loadTradeHistory, migrateTradeHistoryToSync, type StockTradeRecord } from '../shared/trade-history';
 import { detectAllSignals, fetchDayFqKline, type KlinePoint } from '../shared/technical-analysis';
 import { recalcSnapshotsInRange, type RecalcContext } from '../shared/recalc-snapshot';
 import { diffHoldings, appendHoldingHistory, loadHoldingHistory, getHoldingsAtDate } from '../shared/holding-history';
@@ -1289,10 +1289,10 @@ const DAILY_SNAPSHOT_KEY = 'dailyAssetSnapshots';
 async function saveDailyAssetSnapshot(options?: { forceDate?: string; overwrite?: boolean }) {
   if (isWeekendInShanghai() && !options?.forceDate) return;
   const dateKey = options?.forceDate || getShanghaiToday();
-  const [posResult, snapResult, tradeResult] = await Promise.all([
+  const [posResult, snapResult, allTrades] = await Promise.all([
     chrome.storage.local.get(['stockPositions', 'fundPositions']),
     chrome.storage.local.get(DAILY_SNAPSHOT_KEY),
-    chrome.storage.local.get('stockTradeHistory'),
+    loadTradeHistory(),
   ]);
   const snapshots = (snapResult[DAILY_SNAPSHOT_KEY] ?? {}) as Record<string, DailyAssetSnapshot>;
   if (!options?.overwrite && snapshots[dateKey]) return;
@@ -1308,7 +1308,6 @@ async function saveDailyAssetSnapshot(options?: { forceDate?: string; overwrite?
   const floatingPnl = stockFloating + fundHoldingProfit;
 
   // 已实现盈亏（从交易记录计算，只有股票）
-  const allTrades = (tradeResult.stockTradeHistory ?? {}) as Record<string, StockTradeRecord[]>;
   let stockRealizedPnl = 0;
   for (const trades of Object.values(allTrades)) {
     stockRealizedPnl += computePositionFromTrades(trades).realizedPnl;
@@ -1378,12 +1377,12 @@ async function recalcSnapshotRange(startDate: string) {
 
   const [posResult, tradeResult, holdingResult] = await Promise.all([
     chrome.storage.local.get(['stockPositions', 'fundPositions']),
-    chrome.storage.local.get(TRADE_HISTORY_KEY),
+    loadTradeHistory(),
     loadHoldingHistory(),
   ]);
   const stockPositions = (posResult.stockPositions ?? []) as StockPosition[];
   const fundPositions = (posResult.fundPositions ?? []) as FundPosition[];
-  const allTrades = (tradeResult[TRADE_HISTORY_KEY] ?? {}) as Record<string, StockTradeRecord[]>;
+  const allTrades = tradeResult;
   const holdingHistory = holdingResult;
 
   // 预加载 K 线数据（缓存优先）
@@ -1489,12 +1488,12 @@ async function triggerStyleAndStopCalc() {
       chrome.storage.local.get(['stockPositions']),
       chrome.storage.sync.get(['stockHoldings']),
       chrome.storage.local.get(['fundPositions']),
-      chrome.storage.local.get([TRADE_HISTORY_KEY]),
+      loadTradeHistory(),
     ]);
     const positions = (Array.isArray(posResult.stockPositions) ? posResult.stockPositions : []) as StockPosition[];
     const holdings = (Array.isArray(holdingsResult.stockHoldings) ? holdingsResult.stockHoldings : []) as StockHoldingConfig[];
     const fundPositions = (Array.isArray(fundResult.fundPositions) ? fundResult.fundPositions : []) as FundPosition[];
-    const allTrades = (tradeResult[TRADE_HISTORY_KEY] ?? {}) as Record<string, StockTradeRecord[]>;
+    const allTrades = tradeResult;
     if (holdings.length === 0 && fundPositions.filter((f) => f.units > 0).length === 0) return;
 
     // 获取每只持仓股票的 K 线数据
@@ -1593,14 +1592,7 @@ async function triggerStyleAndStopCalc() {
 // -----------------------------------------------------------
 
 async function loadTradeHistoryForBadge(): Promise<Record<string, StockTradeRecord[]>> {
-  try {
-    const result = await chrome.storage.local.get(TRADE_HISTORY_KEY);
-    const raw = result[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
-    if (!raw || typeof raw !== 'object') return {};
-    return raw;
-  } catch {
-    return {};
-  }
+  return loadTradeHistory();
 }
 
 function computeMetrics(
@@ -1853,8 +1845,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // 首次安装：初始化默认配置
     await chrome.storage.sync.set({ [BADGE_STORAGE_KEY]: DEFAULT_BADGE_CONFIG });
   } else if (details.reason === 'update') {
-    // 版本升级：迁移交易记录到 local storage
-    void migrateTradeHistoryToLocal();
+    // 版本升级：迁移交易记录到 sync storage
+    void migrateTradeHistoryToSync();
     console.log(`[bg] updated from ${details.previousVersion} to ${chrome.runtime.getManifest().version}`);
   } else {
     // chrome_update / shared_module_update：确保角标配置存在

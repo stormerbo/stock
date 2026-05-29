@@ -6019,6 +6019,42 @@ body.theme-light .stop-ctx-menu { background: rgba(248,251,255,.98); }
 }
 .date-picker-trigger-value.is-placeholder { color: var(--text-3); font-weight: 500; }
 .date-picker-trigger-icon { color: var(--text-2); flex-shrink: 0; }
+.date-picker-trigger.is-compact {
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--bg-0);
+  box-shadow: none;
+}
+.date-picker-trigger.is-compact .date-picker-trigger-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+.date-picker-trigger.is-compact .date-picker-trigger-value {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* Trade add modal: force all field controls to one consistent height */
+.trade-add-modal .trade-modal-control,
+.trade-add-modal .date-picker-trigger {
+  box-sizing: border-box !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+}
+.trade-add-modal .date-picker-trigger-body {
+  min-height: 0;
+  height: 100%;
+  align-items: center;
+}
+.trade-add-modal .date-picker-trigger-value {
+  line-height: 1 !important;
+}
 
 .date-picker-popover {
   position: fixed;

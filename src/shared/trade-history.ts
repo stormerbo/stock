@@ -3,7 +3,8 @@
 // -----------------------------------------------------------
 
 export const TRADE_HISTORY_KEY = 'stockTradeHistory';
-export const TRADE_HISTORY_SYNC_KEY = 'stockTradeHistory_sync'; // old sync key for migration
+export const TRADE_HISTORY_SYNC_KEY = 'stockTradeHistory_sync'; // legacy sync key
+export const TRADE_HISTORY_MIGRATION_KEY = 'stockTradeHistory_migrated_to_sync';
 
 export type TradeType = 'buy' | 'sell' | 'dividend';
 
@@ -44,6 +45,58 @@ function genTradeId(): string {
   return `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Number.NaN;
+}
+
+function normalizeTradeRecord(raw: unknown, fallbackCode: string): StockTradeRecord | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const id = typeof record.id === 'string' && record.id.trim() ? record.id : '';
+  const stockCode = typeof record.stockCode === 'string' && record.stockCode.trim()
+    ? record.stockCode.trim()
+    : typeof record.code === 'string' && record.code.trim()
+      ? record.code.trim()
+      : fallbackCode;
+  const date = typeof record.date === 'string' && record.date.trim() ? record.date.trim() : '';
+  const typeRaw = typeof record.type === 'string' ? record.type : typeof record.tradeType === 'string' ? record.tradeType : '';
+  const type = typeRaw === 'buy' || typeRaw === 'sell' || typeRaw === 'dividend' ? typeRaw : null;
+  const shares = toFiniteNumber(record.shares ?? record.qty ?? record.volume);
+  const price = toFiniteNumber(record.price ?? record.unitPrice);
+  const total = toFiniteNumber(record.total);
+  const fees = toFiniteNumber(record.fees);
+  const commission = toFiniteNumber(record.commission);
+  const stampTax = toFiniteNumber(record.stampTax);
+  const transferFee = toFiniteNumber(record.transferFee);
+  const createdAt = typeof record.createdAt === 'string' && record.createdAt.trim()
+    ? record.createdAt.trim()
+    : new Date().toISOString();
+  const note = typeof record.note === 'string' && record.note.trim() ? record.note.trim() : undefined;
+
+  if (!id || !stockCode || !date || !type || !Number.isFinite(shares) || !Number.isFinite(price)) return null;
+
+  return {
+    id,
+    stockCode,
+    date,
+    type,
+    shares,
+    price,
+    total: Number.isFinite(total) ? total : undefined,
+    fees: Number.isFinite(fees) ? fees : undefined,
+    commission: Number.isFinite(commission) ? commission : undefined,
+    stampTax: Number.isFinite(stampTax) ? stampTax : undefined,
+    transferFee: Number.isFinite(transferFee) ? transferFee : undefined,
+    note,
+    createdAt,
+  };
+}
+
 function compareTrades(a: StockTradeRecord, b: StockTradeRecord): number {
   const dateDiff = a.date.localeCompare(b.date);
   if (dateDiff !== 0) return dateDiff;
@@ -52,6 +105,28 @@ function compareTrades(a: StockTradeRecord, b: StockTradeRecord): number {
   const createdDiff = createdAtA.localeCompare(createdAtB);
   if (createdDiff !== 0) return createdDiff;
   return a.id.localeCompare(b.id);
+}
+
+export function countTradeHistory(history: Record<string, StockTradeRecord[]>): number {
+  return Object.values(history).reduce((sum, trades) => sum + trades.length, 0);
+}
+
+export function mergeTradeHistory(primary: Record<string, StockTradeRecord[]>, secondary: Record<string, StockTradeRecord[]>): Record<string, StockTradeRecord[]> {
+  const merged: Record<string, StockTradeRecord[]> = {};
+  const codes = new Set([...Object.keys(primary), ...Object.keys(secondary)]);
+  for (const code of codes) {
+    const all = [...(primary[code] ?? []), ...(secondary[code] ?? [])];
+    const unique = new Map<string, StockTradeRecord>();
+    for (const trade of all) {
+      if (!trade || typeof trade.id !== 'string') continue;
+      if (!unique.has(trade.id)) {
+        unique.set(trade.id, trade);
+      }
+    }
+    const rows = [...unique.values()].sort(compareTrades);
+    if (rows.length > 0) merged[code] = rows;
+  }
+  return merged;
 }
 
 // -----------------------------------------------------------
@@ -182,45 +257,131 @@ export function computeDailyPnlFromTrades(
 // Persistence
 // -----------------------------------------------------------
 
+export function sanitizeTradeHistory(raw: unknown): Record<string, StockTradeRecord[]> {
+  if (!raw || typeof raw !== 'object') return {};
+  const clean: Record<string, StockTradeRecord[]> = {};
+  for (const [code, records] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(records)) continue;
+    const normalized = records
+      .map((record) => normalizeTradeRecord(record, code))
+      .filter((record): record is StockTradeRecord => Boolean(record));
+    if (normalized.length > 0) {
+      clean[code] = normalized;
+    }
+  }
+  return clean;
+}
+
 export async function loadTradeHistory(): Promise<Record<string, StockTradeRecord[]>> {
   try {
-    const result = await chrome.storage.local.get(TRADE_HISTORY_KEY);
-    const raw = result[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
-    if (!raw || typeof raw !== 'object') return {};
-    // Basic sanitization
-    const clean: Record<string, StockTradeRecord[]> = {};
-    for (const [code, records] of Object.entries(raw)) {
-      if (!Array.isArray(records)) continue;
-      clean[code] = records.filter((r) => r && typeof r.id === 'string' && r.stockCode && r.type && Number.isFinite(r.shares) && Number.isFinite(r.price));
+    const [syncResult, localResult] = await Promise.all([
+      chrome.storage.sync.get([TRADE_HISTORY_KEY, TRADE_HISTORY_SYNC_KEY, TRADE_HISTORY_MIGRATION_KEY]),
+      chrome.storage.local.get(TRADE_HISTORY_KEY),
+    ]);
+    const migrated = Boolean(syncResult[TRADE_HISTORY_MIGRATION_KEY]);
+    const syncRaw = syncResult[TRADE_HISTORY_KEY] ?? syncResult[TRADE_HISTORY_SYNC_KEY];
+    const syncClean = sanitizeTradeHistory(syncRaw);
+    const localClean = sanitizeTradeHistory(localResult[TRADE_HISTORY_KEY]);
+
+    if (migrated) {
+      if (countTradeHistory(syncClean) > 0) {
+        if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+          void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
+        }
+        return syncClean;
+      }
+      if (countTradeHistory(localClean) > 0) {
+        void chrome.storage.sync.set({
+          [TRADE_HISTORY_KEY]: localClean,
+          [TRADE_HISTORY_MIGRATION_KEY]: true,
+        }).catch(() => {});
+        if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+          void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
+        }
+        return localClean;
+      }
+      if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+        void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
+      }
+      return {};
     }
-    return clean;
+
+    const merged = mergeTradeHistory(syncClean, localClean);
+    if (countTradeHistory(merged) === 0) {
+      return {};
+    }
+
+    void chrome.storage.sync.set({
+      [TRADE_HISTORY_KEY]: merged,
+      [TRADE_HISTORY_MIGRATION_KEY]: true,
+    }).catch(() => {});
+    if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+      void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
+    }
+    void chrome.storage.local.set({ [TRADE_HISTORY_KEY]: merged }).catch(() => {});
+    return merged;
   } catch {
     return {};
   }
 }
 
 export async function saveTradeHistory(history: Record<string, StockTradeRecord[]>): Promise<void> {
-  await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: history });
+  const clean = sanitizeTradeHistory(history);
+  let saved = false;
+  try {
+    await chrome.storage.sync.set({
+      [TRADE_HISTORY_KEY]: clean,
+      [TRADE_HISTORY_MIGRATION_KEY]: true,
+    });
+    saved = true;
+  } catch {
+    // sync could fail due to quota/offline sync state; still persist locally.
+  }
+  try {
+    await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: clean });
+    saved = true;
+  } catch {
+    // best effort
+  }
+  if (!saved) {
+    throw new Error('保存交易记录失败');
+  }
 }
 
-/** Migrate trade history from chrome.storage.sync → local (once). */
-export async function migrateTradeHistoryToLocal(): Promise<void> {
+/** Migrate trade history to sync storage, keep local as compatibility mirror. */
+export async function migrateTradeHistoryToSync(): Promise<void> {
   try {
-    // Check if data already exists in local
-    const localResult = await chrome.storage.local.get(TRADE_HISTORY_KEY);
-    if (localResult[TRADE_HISTORY_KEY]) return; // already migrated
+    const [syncResult, localResult] = await Promise.all([
+      chrome.storage.sync.get([TRADE_HISTORY_KEY, TRADE_HISTORY_SYNC_KEY, TRADE_HISTORY_MIGRATION_KEY]),
+      chrome.storage.local.get(TRADE_HISTORY_KEY),
+    ]);
+    const syncClean = sanitizeTradeHistory(syncResult[TRADE_HISTORY_KEY] ?? syncResult[TRADE_HISTORY_SYNC_KEY]);
+    const localClean = sanitizeTradeHistory(localResult[TRADE_HISTORY_KEY]);
+    const merged = mergeTradeHistory(syncClean, localClean);
 
-    // Try reading from sync (old key or same key)
-    const syncResult = await chrome.storage.sync.get(TRADE_HISTORY_KEY);
-    const raw = syncResult[TRADE_HISTORY_KEY] as Record<string, StockTradeRecord[]> | undefined;
-    if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
-      await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: raw });
-      // Clear from sync after successful migration
-      await chrome.storage.sync.remove(TRADE_HISTORY_KEY);
+    if (Object.keys(merged).length > 0) {
+      await chrome.storage.sync.set({
+        [TRADE_HISTORY_KEY]: merged,
+        [TRADE_HISTORY_MIGRATION_KEY]: true,
+      });
+      if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+        await chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY);
+      }
+      await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: merged });
+      return;
+    }
+
+    if (!syncResult[TRADE_HISTORY_MIGRATION_KEY]) {
+      await chrome.storage.sync.set({ [TRADE_HISTORY_MIGRATION_KEY]: true });
     }
   } catch {
     // best effort
   }
+}
+
+/** @deprecated 已改为 migrateTradeHistoryToSync，保留兼容旧调用 */
+export async function migrateTradeHistoryToLocal(): Promise<void> {
+  await migrateTradeHistoryToSync();
 }
 
 export async function getTradesForStock(code: string): Promise<StockTradeRecord[]> {
@@ -243,10 +404,30 @@ export async function addTrade(trade: Omit<StockTradeRecord, 'id' | 'createdAt'>
 }
 
 export async function deleteTrade(stockCode: string, tradeId: string): Promise<void> {
-  const all = await loadTradeHistory();
-  const records = all[stockCode];
-  if (!records) return;
-  all[stockCode] = records.filter((r) => r.id !== tradeId);
-  if (all[stockCode].length === 0) delete all[stockCode];
-  await saveTradeHistory(all);
+  try {
+    const [syncResult, localResult] = await Promise.all([
+      chrome.storage.sync.get([TRADE_HISTORY_KEY, TRADE_HISTORY_SYNC_KEY, TRADE_HISTORY_MIGRATION_KEY]),
+      chrome.storage.local.get(TRADE_HISTORY_KEY),
+    ]);
+    const syncClean = sanitizeTradeHistory(syncResult[TRADE_HISTORY_KEY] ?? syncResult[TRADE_HISTORY_SYNC_KEY]);
+    const localClean = sanitizeTradeHistory(localResult[TRADE_HISTORY_KEY]);
+    const merged = mergeTradeHistory(syncClean, localClean);
+    const records = merged[stockCode];
+    if (!records || records.length === 0) return;
+
+    const next = { ...merged };
+    next[stockCode] = records.filter((r) => r.id !== tradeId);
+    if (next[stockCode].length === 0) delete next[stockCode];
+
+    await chrome.storage.sync.set({
+      [TRADE_HISTORY_KEY]: next,
+      [TRADE_HISTORY_MIGRATION_KEY]: true,
+    });
+    if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
+      await chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY);
+    }
+    await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: next });
+  } catch {
+    // best effort
+  }
 }

@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";
 import {
   fetchTencentStockDetail,
   isTradingHours,
   type StockDetailData,
-  type StockPeriod,
 } from '../stockDetail';
 import KlineChart from '../components/KlineChart';
 import { fetchFundamentals, isFundamentalDataValid, type FundamentalData } from "../../shared/fundamentals";
-import { getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
+import { TRADE_HISTORY_KEY, getTradesForStock, type StockTradeRecord } from "../../shared/trade-history";
 import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../shared/technical-analysis";
 import TradeHistoryView from "./TradeHistoryView";
 import AssessmentSummaryBlock from "../components/AssessmentSummaryBlock";
@@ -16,11 +15,13 @@ import { loadCachedStockAssessments, sanitizeStockAssessmentCache } from "../../
 import type { StockAssessment } from "../../shared/stock-assessment.ts";
 import { getStockLimitPct } from '../../shared/stock-limit';
 import { getQuickStatsCollapsedSummary, getQuickStatsToggleState } from './stock-detail-panels';
+import { getStockDetailTabs, type StockDetailTabValue } from './stock-detail-tabs';
 
 type Props = {
   code: string;
   fallbackName: string;
   onBack: () => void;
+  onStockTradesChanged?: (code: string) => void;
   onOpenAssessment?: (code: string) => void;
   onSelectSector?: (sectorCode: string, sectorName: string) => void;
 };
@@ -43,27 +44,11 @@ function toneClass(value: number): string {
   return value >= 0 ? "up" : "down";
 }
 
-type TabValue = StockPeriod | "fundamental" | "trades" | "analysis";
-
-const PERIOD_TABS: Array<{ label: string; value: TabValue }> = [
-  { label: "分时", value: "minute" },
-  { label: "五日", value: "fiveDay" },
-  { label: "日K", value: "day" },
-  { label: "周K", value: "week" },
-  { label: "月K", value: "month" },
-  { label: "年K", value: "year" },
-  { label: "120分", value: "m120" },
-  { label: "60分", value: "m60" },
-  { label: "30分", value: "m30" },
-  { label: "15分", value: "m15" },
-  { label: "5分", value: "m5" },
-  { label: "基本面", value: "fundamental" },
-  { label: "分析", value: "analysis" },
-];
+type TabValue = StockDetailTabValue;
 
 // ─── Main Detail Panel ───
 
-export default function StockDetailView({ code, fallbackName, onBack, onOpenAssessment, onSelectSector }: Props) {
+export default function StockDetailView({ code, fallbackName, onBack, onStockTradesChanged, onOpenAssessment, onSelectSector }: Props) {
   const [detail, setDetail] = useState<StockDetailData | null>(null);
   const [period, setPeriod] = useState<TabValue>("minute");
   const [loading, setLoading] = useState(true);
@@ -78,8 +63,8 @@ export default function StockDetailView({ code, fallbackName, onBack, onOpenAsse
   const [assessment, setAssessment] = useState<StockAssessment | null>(null);
   const [quickStatsExpanded, setQuickStatsExpanded] = useState(false);
 
-  const hasTrades = trades.length > 0;
   const quickStatsSummary = getQuickStatsCollapsedSummary();
+  const periodTabs = getStockDetailTabs(trades.length);
 
   useEffect(() => {
     loadCachedStockAssessments().then((items) => {
@@ -97,10 +82,26 @@ export default function StockDetailView({ code, fallbackName, onBack, onOpenAsse
     return () => chrome.storage.onChanged.removeListener(listener);
   }, [code]);
 
+  const loadTrades = useCallback(async () => {
+    const records = await getTradesForStock(code);
+    setTrades(records);
+    onStockTradesChanged?.(code);
+  }, [code, onStockTradesChanged]);
+
   // 加载交易记录
   useEffect(() => {
-    getTradesForStock(code).then(setTrades);
-  }, [code]);
+    void loadTrades();
+  }, [loadTrades]);
+
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return;
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'sync' || !changes[TRADE_HISTORY_KEY]) return;
+      void loadTrades();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, [loadTrades]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +209,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onOpenAsse
             </div>
             <TradeHistoryView code={code} name={detail?.name || fallbackName}
               embedded
-              onUpdate={() => getTradesForStock(code).then(setTrades)} />
+              onUpdate={loadTrades} />
           </>
         ) : null}
 
@@ -306,7 +307,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onOpenAsse
 
       {/* ─── Fixed Bottom Tabs ─── */}
       <div className="period-tabs">
-        {PERIOD_TABS.map((tab) => (
+        {periodTabs.map((tab) => (
           <button
             key={tab.value}
             type="button"
@@ -316,12 +317,6 @@ export default function StockDetailView({ code, fallbackName, onBack, onOpenAsse
             {tab.label}
           </button>
         ))}
-        {hasTrades && (
-          <button type="button"
-            className={`period-tab ${period === ("trades" as TabValue) ? "active" : ""}`}
-            onClick={() => setPeriod("trades")}
-          >交易</button>
-        )}
       </div>
     </section>
   );

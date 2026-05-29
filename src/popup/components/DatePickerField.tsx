@@ -17,6 +17,7 @@ type Props = {
   minDate?: string;
   maxDate?: string;
   placeholder?: string;
+  compact?: boolean;
 };
 
 function compareDateKey(a: string, b: string): number {
@@ -30,6 +31,7 @@ export default function DatePickerField({
   minDate,
   maxDate,
   placeholder = '选择日期',
+  compact = false,
 }: Props) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -200,14 +202,22 @@ export default function DatePickerField({
       <button
         ref={triggerRef}
         type="button"
-        className={`date-picker-trigger ${open ? 'is-open' : ''}`}
+        className={`date-picker-trigger ${open ? 'is-open' : ''} ${compact ? 'is-compact' : ''}`}
         onClick={() => setOpen((prev) => !prev)}
       >
         <span className="date-picker-trigger-body">
-          <span className="date-picker-trigger-label">{label}</span>
-          <span className={`date-picker-trigger-value ${value ? '' : 'is-placeholder'}`}>
-            {value ? getDatePickerTriggerLabel(value) : placeholder}
-          </span>
+          {compact ? (
+            <span className={`date-picker-trigger-value ${value ? '' : 'is-placeholder'}`}>
+              {value ? getDatePickerTriggerLabel(value) : (placeholder || label)}
+            </span>
+          ) : (
+            <>
+              <span className="date-picker-trigger-label">{label}</span>
+              <span className={`date-picker-trigger-value ${value ? '' : 'is-placeholder'}`}>
+                {value ? getDatePickerTriggerLabel(value) : placeholder}
+              </span>
+            </>
+          )}
         </span>
         <CalendarDays size={15} className="date-picker-trigger-icon" />
       </button>
