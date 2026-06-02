@@ -52,7 +52,6 @@ import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/sear
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
 import DetailErrorBoundary from './components/DetailErrorBoundary';
 import IntradayChart from './components/IntradayChart';
-import MarketStatsStrip from './components/MarketStatsStrip';
 import SideNav from './components/SideNav';
 import AccountDashboard from './components/AccountDashboard';
 import NotificationPanel from './components/NotificationPanel';
@@ -1963,6 +1962,7 @@ function clearIntradayIfStale(
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           unreadCount={unreadCount}
+          marketStats={marketStats}
           theme={theme}
           toggleTheme={toggleTheme}
           openSettings={openSettings}
@@ -1970,10 +1970,6 @@ function clearIntradayIfStale(
         />
 
         <main className={`main-area ${stockDetailTarget || fundDetailTarget || sectorDetailTarget ? 'detail-layout' : ''}`}>
-          {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
-            <MarketStatsStrip marketStats={marketStats} />
-          ) : null}
-
           {!stockDetailTarget && !fundDetailTarget && activeTab !== 'notifications' && activeTab !== 'trades' && activeTab !== 'risk' ? (
           <section className="index-strip">
             <div className="index-grid">

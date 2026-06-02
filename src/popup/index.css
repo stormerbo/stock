@@ -183,54 +183,14 @@ body {
   border: 1px solid color-mix(in srgb, var(--glass-border) 24%, transparent);
   border-radius: 0;
   background: transparent;
-  padding: 1px 8px 2px;
+  padding: 6px 8px;
   overflow: hidden;
-}
-
-.market-stats-strip {
-  position: relative;
-  z-index: 22;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 2px 8px 2px;
-}
-
-.market-stats-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px 6px;
-  min-width: 0;
-  width: 100%;
-}
-
-.market-stats-strip .market-stats-entry {
-  min-width: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  padding: 2px 5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--glass-bg-strong) 24%, transparent);
-  border: 1px solid color-mix(in srgb, var(--glass-border) 18%, transparent);
-}
-
-.market-stats-strip .market-stats-label {
-  font-size: 7px;
-  letter-spacing: 0.02em;
-}
-
-.market-stats-strip .market-stats-value {
-  font-size: 8px;
-  line-height: 1;
 }
 
 .index-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 3px;
+  gap: 8px;
 }
 
 .index-card {
@@ -245,16 +205,16 @@ body {
 
 .index-card p {
   margin: 0;
-  font-size: 8px;
-  line-height: 1.05;
+  font-size: 10px;
+  line-height: 1.2;
   color: var(--text-1);
   white-space: nowrap;
 }
 
 .index-card strong {
   display: block;
-  margin-top: 2px;
-  font-size: 11px;
+  margin-top: 3px;
+  font-size: 14px;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -267,9 +227,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  margin-top: 2px;
-  font-size: 8px;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -580,7 +540,7 @@ body {
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  padding: 1px 8px 3px;
+  padding: 6px 8px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -715,12 +675,12 @@ body {
 .metrics.inline {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 145px));
-  gap: 3px;
+  grid-template-columns: repeat(3, minmax(0, 148px));
+  gap: 6px;
 }
 
 .metrics.inline.account {
-  grid-template-columns: repeat(3, minmax(0, 145px));
+  grid-template-columns: repeat(3, minmax(0, 148px));
 }
 
 .metric-card.compact {
@@ -730,13 +690,13 @@ body {
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  padding: 2px 8px;
+  padding: 6px 9px;
 }
 
 .metric-card p {
   margin: 0;
-  font-size: 8px;
-  line-height: 1.1;
+  font-size: 10px;
+  line-height: 1.2;
   white-space: nowrap;
   color: var(--text-1);
 }
@@ -768,8 +728,8 @@ body {
 
 .metric-card strong {
   display: block;
-  margin-top: 1px;
-  font-size: 10px;
+  margin-top: 4px;
+  font-size: 13px;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -785,9 +745,9 @@ body {
 .account-header-copy {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   min-width: 0;
-  padding: 0 2px;
+  padding: 2px 2px;
 }
 
 .account-header-eyebrow {
@@ -858,8 +818,8 @@ body {
   border-radius: 14px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--glass-bg-strong) 42%, transparent), color-mix(in srgb, var(--glass-bg) 40%, transparent)),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-border-strong) 30%, transparent), transparent 26%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-border-strong) 34%, transparent);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 26%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .account-hero-card {
@@ -940,11 +900,11 @@ body {
 }
 
 .allocation-bar span.stock {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 72%, var(--color-on-accent) 28%), color-mix(in srgb, var(--brand) 92%, transparent));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 72%, white 28%), color-mix(in srgb, var(--brand) 92%, transparent));
 }
 
 .allocation-bar span.fund {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--down) 64%, var(--color-on-accent) 36%), color-mix(in srgb, var(--down) 88%, transparent));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--down) 64%, white 36%), color-mix(in srgb, var(--down) 88%, transparent));
 }
 
 .account-grid {
@@ -3181,8 +3141,9 @@ body {
   color: var(--color-accent);
 }
 
-.market-stats-panel {
-  background: color-mix(in srgb, var(--glass-bg) 50%, transparent);
+body.theme-light .market-stats-panel,
+body.theme-white .market-stats-panel {
+  background: rgba(255, 255, 255, 0.34);
 }
 
 /* ---- Notification Sub Tabs ---- */

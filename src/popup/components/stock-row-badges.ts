@@ -1,5 +1,4 @@
-import { normalizeStockCode } from '../../shared/fetch';
-
+import { normalizeStockCode } from '../../shared/fetch.ts';
 export type StockBadgeTone = 'growth' | 'tech' | 'beijing';
 
 export type StockRowBadge = {
@@ -40,4 +39,22 @@ export function hasTechSignalBadge(
   code: string,
 ): boolean {
   return Boolean(signalStocks?.[code] || tradeSignals?.[code]);
+}
+
+export function resolveTechSignalBadgeTone(
+  signal: { score?: number; level?: string } | undefined,
+): 'signal-up' | 'signal-dn' | 'signal-zero' {
+  if (!signal) return 'signal-zero';
+  if (signal.level) {
+    if (signal.level === 'strong_buy' || signal.level === 'buy') return 'signal-up';
+    if (signal.level === 'reduce' || signal.level === 'avoid') return 'signal-dn';
+    return 'signal-zero';
+  }
+  const score = signal.score;
+  if (typeof score === 'number' && Number.isFinite(score)) {
+    if (score > 0) return 'signal-up';
+    if (score < 0) return 'signal-dn';
+    return 'signal-zero';
+  }
+  return 'signal-zero';
 }

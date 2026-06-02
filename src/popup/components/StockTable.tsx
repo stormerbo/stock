@@ -5,7 +5,7 @@ import { levelLabel } from '../../shared/trade-signal';
 import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
-import { getStockRowBadges, hasTechSignalBadge } from './stock-row-badges';
+import { getStockRowBadges, hasTechSignalBadge, resolveTechSignalBadgeTone } from './stock-row-badges';
 import type { StockRow, StockSortKey, SortDir, ColumnSort } from '../types';
 
 type EditingCell = {
@@ -208,7 +208,7 @@ export default function StockTable({
                           )}
                           onMouseLeave={hideSignalTip}
                         >
-                          <span className={'stock-badge signal' + (() => { const sc = signalStocks?.[item.code]?.score; return sc != null ? (sc > 0 ? ' signal-up' : sc < 0 ? ' signal-dn' : ' signal-zero') : (tradeSignals?.[item.code] ? ' signal-up' : ''); })()}>技</span>
+                          <span className={`stock-badge signal ${resolveTechSignalBadgeTone(signalStocks?.[item.code] ?? tradeSignals?.[item.code])}`}>技</span>
                         </span>
                       ) : null}
                     </span>

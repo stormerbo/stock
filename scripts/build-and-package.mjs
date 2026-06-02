@@ -43,17 +43,6 @@ function runCommandCapture(command, args, cwd = rootDir) {
   return result.stdout;
 }
 
-function getTimestamp() {
-  const now = new Date();
-  const yyyy = String(now.getFullYear());
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mi = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
-}
-
 function resolveKeyPath() {
   const envKey = process.env.EXTENSION_KEY_PEM?.trim();
   if (envKey) {
@@ -131,7 +120,7 @@ function main() {
     console.log(`[package] Removed ${existingZips.length} old release(s)`);
   }
 
-  const zipName = `${pkgName}-v${pkgVersion}-${getTimestamp()}.zip`;
+  const zipName = `${pkgName}-v${pkgVersion}.zip`;
   const zipPath = path.join(releaseDir, zipName);
 
   console.log(`[package] Creating zip: ${zipPath}`);
