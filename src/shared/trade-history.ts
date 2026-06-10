@@ -111,6 +111,22 @@ export function countTradeHistory(history: Record<string, StockTradeRecord[]>): 
   return Object.values(history).reduce((sum, trades) => sum + trades.length, 0);
 }
 
+/** 如果 local 比 sync 数据更新，异步写回 sync */
+async function syncLocalToSync(local: Record<string, StockTradeRecord[]>, sync: Record<string, StockTradeRecord[]>): Promise<void> {
+  const localCount = countTradeHistory(local);
+  const syncCount = countTradeHistory(sync);
+  if (localCount > 0 && localCount > syncCount) {
+    try {
+      await chrome.storage.sync.set({
+        [TRADE_HISTORY_KEY]: local,
+        [TRADE_HISTORY_MIGRATION_KEY]: true,
+      });
+    } catch {
+      // best effort
+    }
+  }
+}
+
 export function mergeTradeHistory(primary: Record<string, StockTradeRecord[]>, secondary: Record<string, StockTradeRecord[]>): Record<string, StockTradeRecord[]> {
   const merged: Record<string, StockTradeRecord[]> = {};
   const codes = new Set([...Object.keys(primary), ...Object.keys(secondary)]);
@@ -284,21 +300,16 @@ export async function loadTradeHistory(): Promise<Record<string, StockTradeRecor
     const localClean = sanitizeTradeHistory(localResult[TRADE_HISTORY_KEY]);
 
     if (migrated) {
+      // 优先 local（即时一致），兜底 sync（有同步延迟风险）
+      if (countTradeHistory(localClean) > 0) {
+        void syncLocalToSync(localClean, syncClean);
+        return localClean;
+      }
       if (countTradeHistory(syncClean) > 0) {
         if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
           void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
         }
         return syncClean;
-      }
-      if (countTradeHistory(localClean) > 0) {
-        void chrome.storage.sync.set({
-          [TRADE_HISTORY_KEY]: localClean,
-          [TRADE_HISTORY_MIGRATION_KEY]: true,
-        }).catch(() => {});
-        if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
-          void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
-        }
-        return localClean;
       }
       if (syncResult[TRADE_HISTORY_SYNC_KEY]) {
         void chrome.storage.sync.remove(TRADE_HISTORY_SYNC_KEY).catch(() => {});
@@ -328,6 +339,13 @@ export async function loadTradeHistory(): Promise<Record<string, StockTradeRecor
 export async function saveTradeHistory(history: Record<string, StockTradeRecord[]>): Promise<void> {
   const clean = sanitizeTradeHistory(history);
   let saved = false;
+  // 先写 local（即时一致），再写 sync（跨设备同步，允许失败）
+  try {
+    await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: clean });
+    saved = true;
+  } catch {
+    // best effort
+  }
   try {
     await chrome.storage.sync.set({
       [TRADE_HISTORY_KEY]: clean,
@@ -335,13 +353,7 @@ export async function saveTradeHistory(history: Record<string, StockTradeRecord[
     });
     saved = true;
   } catch {
-    // sync could fail due to quota/offline sync state; still persist locally.
-  }
-  try {
-    await chrome.storage.local.set({ [TRADE_HISTORY_KEY]: clean });
-    saved = true;
-  } catch {
-    // best effort
+    // sync could fail due to quota/offline sync state
   }
   if (!saved) {
     throw new Error('保存交易记录失败');

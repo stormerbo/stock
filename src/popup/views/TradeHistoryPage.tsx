@@ -225,6 +225,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   // ─── 派生数据 ───
 
   const flatTrades = useMemo(() => {
+    console.log('[TradeHistoryPage] flatTrades recompute', Object.keys(stockHistory).length, 'stocks');
     const all: Array<{ code: string; trade: StockTradeRecord }> = [];
     for (const [code, trades] of Object.entries(stockHistory)) {
       for (const t of trades) {
@@ -275,6 +276,7 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
   // ─── 添加交易 ───
 
   const handleAddTrade = async () => {
+    console.log("[addTrade] handleAddTrade CALLED", { code: modal.code, shares: modal.shares, price: modal.price, submitting: modal.submitting });
     const s = Math.round(Number(modal.shares));
     const p = Number(modal.price);
     if (!modal.code) { setModal((m) => ({ ...m, error: '请选择股票' })); return; }
@@ -282,22 +284,42 @@ export default function TradeHistoryPage({ stockNames, allStockCodes, onStockTra
     if (modal.type !== 'dividend' && (!Number.isFinite(p) || p <= 0)) { setModal((m) => ({ ...m, error: '请输入有效价格' })); return; }
     setModal((m) => ({ ...m, error: '', submitting: true }));
 
-    await addTrade({
-      stockCode: modal.code, date: modal.date || new Date().toISOString().slice(0, 10),
-      type: modal.type,
-      shares: modal.type === 'dividend' ? 0 : s,
-      price: modal.type === 'dividend' ? 0 : p,
-      total: modal.total ? Number(modal.total) : undefined,
-      commission: modal.commission ? Number(modal.commission) : undefined,
-      stampTax: modal.stampTax ? Number(modal.stampTax) : undefined,
-      transferFee: modal.transferFee ? Number(modal.transferFee) : undefined,
-      note: modal.note || undefined,
-    });
+    console.log('[addTrade] BEFORE addTrade call');
+    try {
+      await addTrade({
+        stockCode: modal.code, date: modal.date || new Date().toISOString().slice(0, 10),
+        type: modal.type,
+        shares: modal.type === 'dividend' ? 0 : s,
+        price: modal.type === 'dividend' ? 0 : p,
+        total: modal.total ? Number(modal.total) : undefined,
+        commission: modal.commission ? Number(modal.commission) : undefined,
+        stampTax: modal.stampTax ? Number(modal.stampTax) : undefined,
+        transferFee: modal.transferFee ? Number(modal.transferFee) : undefined,
+        note: modal.note || undefined,
+      });
+      console.log('[addTrade] AFTER addTrade call (success)');
+    } catch (err) {
+      console.error('[addTrade] 添加交易失败:', err);
+      setModal((m) => ({ ...m, submitting: false, error: err instanceof Error ? err.message : '添加失败' }));
+      return;
+    }
 
-    await refreshStock(modal.code);
-    onStockTradesChanged?.(modal.code);
+    console.log('[addTrade] calling refreshStock');
+    try {
+      await refreshStock(modal.code);
+      console.log('[addTrade] refreshStock done');
+    } catch (e) { console.error('[addTrade] refreshStock error:', e); }
+
+    console.log('[addTrade] calling onStockTradesChanged');
+    try {
+      onStockTradesChanged?.(modal.code);
+      console.log('[addTrade] onStockTradesChanged done');
+    } catch (e) { console.error('[addTrade] onStockTradesChanged error:', e); }
+
+    console.log('[addTrade] closing modal');
     setShowModal(false);
     setModal(emptyModal());
+    console.log('[addTrade] handleAddTrade COMPLETED');
   };
 
   // ─── 删除交易 ───

@@ -14,6 +14,8 @@ type StockDisplay = {
   name: string;
   price: number;
   prevClose: number;
+  shares: number;
+  dailyPnl: number;
   changePct: number;
   high?: number;
   low?: number;
@@ -121,6 +123,8 @@ export default function App({ initialTheme = 'dark' }: AppProps) {
         name: p.name,
         price: p.price,
         prevClose: p.prevClose,
+        shares: p.shares,
+        dailyPnl: p.dailyPnl,
         changePct: p.dailyChangePct,
         intraday: p.intraday,
       });
@@ -165,7 +169,18 @@ export default function App({ initialTheme = 'dark' }: AppProps) {
   }, []);
 
   // ---- Compute aggregate values ----
-  const totalChangePct = displayList.reduce((sum, s) => sum + (Number.isFinite(s.changePct) ? s.changePct : 0), 0);
+  let totalDailyPnl = 0;
+  let totalOpeningValue = 0;
+  for (const s of displayList) {
+    if (Number.isFinite(s.dailyPnl)) {
+      totalDailyPnl += s.dailyPnl;
+    }
+    const openingValue = s.prevClose * s.shares;
+    if (Number.isFinite(openingValue)) {
+      totalOpeningValue += openingValue;
+    }
+  }
+  const totalChangePct = totalOpeningValue > 0 ? (totalDailyPnl / totalOpeningValue) * 100 : 0;
   const lastUpdated = positions.length > 0
     ? positions.reduce((latest, p) => {
         if (p.updatedAt && p.updatedAt > latest) return p.updatedAt;
