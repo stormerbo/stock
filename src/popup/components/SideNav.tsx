@@ -6,6 +6,7 @@ import { formatMarketAmount, formatNumber } from '../utils/format';
 type Props = {
   activeTab: PageTab;
   setActiveTab: (tab: PageTab) => void;
+  sidebarConfig: { fundEnabled: boolean; goldEnabled: boolean };
   unreadCount: number;
   marketStats: MarketStats | null;
   theme: ThemeMode;
@@ -15,7 +16,7 @@ type Props = {
 };
 
 export default function SideNav({
-  activeTab, setActiveTab, unreadCount, marketStats, theme, toggleTheme, openSettings, clearDetailTargets,
+  activeTab, setActiveTab, sidebarConfig, unreadCount, marketStats, theme, toggleTheme, openSettings, clearDetailTargets,
 }: Props) {
   return (
     <aside className="side-nav">
@@ -27,6 +28,7 @@ export default function SideNav({
         <BarChart3 size={10} />
         <span>股票</span>
       </button>
+      {sidebarConfig.fundEnabled ? (
       <button
         type="button"
         className={`nav-btn ${activeTab === 'funds' ? 'active' : ''}`}
@@ -35,6 +37,8 @@ export default function SideNav({
         <WalletCards size={10} />
         <span>基金</span>
       </button>
+      ) : null}
+      {sidebarConfig.goldEnabled ? (
       <button
         type="button"
         className={`nav-btn ${activeTab === 'gold' ? 'active' : ''}`}
@@ -43,6 +47,7 @@ export default function SideNav({
         <Coins size={10} />
         <span>金价</span>
       </button>
+      ) : null}
       <button
         type="button"
         className={`nav-btn ${activeTab === 'trades' ? 'active' : ''}`}

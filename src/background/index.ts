@@ -1,5 +1,6 @@
 import {
   fetchBatchStockQuotes,
+  fetchStockIntraday,
  fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
@@ -498,6 +499,7 @@ function startRefreshLoop() {
     void refreshStocks();
     void refreshFunds();
     void refreshIndexes();
+    void migratePortfolioToSync();
   });
   void loadTechReportConfig().then((config) => {
     if (config.enabled) {
@@ -556,8 +558,15 @@ async function refreshStocks(force = false) {
   if (refreshStocksInFlight) return;
   refreshStocksInFlight = true;
   try {
-    const result = await chrome.storage.sync.get('stockHoldings');
-    const stocks = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as StockHoldingConfig[];
+    let stocks: StockHoldingConfig[] = [];
+    {
+      const result = await chrome.storage.sync.get('stockHoldings');
+      stocks = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as StockHoldingConfig[];
+      if (stocks.length === 0) {
+        const local = await chrome.storage.local.get('stockHoldings');
+        stocks = (Array.isArray(local.stockHoldings) ? local.stockHoldings : []) as StockHoldingConfig[];
+      }
+    }
     if (stocks.length === 0) return;
 
     const positions = await fetchBatchStockQuotes(stocks);
@@ -580,6 +589,30 @@ async function refreshStocks(force = false) {
       const state = await getApiErrorState();
       if (state.stockQuoteErrorAt !== 0 || state.stockIntradayErrorAt !== 0) {
         await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });
+      }
+    }
+
+    // 交易时段后台刷新分时数据，写入独立 key（popup 从这读）
+    if (isTradingHours()) {
+      const allCodes = stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean);
+      if (allCodes.length > 0) {
+        const intradayResults = await pMap(
+          allCodes,
+          async (code) => {
+            try {
+              const d = await fetchStockIntraday(code);
+              return { code, data: d.data, prevClose: d.prevClose };
+            } catch {
+              return { code, data: [] as Array<{ time: string; price: number }>, prevClose: Number.NaN };
+            }
+          },
+          3,
+        );
+        const intradayMap: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+        for (const r of intradayResults) {
+          intradayMap[r.code] = { data: r.data, prevClose: r.prevClose };
+        }
+        await chrome.storage.local.set({ stockIntradayData: intradayMap });
       }
     }
 
@@ -1351,11 +1384,25 @@ async function recalcSnapshotRange(startDate: string) {
 }
 
 async function refreshFunds() {
+  // 如果基金页面被关闭，不拉取行情
+  try {
+    const r = await chrome.storage.sync.get('sidebarConfig');
+    const cfg = r.sidebarConfig as { fundEnabled?: boolean } | undefined;
+    if (cfg && !cfg.fundEnabled) return;
+  } catch { /* ignore */ }
+
   if (refreshFundsInFlight) return;
   refreshFundsInFlight = true;
   try {
-    const result = await chrome.storage.sync.get('fundHoldings');
-    const funds = (Array.isArray(result.fundHoldings) ? result.fundHoldings : []) as FundHoldingConfig[];
+    let funds: FundHoldingConfig[] = [];
+    {
+      const result = await chrome.storage.sync.get('fundHoldings');
+      funds = (Array.isArray(result.fundHoldings) ? result.fundHoldings : []) as FundHoldingConfig[];
+      if (funds.length === 0) {
+        const local = await chrome.storage.local.get('fundHoldings');
+        funds = (Array.isArray(local.fundHoldings) ? local.fundHoldings : []) as FundHoldingConfig[];
+      }
+    }
     if (funds.length === 0) return;
 
     const positions = await Promise.all(
@@ -1380,6 +1427,29 @@ async function refreshFunds() {
   }
 }
 
+
+/** 将 local 持仓数据迁移到 sync（每天一次，避免 MAX_WRITE_OPERATIONS_PER_HOUR） */
+async function migratePortfolioToSync() {
+  try {
+    const r = await chrome.storage.local.get('_lastPortfolioSyncDate');
+    const lastDate = r._lastPortfolioSyncDate as string | undefined;
+    const today = new Date().toLocaleDateString('en-CA');
+    if (lastDate === today) return;
+
+    const local = await chrome.storage.local.get(['stockHoldings', 'fundHoldings']);
+    const hasStock = Array.isArray(local.stockHoldings) && local.stockHoldings.length > 0;
+    const hasFund = Array.isArray(local.fundHoldings) && local.fundHoldings.length > 0;
+    if (hasStock || hasFund) {
+      await chrome.storage.sync.set({
+        stockHoldings: local.stockHoldings || [],
+        fundHoldings: local.fundHoldings || [],
+      });
+      await chrome.storage.local.set({ _lastPortfolioSyncDate: today });
+    }
+  } catch (e) {
+    console.warn('[Portfolio] daily sync migration failed:', e);
+  }
+}
 
 /** 判断上海时区今天是否是周末（非交易日） */
 function isWeekendInShanghai(): boolean {
@@ -1792,6 +1862,8 @@ startRefreshLoop();
 setTimeout(() => void updateHoverTitleFromStorage(), 2000);
 // 初始更新角标（从缓存数据）
 setTimeout(() => scheduleBadgeUpdate(), 1000);
+// 每天定时迁移 local→sync（作为 setInterval 保底，SW 重启后 startRefreshLoop 会再触发）
+setInterval(() => void migratePortfolioToSync(), 24 * 60 * 60 * 1000);
 // 交易时段内每 60s 保存一次资产快照（内部按天去重）
 setTimeout(() => void saveDailyAssetSnapshot(), 5_000);
 setInterval(() => void saveDailyAssetSnapshot(), 60_000);

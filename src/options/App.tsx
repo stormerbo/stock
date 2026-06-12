@@ -549,12 +549,20 @@ export default function App() {
     }
   }, []);
 
-  const displayDirty = JSON.stringify(displayDraft) !== JSON.stringify(displayConfig);
-  const refreshDirty = JSON.stringify(refreshDraft) !== JSON.stringify(refreshConfig);
+
+  const SIDEBAR_CONFIG_KEY = 'sidebarConfig';
+  const [sidebarConfig, setSidebarConfig] = useState<{ fundEnabled: boolean; goldEnabled: boolean }>({ fundEnabled: false, goldEnabled: false });
+
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get(SIDEBAR_CONFIG_KEY, (result: Record<string, unknown>) => {
+        const config = result[SIDEBAR_CONFIG_KEY] as { fundEnabled: boolean; goldEnabled: boolean } | undefined;
+        if (config) setSidebarConfig(config);
+      });
+    }
+  }, []);
 
   // ---- Save ----
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   // ---- Theme ----
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -642,7 +650,6 @@ export default function App() {
     }
   }, []);
 
-  const workModeDirty = JSON.stringify(workModeDraft) !== JSON.stringify(workModeConfig);
 
   // ---- Technical Report Config ----
   const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
@@ -685,7 +692,6 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  const techReportDirty = JSON.stringify(techReportDraft) !== JSON.stringify(techReportConfig);
 
   // ---- Tag Config ----
   const [tagConfig, setTagConfig] = useState<TagConfig>({ tags: [] });
@@ -747,33 +753,18 @@ export default function App() {
   };
 
   // ---- Save ----
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      await batchSaveStorageItems({
-        [DISPLAY_STORAGE_KEY]: displayDraft,
-        [REFRESH_STORAGE_KEY]: normalizeRefreshConfig(refreshDraft),
-        [WORK_MODE_STORAGE_KEY]: workModeDraft,
-        [TECH_REPORT_STORAGE_KEY]: techReportDraft,
-      });
-      setDisplayConfig(displayDraft);
-      setRefreshConfig(normalizeRefreshConfig(refreshDraft));
-      setRefreshDraft(normalizeRefreshConfig(refreshDraft));
-      setWorkModeConfig(workModeDraft);
-      setTechReportConfig(techReportDraft);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
+  // Auto-save on change
+  useEffect(() => {
+    if (!displayLoadedRef.current) return;
+    batchSaveStorageItems({
+      [DISPLAY_STORAGE_KEY]: displayDraft,
+      [REFRESH_STORAGE_KEY]: normalizeRefreshConfig(refreshDraft),
+      [WORK_MODE_STORAGE_KEY]: workModeDraft,
+      [TECH_REPORT_STORAGE_KEY]: techReportDraft,
+    });
+    setDisplayConfig(displayDraft);
   }, [displayDraft, refreshDraft, workModeDraft, techReportDraft]);
 
-  const handleReset = useCallback(() => {
-    setDisplayDraft(displayConfig);
-    setRefreshDraft(refreshConfig);
-    setWorkModeDraft(workModeConfig);
-    setTechReportDraft(techReportConfig);
-  }, [displayConfig, refreshConfig, workModeConfig, techReportConfig]);
 
   // ---- Floating Panel Config ----
   const [overlayDraft, setOverlayDraft] = useState<FloatingOverlayConfig>(DEFAULT_OVERLAY_CONFIG);
@@ -830,6 +821,16 @@ export default function App() {
     });
   }, []);
 
+  // Auto-save alert config
+  useEffect(() => {
+    if (!alertDraft) return;
+    saveAlertConfig(alertDraft);
+    setAlertConfig(alertDraft);
+    const map: Record<string, string> = {};
+    for (const s of alertDraft.stocks) map[s.code] = JSON.stringify(s);
+    setSavedStocks(map);
+  }, [alertDraft]);
+
   // Fetch names for stocks that have no valid name (code shown as name)
   const [fetchedAlertStockNames, setFetchedAlertStockNames] = useState<Map<string, string>>(new Map());
   const fetchedNameCodesRef = useRef<Set<string>>(new Set());
@@ -885,24 +886,6 @@ export default function App() {
       createAlertRule('change_pct'),
     ],
   }), []);
-
-  const handleSaveAlerts = useCallback(async () => {
-    setSaving(true);
-    try {
-      await saveAlertConfig(alertDraft);
-      setAlertConfig(alertDraft);
-      const map: Record<string, string> = {};
-      for (const s of alertDraft.stocks) map[s.code] = JSON.stringify(s);
-      setSavedStocks(map);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
-  }, [alertDraft]);
-
-  const alertDirty = JSON.stringify(alertDraft) !== JSON.stringify(alertConfig);
-  const hasUnsaved = displayDirty || refreshDirty || alertDirty || workModeDirty || techReportDirty;
 
   const saveSingleStock = (code: string) => {
     const current = JSON.stringify(alertDraft.stocks.find((s) => s.code === code));
@@ -1159,7 +1142,6 @@ export default function App() {
         {settingsTab === 'basic' && (<section className="options-section">
           <h2>
             显示偏好
-            <span className={`dirty-tag ${displayDirty ? 'dirty' : ''}`}>{displayDirty ? '未保存' : '已保存'}</span>
           </h2>
           <div className="config-card">
             <div className="config-row">
@@ -1187,7 +1169,7 @@ export default function App() {
                 <span className="config-label">股票隐私</span>
                 <span className="config-hint">隐藏股票页的持仓、成本和收益相关信息</span>
               </div>
-              <label className={`privacy-toggle ${displayDraft.stockPrivacyHidden ? 'active' : ''}`}>
+              <label className="toggle-switch">
                 <input
                   type="checkbox"
                   checked={displayDraft.stockPrivacyHidden}
@@ -1200,7 +1182,7 @@ export default function App() {
                     };
                   })}
                 />
-                <span>{displayDraft.stockPrivacyHidden ? '已隐藏' : '已显示'}</span>
+                <span className="toggle-slider" />
               </label>
             </div>
 
@@ -1209,7 +1191,7 @@ export default function App() {
                 <span className="config-label">基金隐私</span>
                 <span className="config-hint">隐藏基金页的持仓、成本和收益相关信息</span>
               </div>
-              <label className={`privacy-toggle ${displayDraft.fundPrivacyHidden ? 'active' : ''}`}>
+              <label className="toggle-switch">
                 <input
                   type="checkbox"
                   checked={displayDraft.fundPrivacyHidden}
@@ -1222,7 +1204,7 @@ export default function App() {
                     };
                   })}
                 />
-                <span>{displayDraft.fundPrivacyHidden ? '已隐藏' : '已显示'}</span>
+                <span className="toggle-slider" />
               </label>
             </div>
 
@@ -1252,7 +1234,6 @@ export default function App() {
         {settingsTab === 'basic' && (<section className="options-section">
           <h2>
             刷新策略
-            <span className={`dirty-tag ${refreshDirty ? 'dirty' : ''}`}>{refreshDirty ? '未保存' : '已保存'}</span>
           </h2>
           <div className="config-card">
             <div className="config-row">
@@ -1463,7 +1444,6 @@ export default function App() {
         {settingsTab === 'alerts' && (<section className="options-section">
           <h2>
             告警设置
-            <span className={`dirty-tag ${alertDirty ? 'dirty' : ''}`}>{alertDirty ? '未保存' : '已保存'}</span>
             <Button type="button" variant="secondary" size="sm" style={{ marginLeft: 'auto' }} onClick={sendTestNotification}>
               🔔 发送测试通知
             </Button>
@@ -1718,7 +1698,6 @@ export default function App() {
         {settingsTab === 'tech-report' && (<section className="options-section">
           <h2>
             盘后技术指标报告
-            <span className={`dirty-tag ${techReportDirty ? 'dirty' : ''}`}>{techReportDirty ? '未保存' : '已保存'}</span>
           </h2>
           <div className="config-card">
             <div className="config-row">
@@ -1908,7 +1887,42 @@ export default function App() {
           </div>
         </section>)}
 
-        {settingsTab === 'other' && (<section className="options-section">
+       {settingsTab === 'other' && (<section className="options-section">
+          <h2>侧边栏</h2>
+          <p className="section-desc">选择在侧边栏中显示的页面入口。默认只显示股票页面。</p>
+          <div className="config-card">
+            <div className="config-row">
+              <div>
+                <span className="config-label">基金页面</span>
+                <span className="config-hint">在侧边栏显示基金持仓页面</span>
+              </div>
+              <label className="toggle-switch">
+                <input type="checkbox" checked={sidebarConfig.fundEnabled}
+                  onChange={(e) => {
+                    const next = { ...sidebarConfig, fundEnabled: e.target.checked };
+                    setSidebarConfig(next);
+                    chrome.storage.sync.set({ [SIDEBAR_CONFIG_KEY]: next });
+                  }} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+            <div className="config-row">
+              <div>
+                <span className="config-label">金价页面</span>
+                <span className="config-hint">在侧边栏显示贵金属行情页面</span>
+              </div>
+              <label className="toggle-switch">
+                <input type="checkbox" checked={sidebarConfig.goldEnabled}
+                  onChange={(e) => {
+                    const next = { ...sidebarConfig, goldEnabled: e.target.checked };
+                    setSidebarConfig(next);
+                    chrome.storage.sync.set({ [SIDEBAR_CONFIG_KEY]: next });
+                  }} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+          </div>
+
           <h2>数据迁移</h2>
           <p className="section-desc">用于跨扩展 ID 迁移全部数据（自选、持仓、告警、通知、收益明细、显示设置等）。</p>
           <div className="config-card">
@@ -2047,22 +2061,6 @@ export default function App() {
         </section>)}
 
         {/* ---- Actions ---- */}
-        <div className={`actions-bar ${hasUnsaved ? 'visible' : ''}`}>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              void handleSave();
-              void handleSaveAlerts();
-            }}
-            disabled={saving || !hasUnsaved}
-          >
-            {saving ? '保存中...' : saved ? '已保存 ✓' : '保存设置'}
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleReset}>
-            恢复
-          </button>
-        </div>
 
         {/* ---- Donate Modal ---- */}
         {showDonate && (

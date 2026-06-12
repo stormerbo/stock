@@ -142,6 +142,8 @@ export default function App() {
   });
 
   const [badgeConfig, setBadgeConfig] = useState<{ enabled: boolean; mode: string } | null>(null);
+  const SIDEBAR_CONFIG_KEY = 'sidebarConfig';
+  const [sidebarConfig, setSidebarConfig] = useState<{ fundEnabled: boolean; goldEnabled: boolean }>({ fundEnabled: false, goldEnabled: false });
 
   const applyThemeClass = useCallback((mode: ThemeMode) => {
     document.body.classList.remove('theme-light', 'theme-white');
@@ -236,6 +238,21 @@ export default function App() {
       chrome.storage.onChanged.removeListener(listener);
     };
   }, []);
+
+  // 读侧边栏配置
+  useEffect(() => {
+    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+      chrome.storage.sync.get('sidebarConfig', (result: Record<string, unknown>) => {
+        const config = result['sidebarConfig'] as { fundEnabled: boolean; goldEnabled: boolean } | undefined;
+        if (config) setSidebarConfig(config);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'funds' && !sidebarConfig.fundEnabled) setActiveTab('stocks');
+    if (activeTab === 'gold' && !sidebarConfig.goldEnabled) setActiveTab('stocks');
+  }, [sidebarConfig]);
 
   // 加载交易信号
   useEffect(() => {
@@ -1021,11 +1038,25 @@ export default function App() {
       });
     }
 
-      // 监听后台刷新写入
-      const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-        if (area !== 'local') return;
-        if (changes.stockPositions?.newValue) {
-          const newRows = changes.stockPositions.newValue as StockPosition[];
+     // 监听后台刷新写入
+     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+       if (area !== 'local') return;
+        if (changes.stockIntradayData?.newValue) {
+          setStockPositions((prev) => {
+            const intradayData = changes.stockIntradayData.newValue as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }>;
+            return prev.map(p => {
+              const data = intradayData[p.code];
+              if (data && data.data.length > 0) {
+                return { ...p, intraday: data };
+              }
+              return p;
+            });
+          });
+          return;
+        }
+
+       if (changes.stockPositions?.newValue) {
+         const newRows = changes.stockPositions.newValue as StockPosition[];
           setStockPositions((prev) => {
             const prevMap = new Map(prev.map(p => [p.code, p]));
             return newRows.map(p => ({
@@ -1078,8 +1109,8 @@ export default function App() {
         // 先读 storage 缓存，避免重复请求后台已有的数据
         let cached: StockPosition[] = [];
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-          const stored = await new Promise<Record<string, unknown>>((resolve) =>
-            chrome.storage.local.get(['stockPositions'], resolve),
+         const stored = await new Promise<Record<string, unknown>>((resolve) =>
+            chrome.storage.local.get(['stockPositions', 'stockIntradayData'], resolve),
           );
           if (!cancelled && Array.isArray(stored.stockPositions)) {
             cached = stored.stockPositions as StockPosition[];
@@ -1090,11 +1121,29 @@ export default function App() {
               if (!h) return p;
               return { ...p, shares: Math.max(0, h.shares), cost: Math.max(0, h.cost) };
             });
-            setStockPositions(cached);
+           setStockPositions(cached);
+
+            // 从 background 的独立 key 读分时数据
+            const intradayData = stored.stockIntradayData as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> | undefined;
+            if (intradayData) {
+              let changed = false;
+              cached = cached.map((p) => {
+                const data = intradayData[p.code];
+                if (data && data.data.length > 0) {
+                  changed = true;
+                  return { ...p, intraday: data };
+                }
+                return p;
+              });
+              if (changed) setStockPositions(cached);
+            }
           }
         }
 
         if (cancelled) return;
+
+        // 缓存数据已显示，提前结束 loading（后续刷新在后台进行，不阻塞 UI）
+        setStocksLoading(false);
 
         const normalizedHoldings = stockHoldings
           .map((holding) => normalizeStockCode(holding.code))
@@ -1110,7 +1159,6 @@ export default function App() {
         });
 
         if (missingHoldings.length === 0 && intradayMissingCodes.length === 0) {
-          setStocksLoading(false);
           return;
         }
 
@@ -1168,9 +1216,16 @@ export default function App() {
                   await chrome.storage.local.set({
                     stockPositions: updated,
                   });
+
                 } catch {
                   // storage write failure is non-critical
                 }
+                 // 缓存分时数据，下次打开 popup 秒读
+                 const intradayWrite: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+                 for (const r of validResults) {
+                   intradayWrite[r.code] = { data: r.data, prevClose: r.prevClose };
+                 }
+                 await chrome.storage.local.set({ stockIntradayData: intradayWrite });
               }
             }
           }
@@ -1221,6 +1276,12 @@ export default function App() {
           return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
         }),
       );
+      // 缓存分时数据，下次打开 popup 秒读
+      const intradayWrite: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+      for (const r of valid) {
+        intradayWrite[r.code] = { data: r.data, prevClose: r.prevClose };
+      }
+      void chrome.storage.local.set({ stockIntradayData: intradayWrite });
     };
 
     const timer = setInterval(refreshIntraday, 60_000);
@@ -1968,6 +2029,7 @@ export default function App() {
         <SideNav
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          sidebarConfig={sidebarConfig}
           unreadCount={unreadCount}
           marketStats={marketStats}
           theme={theme}
