@@ -1271,10 +1271,10 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      fundRefreshSeconds: Math.min(300, Math.max(5, Number(e.target.value) || 5)),
+                      fundRefreshSeconds: Math.min(300, Math.max(60, Number(e.target.value) || 60)),
                     }))
                   }
-                  min={2}
+                  min={60}
                   max={300}
                   className="number-input"
                 />

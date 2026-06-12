@@ -1158,7 +1158,7 @@ export default function App() {
           return !hasUsableStockIntradayData(position.intraday);
         });
 
-        if (missingHoldings.length === 0 && intradayMissingCodes.length === 0) {
+        if (missingHoldings.length === 0 && normalizedHoldings.length === 0) {
           return;
         }
 
@@ -1180,9 +1180,10 @@ export default function App() {
           }
         }
 
-        if (!cancelled && intradayMissingCodes.length > 0) {
+        // 始终拉取最新分时数据（缓存用于首次秒出，后台刷新保证数据最新）
+        if (!cancelled && normalizedHoldings.length > 0) {
           const intradayResults = await pMap(
-            intradayMissingCodes,
+            normalizedHoldings,
             async (code) => {
               try {
                 const result = await fetchStockIntraday(code);

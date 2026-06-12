@@ -1395,6 +1395,13 @@ async function refreshFunds() {
     if (cfg && !cfg.fundEnabled) return;
   } catch { /* ignore */ }
 
+  // 非交易时段降低刷新频率（最低 10 分钟）
+  if (!isTradingHours()) {
+    const r = await chrome.storage.local.get('_lastFundRefreshTime');
+    const lastTime = r._lastFundRefreshTime as number || 0;
+    if (Date.now() - lastTime < 10 * 60 * 1000) return;
+  }
+
   if (refreshFundsInFlight) return;
   refreshFundsInFlight = true;
   try {
@@ -1421,7 +1428,7 @@ async function refreshFunds() {
         await saveApiErrorState({ ...state, fundErrorAt: 0 });
       }
     }
-    await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString() });
+    await chrome.storage.local.set({ fundPositions: positions, fundUpdatedAt: new Date().toISOString(), _lastFundRefreshTime: Date.now() });
     void updateHoverTitleFromStorage();
   } catch (e) {
     console.warn('[Portfolio Pulse] fund refresh failed:', e);
@@ -1482,6 +1489,8 @@ async function refreshIndexes() {
 let styleStopCalcInFlight = false;
 
 async function triggerStyleAndStopCalc() {
+  // 收盘后不再重复拉 K 线（日 K 一天只更新一次）
+  if (!isTradingHours()) return;
   if (styleStopCalcInFlight) return;
   styleStopCalcInFlight = true;
   try {
@@ -1510,21 +1519,6 @@ async function triggerStyleAndStopCalc() {
       }
     }
 
-    // 异步并行拉 K 线
-    await pMap(
-      holdings,
-      async (h) => {
-        try {
-          const kline = await fetchDayFqKline(h.code, 60);
-          klineByCode[h.code] = kline;
-          closePricesByCode[h.code] = kline.map((k) => k.close).filter((v) => Number.isFinite(v));
-        } catch {
-          // skip
-        }
-      },
-      4,
-    );
-
     // 投资风格画像
     const [shouldCalcStyle, shouldCalcStop, shouldCalcSignal, shouldCalcAssessments, cachedAssessments] = await Promise.all([
       shouldRecalcStyle(),
@@ -1533,6 +1527,24 @@ async function triggerStyleAndStopCalc() {
       shouldRecalcStockAssessments(),
       loadCachedStockAssessments(),
     ]);
+    // 只有需要重算时才拉 K 线（日 K 一天不变多次，避免高频调接口）
+    const needsKline = shouldCalcStyle || shouldCalcStop || shouldCalcAssessments;
+    if (needsKline) {
+      await pMap(
+        holdings,
+        async (h) => {
+          try {
+            const kline = await fetchDayFqKline(h.code, 60);
+            klineByCode[h.code] = kline;
+            closePricesByCode[h.code] = kline.map((k) => k.close).filter((v) => Number.isFinite(v));
+          } catch {
+            // skip
+          }
+        },
+        4,
+      );
+    }
+ 
     if (shouldCalcStyle) {
       const stockFloating = positions.reduce((s, p) => s + (Number.isFinite(p.floatingPnl) ? p.floatingPnl : 0), 0);
       const fundFloating = fundPositions.reduce((s, p) => s + (Number.isFinite(p.holdingProfit) ? p.holdingProfit : 0), 0);
@@ -1547,7 +1559,9 @@ async function triggerStyleAndStopCalc() {
       if (suggestions.length > 0) await saveStopSuggestionsCache(suggestions);
     }
 
-    const assessmentCandidates = holdings
+    const assessmentCandidates: StockAssessment[] = [];
+    if (needsKline) {
+      assessmentCandidates.push(...holdings
       .map((holding, index) => {
         const price = currentPrices[holding.code];
         const kline = klineByCode[holding.code];
@@ -1562,7 +1576,9 @@ async function triggerStyleAndStopCalc() {
           position,
         });
       })
-      .filter((item): item is StockAssessment => item !== null);
+      .filter((item): item is StockAssessment => item !== null)
+      );
+    }
 
     const cachedCodes = new Set(cachedAssessments.map((item) => item.code));
     const nextCodes = new Set(assessmentCandidates.map((item) => item.code));
@@ -1570,7 +1586,7 @@ async function triggerStyleAndStopCalc() {
       || assessmentCandidates.some((item) => !cachedCodes.has(item.code))
       || cachedAssessments.some((item) => !nextCodes.has(item.code));
 
-    if (shouldCalcAssessments || assessmentUniverseChanged) {
+    if ((shouldCalcAssessments || assessmentUniverseChanged) && needsKline) {
       const assessments = assessmentCandidates;
       await saveStockAssessmentCache(sortStockAssessments(assessments));
     }

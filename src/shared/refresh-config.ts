@@ -9,6 +9,7 @@ export type RefreshConfig = {
 export const GOLD_REFRESH_OPTIONS = [30, 60, 300] as const;
 export const DEFAULT_GOLD_REFRESH_SECONDS = 60;
 export const MIN_NON_GOLD_REFRESH_SECONDS = 5;
+export const MIN_FUND_REFRESH_SECONDS = 60;
 
 export const DEFAULT_REFRESH_CONFIG: RefreshConfig = {
   stockRefreshSeconds: 15,
@@ -25,6 +26,10 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 
 function normalizeNonGoldRefreshSeconds(value: unknown, fallback: number): number {
   return Math.max(MIN_NON_GOLD_REFRESH_SECONDS, normalizePositiveInt(value, fallback));
+}
+
+function normalizeFundRefreshSeconds(value: unknown, fallback: number): number {
+  return Math.max(MIN_FUND_REFRESH_SECONDS, normalizePositiveInt(value, fallback));
 }
 
 function normalizeGoldRefreshSeconds(value: unknown): number {
@@ -45,7 +50,7 @@ export function normalizeRefreshConfig(value: unknown): RefreshConfig {
   const raw = (value && typeof value === 'object') ? value as Partial<RefreshConfig> : {};
   return {
     stockRefreshSeconds: normalizeNonGoldRefreshSeconds(raw.stockRefreshSeconds, DEFAULT_REFRESH_CONFIG.stockRefreshSeconds),
-    fundRefreshSeconds: normalizeNonGoldRefreshSeconds(raw.fundRefreshSeconds, DEFAULT_REFRESH_CONFIG.fundRefreshSeconds),
+    fundRefreshSeconds: normalizeFundRefreshSeconds(raw.fundRefreshSeconds, DEFAULT_REFRESH_CONFIG.fundRefreshSeconds),
     indexRefreshSeconds: normalizeNonGoldRefreshSeconds(raw.indexRefreshSeconds, DEFAULT_REFRESH_CONFIG.indexRefreshSeconds),
     marketStatsRefreshSeconds: normalizeNonGoldRefreshSeconds(raw.marketStatsRefreshSeconds, DEFAULT_REFRESH_CONFIG.marketStatsRefreshSeconds),
     goldRefreshSeconds: normalizeGoldRefreshSeconds(raw.goldRefreshSeconds),

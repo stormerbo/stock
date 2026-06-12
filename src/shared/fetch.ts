@@ -256,7 +256,8 @@ export function isTradingHours(): boolean {
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   const totalMinutes = hour * 60 + minute;
 
-  return totalMinutes >= MORNING_START && totalMinutes <= AFTERNOON_END;
+    const graceEnd = AFTERNOON_END + 30;
+  return totalMinutes >= MORNING_START && totalMinutes <= graceEnd;
 }
 
 /**
@@ -1132,6 +1133,8 @@ async function fetchEastmoneyBreadthFallback(): Promise<MarketBreadthSnapshot | 
  * 3) 东财：成交额兜底（stock/get），并保留 breadth 兜底
  */
 export async function fetchMarketStats(): Promise<MarketStats | null> {
+  // 过了交易时间不再拉取（数据不变）
+  if (!isTradingHours()) return null;
   const [sinaResult, tencentResult, eastmoneyTurnoverResult] = await Promise.allSettled([
     fetchSinaBreadthSnapshot(),
     fetchTencentTurnoverSnapshot(),

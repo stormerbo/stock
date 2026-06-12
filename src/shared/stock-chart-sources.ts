@@ -235,7 +235,7 @@ export async function fetchEastmoneyIntraday(tencentCode: string, period: StockC
   if (!secid) throw new Error('invalid stock code');
   const ndays = period === 'fiveDay' ? 5 : 1;
   const text = await fetchTextViaExtension(
-    `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3,f4,f5,f6,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&ndays=${ndays}`,
+    `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${encodeURIComponent(secid)}&fields1=f1,f2,f3,f4,f5,f6,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&ndays=${ndays}&lmt=240&_=${Date.now()}`,
   );
   const json = JSON.parse(text) as { data?: { trends?: string[] } };
   return parseEastmoneyIntradayTrends(json.data?.trends ?? []);
