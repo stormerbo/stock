@@ -1489,8 +1489,6 @@ async function refreshIndexes() {
 let styleStopCalcInFlight = false;
 
 async function triggerStyleAndStopCalc() {
-  // 收盘后不再重复拉 K 线（日 K 一天只更新一次）
-  if (!isTradingHours()) return;
   if (styleStopCalcInFlight) return;
   styleStopCalcInFlight = true;
   try {
