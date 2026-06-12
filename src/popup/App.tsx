@@ -1220,12 +1220,13 @@ export default function App() {
                 } catch {
                   // storage write failure is non-critical
                 }
-                 // 缓存分时数据，下次打开 popup 秒读
-                 const intradayWrite: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+                 // 合并写入缓存，不覆盖其他股票的已有数据
+                 const existing = await chrome.storage.local.get('stockIntradayData');
+                 const merged: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = { ...(existing.stockIntradayData as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> || {}) };
                  for (const r of validResults) {
-                   intradayWrite[r.code] = { data: r.data, prevClose: r.prevClose };
+                   merged[r.code] = { data: r.data, prevClose: r.prevClose };
                  }
-                 await chrome.storage.local.set({ stockIntradayData: intradayWrite });
+                 await chrome.storage.local.set({ stockIntradayData: merged });
               }
             }
           }
@@ -1276,12 +1277,13 @@ export default function App() {
           return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
         }),
       );
-      // 缓存分时数据，下次打开 popup 秒读
-      const intradayWrite: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+      // 合并写入缓存
+      const existing = await chrome.storage.local.get('stockIntradayData');
+      const merged: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = { ...(existing.stockIntradayData as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> || {}) };
       for (const r of valid) {
-        intradayWrite[r.code] = { data: r.data, prevClose: r.prevClose };
+        merged[r.code] = { data: r.data, prevClose: r.prevClose };
       }
-      void chrome.storage.local.set({ stockIntradayData: intradayWrite });
+      await chrome.storage.local.set({ stockIntradayData: merged });
     };
 
     const timer = setInterval(refreshIntraday, 60_000);

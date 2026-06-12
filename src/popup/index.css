@@ -269,8 +269,9 @@ body {
 .index-modal-panel {
   position: relative;
   width: min(736px, 100%);
+  height: min(680px, calc(100vh - 40px));
   max-height: 100%;
-  min-height: 0;
+  min-height: 380px;
   display: flex;
   flex-direction: column;
   border-radius: 20px;
@@ -360,9 +361,10 @@ body {
 }
 
 .index-modal-body {
-  margin-top: 12px;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  margin-top: 12px;
 }
 
 .index-modal-body.kline {

@@ -608,11 +608,15 @@ async function refreshStocks(force = false) {
           },
           3,
         );
-        const intradayMap: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = {};
+        // 合并写入缓存，只覆盖成功拉取的分时数据，失败时保留旧值
+        const existing = await chrome.storage.local.get('stockIntradayData');
+        const merged: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = { ...(existing.stockIntradayData as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> || {}) };
         for (const r of intradayResults) {
-          intradayMap[r.code] = { data: r.data, prevClose: r.prevClose };
+          if (r.data.length > 0) {
+            merged[r.code] = { data: r.data, prevClose: r.prevClose };
+          }
         }
-        await chrome.storage.local.set({ stockIntradayData: intradayMap });
+        await chrome.storage.local.set({ stockIntradayData: merged });
       }
     }
 
