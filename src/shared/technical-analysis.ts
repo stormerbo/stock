@@ -4,6 +4,7 @@
 // -----------------------------------------------------------
 
 import { normalizeStockCode, toTencentStockCode } from './fetch.ts';
+import { fetchStockKlineWithFallback } from './stock-chart-failover.ts';
 import { assessVolumePriceContext } from './volume-price-context.ts';
 
 export type KlinePoint = {
@@ -1100,32 +1101,6 @@ export async function fetchDayFqKline(
   const plainCode = normalizeStockCode(code);
   const tencentCode = toTencentStockCode(plainCode);
   if (!tencentCode) throw new Error('invalid stock code');
-
-  const response = await fetch(
-    `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tencentCode},day,,,${count},qfq`,
-  );
-  const json = (await response.json()) as {
-    data?: Record<string, { qfqday?: string[][] }>;
-  };
-  const payload = json.data?.[tencentCode];
-  const rows = payload?.qfqday;
-  if (!rows || !Array.isArray(rows)) return [];
-
-  const results: KlinePoint[] = [];
-  for (const row of rows) {
-    if (!Array.isArray(row) || row.length < 6) continue;
-    const [date, open, close, high, low, volume] = row;
-    const item = {
-      date: String(date),
-      open: Number(open),
-      close: Number(close),
-      high: Number(high),
-      low: Number(low),
-      volume: Number(volume),
-    };
-    if (Number.isFinite(item.close)) {
-      results.push(item);
-    }
-  }
-  return results;
+  const { data } = await fetchStockKlineWithFallback(tencentCode, 'day', count);
+  return data;
 }

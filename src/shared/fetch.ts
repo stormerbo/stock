@@ -2,6 +2,15 @@
 // Shared fetch utilities for background + popup
 // -----------------------------------------------------------
 
+import {
+  GOLD_INSTRUMENTS,
+  getGoldInstrumentByCode,
+  getGoldInstrumentBySecid,
+  type GoldChartPeriod,
+  type GoldInstrumentId,
+  type GoldMarket,
+} from './gold-config.ts';
+
 export type StockHoldingConfig = {
   code: string;
   name?: string;
@@ -40,7 +49,7 @@ export type StockPosition = {
   floatingPnl: number;
   dailyPnl: number;
   dailyChangePct: number;
-  intraday: { data: Array<{ time: string; price: number }>; prevClose: number };
+  intraday?: { data: Array<{ time: string; price: number }>; prevClose: number };
   updatedAt: string;
 };
 
@@ -77,6 +86,38 @@ export type MarketIndexQuote = {
   price: number;
   change: number;
   changePct: number;
+};
+
+export type GoldQuote = {
+  code: GoldInstrumentId;
+  symbol: string;
+  label: string;
+  market: GoldMarket;
+  price: number;
+  change: number;
+  changePct: number;
+  unit: string;
+  updatedAt: string;
+};
+
+export type GoldIntradayPoint = {
+  time: string;
+  price: number;
+};
+
+export type GoldIntradayData = {
+  data: GoldIntradayPoint[];
+  kline: GoldDetailKlinePoint[];
+  prevClose: number;
+};
+
+export type GoldDetailKlinePoint = {
+  date: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  volume: number;
 };
 
 export const MARKET_INDEXES: Array<{ code: string; label: string }> = [
@@ -300,45 +341,19 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
 }
 
 export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
-  const plain = normalizeStockCode(code);
-  const tencentCode = toTencentStockCode(plain);
-  if (!tencentCode) return { data: [], prevClose: Number.NaN };
-
-  // 和详情页分时图使用相同的腾讯 API（直接 fetch，走 extension 无 CORS 问题）
   try {
-    const response = await fetch(
-      `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tencentCode}`,
-    );
-    if (!response.ok) return { data: [], prevClose: Number.NaN };
-    const json = await response.json() as {
-      data?: Record<string, {
-        qt?: Record<string, string[]>;
-        data?: { data?: string[] };
-      }>;
+    const { fetchInstrumentIntraday, toIntradayMiniChart } = await import('./chart-provider.ts');
+    const result = await fetchInstrumentIntraday({
+      instrumentType: 'stock',
+      code,
+      period: 'minute',
+    });
+    return {
+      data: toIntradayMiniChart(result.data),
+      prevClose: Number.NaN,
     };
-
-    const payload = json.data?.[tencentCode];
-    const intradayRaw = payload?.data?.data ?? [];
-    const quote = payload?.qt?.[tencentCode];
-    const prevClose = quote ? toNumber(quote[4]) : Number.NaN;
-
-    const data = intradayRaw
-      .map((line) => {
-        const parts = String(line).split(' ');
-        if (parts.length < 2) return null;
-        const time = parts[0];
-        const price = toNumber(parts[1]);
-        if (!Number.isFinite(price)) return null;
-        const formattedTime = /^\d{4}$/.test(time)
-          ? `${time.slice(0, 2)}:${time.slice(2, 4)}`
-          : time;
-        if (!/^\d{2}:\d{2}$/.test(formattedTime) || formattedTime > '15:00') return null;
-        return { time: formattedTime, price };
-      })
-      .filter((item): item is { time: string; price: number } => item !== null);
-
-    return { data, prevClose };
-  } catch {
+  } catch (err) {
+    console.warn('[fetchStockIntraday] failed:', code, err);
     return { data: [], prevClose: Number.NaN };
   }
 }
@@ -352,12 +367,33 @@ export async function fetchTencentMarketIndexes(): Promise<MarketIndexQuote[]> {
 type EastmoneyUlistRow = {
   f2?: number | string;   // latest price
   f3?: number | string;   // pct change
+  f4?: number | string;   // absolute change
   f6?: number | string;   // turnover amount
   f12?: string;           // code
   f13?: number | string;  // market
   f14?: string;           // name
   f18?: number | string;  // prev close
   f124?: number | string; // timestamp
+};
+
+type EastmoneyStockGetRow = {
+  f43?: number | string;  // latest price * 100
+  f57?: string;           // code
+  f58?: string;           // name
+  f60?: number | string;  // prev close * 100
+  f86?: number | string;  // timestamp
+  f169?: number | string; // absolute change * 100
+  f170?: number | string; // pct change * 100
+};
+
+type RawGoldQuoteInput = {
+  source: 'eastmoney-ulist' | 'eastmoney-stock-get';
+  secid: string;
+  code: string;
+  label: GoldQuote['label'];
+  market: GoldQuote['market'];
+  unit: string;
+  row: EastmoneyUlistRow | EastmoneyStockGetRow;
 };
 
 function parseEastmoneyUlistPayload(text: string): EastmoneyUlistRow[] {
@@ -397,11 +433,344 @@ async function fetchEastmoneyUlistRows(secids: string[]): Promise<EastmoneyUlist
   return parseEastmoneyUlistPayload(text);
 }
 
+function parseEastmoneyStockGetPayload(text: string): EastmoneyStockGetRow | null {
+  const raw = text.trim();
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      parsed = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+
+  const json = parsed as { data?: EastmoneyStockGetRow | null };
+  return json.data && typeof json.data === 'object' ? json.data : null;
+}
+
+async function fetchEastmoneyStockGetRow(secid: string): Promise<EastmoneyStockGetRow | null> {
+  const text = await fetchTextViaExtension(
+    `https://push2.eastmoney.com/api/qt/stock/get?secid=${encodeURIComponent(secid)}&fields=f43,f57,f58,f60,f86,f169,f170`
+  );
+  return parseEastmoneyStockGetPayload(text);
+}
+
+function scaledEastmoneyNumber(value: unknown): number {
+  if (value === null || value === undefined || value === '') return Number.NaN;
+  const parsed = toNumber(value);
+  return Number.isFinite(parsed) ? parsed / 100 : Number.NaN;
+}
+
+function strictToNumber(value: unknown): number {
+  if (value === null || value === undefined || value === '') return Number.NaN;
+  return toNumber(value);
+}
+
+export function parseGoldQuoteRows(rows: RawGoldQuoteInput[]): GoldQuote[] {
+  const mapped = new Map<GoldQuote['code'], GoldQuote>();
+
+  for (const item of rows) {
+    const instrument = getGoldInstrumentBySecid(item.secid);
+    if (!instrument) continue;
+
+    const row = item.row;
+    const price = item.source === 'eastmoney-stock-get'
+      ? scaledEastmoneyNumber((row as EastmoneyStockGetRow).f43)
+      : strictToNumber((row as EastmoneyUlistRow).f2);
+    const change = item.source === 'eastmoney-stock-get'
+      ? scaledEastmoneyNumber((row as EastmoneyStockGetRow).f169)
+      : strictToNumber((row as EastmoneyUlistRow).f4);
+    const changePct = item.source === 'eastmoney-stock-get'
+      ? scaledEastmoneyNumber((row as EastmoneyStockGetRow).f170)
+      : strictToNumber((row as EastmoneyUlistRow).f3);
+    const updatedAt = item.source === 'eastmoney-stock-get'
+      ? formatEastmoneyTime((row as EastmoneyStockGetRow).f86)
+      : formatEastmoneyTime((row as EastmoneyUlistRow).f124);
+
+    mapped.set(instrument.id, {
+      code: instrument.id,
+      symbol: instrument.code,
+      label: instrument.label,
+      market: instrument.market,
+      price,
+      change,
+      changePct,
+      unit: instrument.unit,
+      updatedAt,
+    });
+  }
+
+  return GOLD_INSTRUMENTS
+    .map((item) => mapped.get(item.id))
+    .filter((item): item is GoldQuote => Boolean(item));
+}
+
+export async function fetchGoldQuotes(): Promise<GoldQuote[]> {
+  // 1) Try batch ulist API (supports all markets, returns correct prices for international products)
+  try {
+    const secids = GOLD_INSTRUMENTS.map((i) => i.secid);
+    const text = await fetchTextViaExtension(
+      `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${encodeURIComponent(secids.join(','))}&fields=f2,f3,f4,f12,f13,f14,f124`,
+    );
+    const ulistRows = parseEastmoneyUlistPayload(text);
+    if (ulistRows.length >= GOLD_INSTRUMENTS.length * 0.5) {
+      const mapped = ulistRows
+        .map((row) => {
+          const secid = String(Math.trunc(Number(row.f13))) + '.' + String(row.f12 ?? '').trim();
+          const instrument = getGoldInstrumentBySecid(secid);
+          if (!instrument) return null;
+          return {
+            source: 'eastmoney-ulist' as const,
+            secid,
+            code: String(row.f12 ?? ''),
+            label: instrument.label,
+            market: instrument.market,
+            unit: instrument.unit,
+            row,
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      const parsed = parseGoldQuoteRows(mapped);
+      if (parsed.length >= GOLD_INSTRUMENTS.length * 0.5) return parsed;
+    }
+  } catch { /* fall through */ }
+
+
+  const results = await pMap(GOLD_INSTRUMENTS, async (instrument) => {
+    // 1) Try stock/get API
+    try {
+      const row = await fetchEastmoneyStockGetRow(instrument.secid);
+      if (row) {
+        const stockPrice = scaledEastmoneyNumber(row.f43);
+        // stock/get can return f43=0 for products with no activity (e.g. NYAuTN12);
+        // reject zero prices so fallbacks (trends2/kline) get a chance
+        if (Number.isFinite(stockPrice) && stockPrice > 0) {
+          return {
+            code: instrument.id,
+            symbol: instrument.code,
+            label: instrument.label,
+            market: instrument.market,
+            price: stockPrice,
+            change: scaledEastmoneyNumber(row.f169),
+            changePct: scaledEastmoneyNumber(row.f170),
+            unit: instrument.unit,
+            updatedAt: formatEastmoneyTime(row.f86),
+          } satisfies GoldQuote;
+        }
+      }
+    } catch { /* fall through */ }
+
+    // 2) Fallback: extract quote from trends2 API
+    try {
+      const text = await fetchTextViaExtension(
+        `https://push2.eastmoney.com/api/qt/stock/trends2/get?secid=${encodeURIComponent(instrument.secid)}&fields1=f1,f2,f3,f4,f5,f6,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&ndays=1`,
+      );
+      const json = JSON.parse(text) as {
+        data?: { trends?: string[]; preSettlement?: number };
+      };
+      const trends = json.data?.trends;
+      if (trends && trends.length > 0) {
+        const last = trends[trends.length - 1].split(',');
+        const close = toNumber(last[2]);
+        if (Number.isFinite(close)) {
+          const prevSettle = toNumber(json.data?.preSettlement);
+          const prevClose = Number.isFinite(prevSettle) ? prevSettle : Number.NaN;
+          const change = Number.isFinite(prevClose) ? close - prevClose : Number.NaN;
+          const changePct = Number.isFinite(prevClose) && prevClose > 0
+            ? (change / prevClose) * 100
+            : Number.NaN;
+          const ts = String(last[0] ?? '');
+          const timePart = ts.length >= 16 ? ts.slice(-8, -3) : ts.slice(-5);
+          const updatedAt = /^\d{2}:\d{2}$/.test(timePart) ? `${timePart}:00` : '-';
+          return {
+            code: instrument.id,
+            symbol: instrument.code,
+            label: instrument.label,
+            market: instrument.market,
+            price: close,
+            change,
+            changePct,
+            unit: instrument.unit,
+            updatedAt,
+          } satisfies GoldQuote;
+        }
+      }
+        } catch { /* ignore */ }
+
+    // 3) Third fallback: extract latest price from kline API
+    try {
+      const text = await fetchTextViaExtension(
+        `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${encodeURIComponent(instrument.secid)}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=0&beg=20260601&end=20500101&lmt=5`,
+      );
+      const json = JSON.parse(text) as {
+        data?: { klines?: string[]; preKPrice?: number };
+      };
+      const klines = json.data?.klines;
+      if (klines && klines.length > 0) {
+        const last = klines[klines.length - 1].split(',');
+        const close = toNumber(last[2]);
+        if (Number.isFinite(close)) {
+          let prevClose = toNumber(json.data?.preKPrice);
+          if (!Number.isFinite(prevClose) && klines.length >= 2) {
+            const prev = klines[klines.length - 2].split(',');
+            prevClose = toNumber(prev[2]);
+          }
+          const change = Number.isFinite(prevClose) ? close - prevClose : Number.NaN;
+          const changePct = Number.isFinite(prevClose) && prevClose > 0
+            ? (change / prevClose) * 100
+            : Number.NaN;
+          return {
+            code: instrument.id,
+            symbol: instrument.code,
+            label: instrument.label,
+            market: instrument.market,
+            price: close,
+            change,
+            changePct,
+            unit: instrument.unit,
+            updatedAt: String(last[0] ?? '').slice(-5) + ':00',
+          } satisfies GoldQuote;
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }, 4);const quoteMap = new Map<GoldQuote['code'], GoldQuote>();
+  for (const q of results) {
+    if (q) quoteMap.set(q.code, q);
+  }
+  return GOLD_INSTRUMENTS
+    .map((item) => quoteMap.get(item.id))
+    .filter((item): item is GoldQuote => Boolean(item));
+}
+export function parseGoldIntradayRows(trends: string[], fallbackPrevClose: number): GoldIntradayData {
+  const data: GoldIntradayPoint[] = [];
+  const kline: GoldDetailKlinePoint[] = [];
+  for (const line of trends) {
+    const parts = String(line).split(',');
+    if (parts.length < 6) continue;
+    const timestamp = String(parts[0] ?? '');
+    const open = toNumber(parts[1]);
+    const close = toNumber(parts[2]);
+    const high = toNumber(parts[3]);
+    const low = toNumber(parts[4]);
+    const volume = toNumber(parts[5]);
+    const price = close;
+    if (!Number.isFinite(price)) continue;
+    const time = timestamp.slice(-5);
+    if (!/^\d{2}:\d{2}$/.test(time)) continue;
+    data.push({ time, price });
+    kline.push({
+      date: timestamp,
+      open: Number.isFinite(open) ? open : price,
+      close: price,
+      high: Number.isFinite(high) ? high : price,
+      low: Number.isFinite(low) ? low : price,
+      volume: Number.isFinite(volume) ? volume : 0,
+    });
+  }
+  return {
+    data,
+    kline,
+    prevClose: Number.isFinite(fallbackPrevClose) ? fallbackPrevClose : Number.NaN,
+  };
+}
+
+export function parseGoldKlineRows(rows: string[]): GoldDetailKlinePoint[] {
+  const result: GoldDetailKlinePoint[] = [];
+  for (const line of rows) {
+    const parts = String(line).split(',');
+    if (parts.length < 6) continue;
+    const [date, open, close, high, low, volume] = parts;
+    const item = {
+      date: String(date),
+      open: toNumber(open),
+      close: toNumber(close),
+      high: toNumber(high),
+      low: toNumber(low),
+      volume: toNumber(volume),
+    };
+    if (
+      Number.isFinite(item.open)
+      && Number.isFinite(item.close)
+      && Number.isFinite(item.high)
+      && Number.isFinite(item.low)
+      && Number.isFinite(item.volume)
+    ) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+function getGoldKlineType(period: Exclude<GoldChartPeriod, 'minute'>): 101 | 102 | 103 {
+  if (period === 'week') return 102;
+  if (period === 'month') return 103;
+  return 101;
+}
+
+export async function fetchGoldIntraday(code: string): Promise<GoldIntradayData> {
+  const instrument = getGoldInstrumentByCode(code);
+  if (!instrument) throw new Error('invalid gold code');
+
+  const text = await fetchTextViaExtension(
+    `https://push2.eastmoney.com/api/qt/stock/trends2/get?secid=${encodeURIComponent(instrument.secid)}&fields1=f1,f2,f3,f4,f5,f6,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&ndays=1`,
+  );
+  const json = JSON.parse(text) as {
+    data?: { trends?: string[]; preSettlement?: number };
+  };
+  const rawTrends = json.data?.trends ?? [];
+  // Filter out night session (20:00-02:30) data — keep only day session (09:00-15:30)
+  // Gold night session data has zero volume and flat prices, making the chart mostly unreadable
+  const dayTrends = rawTrends.filter((t: string) => {
+    const parts = t.split(',');
+    if (parts.length < 6) return false;
+    const ts = String(parts[0] ?? '');
+    if (!ts.includes(' ')) return false;
+    const hour = parseInt(ts.split(' ')[1]?.slice(0, 2), 10);
+    return hour >= 9 && hour <= 15;
+  });
+  // If no day session data (e.g. before 09:00), fall back to raw data
+  if (dayTrends.length < 5 && rawTrends.length > 0) {
+    return parseGoldIntradayRows(rawTrends, toNumber(json.data?.preSettlement));
+  }
+  return parseGoldIntradayRows(dayTrends, toNumber(json.data?.preSettlement));
+}
+
+export async function fetchGoldKline(code: string, period: Exclude<GoldChartPeriod, 'minute'>): Promise<GoldDetailKlinePoint[]> {
+  const instrument = getGoldInstrumentByCode(code);
+  if (!instrument) throw new Error('invalid gold code');
+
+  const text = await fetchTextViaExtension(
+    `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${encodeURIComponent(instrument.secid)}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=${getGoldKlineType(period)}&fqt=0&beg=20000101&end=20500101&lmt=240`,
+  );
+  const json = JSON.parse(text) as {
+    data?: { klines?: string[] };
+  };
+  return parseGoldKlineRows(json.data?.klines ?? []);
+}
+
 function toEastmoneySecidFromRow(row: EastmoneyUlistRow): string {
   const market = Number(row.f13);
   const code = String(row.f12 ?? '').trim();
   if (!Number.isFinite(market) || !code) return '';
   return `${Math.trunc(market)}.${code}`;
+}
+
+/** Convert Tencent-style code (sh000001) to Eastmoney secid format (1.000001). */
+export function toEastmoneySecidFromTencent(tencentCode: string): string {
+  const str = tencentCode.trim().toLowerCase();
+  // sz399300 (沪深300) is listed on Shanghai
+  if (str === 'sz399300') return '1.000300';
+  const m = str.match(/^(sh|sz)(\d{6})$/);
+  if (!m) return '';
+  return m[1] === 'sh' ? `1.${m[2]}` : `0.${m[2]}`;
 }
 
 async function fetchBatchStockQuotesFromEastmoney(holdings: Array<StockHoldingConfig & { code: string }>): Promise<StockPosition[]> {
@@ -438,17 +807,16 @@ async function fetchBatchStockQuotesFromEastmoney(holdings: Array<StockHoldingCo
         code: holding.code,
         name: String(row?.f14 ?? '').trim() || holding.code,
         shares,
-        cost,
-        price,
-        prevClose,
-        floatingPnl,
-        dailyPnl,
-        dailyChangePct: changePct,
-        intraday: { data: [], prevClose: Number.NaN },
-        updatedAt: formatEastmoneyTime(row?.f124),
-      };
-    });
-  } catch {
+       cost,
+       price,
+       prevClose,
+       floatingPnl,
+       dailyPnl,
+       dailyChangePct: changePct,
+       updatedAt: formatEastmoneyTime(row?.f124),
+     };
+   });
+ } catch {
     return [];
   }
 }
@@ -488,7 +856,6 @@ async function fetchBatchStockQuotesFromTencent(holdings: Array<StockHoldingConf
       floatingPnl,
       dailyPnl,
       dailyChangePct: changePct,
-      intraday: { data: [], prevClose: Number.NaN },
       updatedAt: formatQuoteTime(parts[30] || ''),
     };
   });

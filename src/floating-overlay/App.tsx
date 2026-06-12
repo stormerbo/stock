@@ -20,7 +20,7 @@ type StockDisplay = {
   high?: number;
   low?: number;
   open?: number;
-  intraday: { data: Array<{ time: string; price: number }>; prevClose: number };
+  intraday?: { data: Array<{ time: string; price: number }>; prevClose: number };
 };
 
 type AppProps = {

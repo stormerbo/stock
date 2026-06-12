@@ -116,7 +116,17 @@ function IndicatorToggle({ label, value, color, active, onClick }: IndicatorTogg
 
 // ─── Kline Chart Component ───
 
-export default function KlineChart({ detail }: { detail: StockDetailData }) {
+export default function KlineChart({
+  detail,
+  timeFractionFn,
+  breakFraction,
+  axisLabels,
+}: {
+  detail: StockDetailData;
+  timeFractionFn?: (timeStr: string) => number;
+  breakFraction?: number;
+  axisLabels?: [string, string, string];
+}) {
   const isMinuteStyle = detail.period === 'minute' || detail.period === 'fiveDay';
   const isSingleMinute = detail.period === 'minute';
   const showRangeControls = detail.period !== 'minute';
@@ -418,7 +428,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
     if (!isSingleMinute) return visibleKline.map((_, i) => (visibleKline.length > 1 ? (i / (visibleKline.length - 1)) * SVG_W : 0));
     return visibleKline.map((bar) => {
       const timeStr = bar.date.slice(-5);
-      return fractionToX(timeToFraction(timeStr), SVG_W);
+      return fractionToX(timeFractionFn ? timeFractionFn(timeStr) : timeToFraction(timeStr), SVG_W);
     });
   }, [visibleKline, isSingleMinute, SVG_W]);
 
@@ -461,7 +471,7 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
     };
   }, [closes, minuteXs, mainHeight, minuteMin, minuteMax, minuteBaselineY]);
 
-  const noonBreakX = isSingleMinute ? SVG_W * 0.5 : -1;
+  const noonBreakX = isSingleMinute ? SVG_W * (breakFraction ?? 0.5) : -1;
   const minuteVolumeBarWidth = useMemo(() => {
     if (!isMinuteStyle) {
       return visibleKline.length > 0 ? SVG_W / visibleKline.length : 1;
@@ -814,9 +824,9 @@ export default function KlineChart({ detail }: { detail: StockDetailData }) {
       <div className="kline-date-row">
         {isMinuteStyle ? (
           <>
-            <span>09:30</span>
-            <span>11:30/13:00</span>
-            <span>15:00</span>
+            <span>{axisLabels?.[0] ?? '09:30'}</span>
+            <span>{axisLabels?.[1] ?? '11:30/13:00'}</span>
+            <span>{axisLabels?.[2] ?? '15:00'}</span>
           </>
         ) : (
           <>

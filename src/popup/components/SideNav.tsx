@@ -1,4 +1,4 @@
-import { BarChart3, Bell, FileText, Moon, PieChart, Settings, Shield, Sun, WalletCards } from 'lucide-react';
+import { BarChart3, Bell, Coins, FileText, Moon, PieChart, Settings, Shield, Sun, WalletCards } from 'lucide-react';
 import type { PageTab, ThemeMode } from '../types';
 import type { MarketStats } from '../../shared/fetch';
 import { formatMarketAmount, formatNumber } from '../utils/format';
@@ -34,6 +34,14 @@ export default function SideNav({
       >
         <WalletCards size={10} />
         <span>基金</span>
+      </button>
+      <button
+        type="button"
+        className={`nav-btn ${activeTab === 'gold' ? 'active' : ''}`}
+        onClick={() => { setActiveTab('gold'); clearDetailTargets(); }}
+      >
+        <Coins size={10} />
+        <span>金价</span>
       </button>
       <button
         type="button"

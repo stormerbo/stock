@@ -4,10 +4,11 @@ import type {
   FundPosition,
   StockHoldingConfig,
   FundHoldingConfig,
+  GoldQuote,
   MarketStats,
 } from '../shared/fetch';
 
-export type PageTab = 'stocks' | 'funds' | 'notifications' | 'trades' | 'account' | 'risk';
+export type PageTab = 'stocks' | 'funds' | 'gold' | 'notifications' | 'trades' | 'account' | 'risk';
 export type ThemeMode = 'dark' | 'light' | 'white';
 
 export type IndexDetailTarget = {
@@ -51,6 +52,12 @@ export type StockDetailTarget = {
 export type FundDetailTarget = {
   code: string;
   name: string;
+};
+
+export type GoldDetailTarget = {
+  code: string;
+  name: string;
+  symbol: string;
 };
 
 export type TradeHistoryTarget = {
@@ -98,3 +105,4 @@ export type IntradayDataPoint = {
 };
 
 export type { MarketStats };
+export type { GoldQuote };

@@ -27,6 +27,7 @@ import { THEME_STORAGE_KEY, applyThemeVariables, normalizeThemeMode } from '../s
 import { DISPLAY_STORAGE_KEY, DEFAULT_DISPLAY_CONFIG, normalizeDisplayConfig, type DisplayConfig, type ColorScheme } from '../shared/display';
 import { CONFIG_KEY as OVERLAY_CONFIG_KEY, STATE_KEY as OVERLAY_STATE_KEY, DEFAULT_CONFIG as DEFAULT_OVERLAY_CONFIG, type FloatingOverlayConfig } from '../floating-overlay/config';
 import { loadCachedStyleProfile, type StyleProfile } from '../shared/investment-style';
+import { DEFAULT_REFRESH_CONFIG, GOLD_REFRESH_OPTIONS, normalizeRefreshConfig, type RefreshConfig } from '../shared/refresh-config';
 import RadarChart from '../popup/components/RadarChart';
 import type { ThemeMode } from '../popup/types';
 import { Button } from '../popup/components/ui';
@@ -60,13 +61,7 @@ const BADGE_LABELS: Record<BadgeMode, string> = {
   off: '关闭角标',
 };
 
-type RefreshConfig = {
-  stockRefreshSeconds: number;
-  fundRefreshSeconds: number;
-  indexRefreshSeconds: number;
-  marketStatsRefreshSeconds: number;
-};
-const DEFAULT_REFRESH: RefreshConfig = { stockRefreshSeconds: 15, fundRefreshSeconds: 60, indexRefreshSeconds: 30, marketStatsRefreshSeconds: 30 };
+const DEFAULT_REFRESH = DEFAULT_REFRESH_CONFIG;
 const BACKUP_SCHEMA_VERSION = 1;
 
 type BackupPayload = {
@@ -409,6 +404,17 @@ function saveStorageItem<T>(key: string, value: T): Promise<void> {
   return Promise.resolve();
 }
 
+/** Batch-write multiple keys in a single chrome.storage.sync.set() call to stay under quota. */
+function batchSaveStorageItems(items: Record<string, unknown>): Promise<void> {
+  if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+    return chrome.storage.sync.set(items).then();
+  }
+  for (const [key, value] of Object.entries(items)) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+  return Promise.resolve();
+}
+
 function ensureRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
@@ -526,15 +532,14 @@ export default function App() {
   useEffect(() => {
     if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
       chrome.storage.sync.get(REFRESH_STORAGE_KEY, (result: Record<string, unknown>) => {
-        const config = result[REFRESH_STORAGE_KEY] as RefreshConfig | undefined;
-        const resolved = config || DEFAULT_REFRESH;
+        const resolved = normalizeRefreshConfig(result[REFRESH_STORAGE_KEY]);
         setRefreshConfig(resolved);
         setRefreshDraft(resolved);
       });
     } else {
       try {
         const raw = localStorage.getItem(REFRESH_STORAGE_KEY);
-        const resolved = raw ? JSON.parse(raw) : DEFAULT_REFRESH;
+        const resolved = normalizeRefreshConfig(raw ? JSON.parse(raw) : DEFAULT_REFRESH);
         setRefreshConfig(resolved);
         setRefreshDraft(resolved);
       } catch {
@@ -745,14 +750,15 @@ export default function App() {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await Promise.all([
-        saveStorageItem(DISPLAY_STORAGE_KEY, displayDraft),
-        saveStorageItem(REFRESH_STORAGE_KEY, refreshDraft),
-        saveStorageItem(WORK_MODE_STORAGE_KEY, workModeDraft),
-        saveStorageItem(TECH_REPORT_STORAGE_KEY, techReportDraft),
-      ]);
+      await batchSaveStorageItems({
+        [DISPLAY_STORAGE_KEY]: displayDraft,
+        [REFRESH_STORAGE_KEY]: normalizeRefreshConfig(refreshDraft),
+        [WORK_MODE_STORAGE_KEY]: workModeDraft,
+        [TECH_REPORT_STORAGE_KEY]: techReportDraft,
+      });
       setDisplayConfig(displayDraft);
-      setRefreshConfig(refreshDraft);
+      setRefreshConfig(normalizeRefreshConfig(refreshDraft));
+      setRefreshDraft(normalizeRefreshConfig(refreshDraft));
       setWorkModeConfig(workModeDraft);
       setTechReportConfig(techReportDraft);
       setSaved(true);
@@ -1261,7 +1267,7 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      stockRefreshSeconds: Math.min(60, Math.max(2, Number(e.target.value) || 2)),
+                      stockRefreshSeconds: Math.min(60, Math.max(5, Number(e.target.value) || 5)),
                     }))
                   }
                   min={2}
@@ -1284,7 +1290,7 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      fundRefreshSeconds: Math.min(300, Math.max(2, Number(e.target.value) || 2)),
+                      fundRefreshSeconds: Math.min(300, Math.max(5, Number(e.target.value) || 5)),
                     }))
                   }
                   min={2}
@@ -1307,7 +1313,7 @@ export default function App() {
                   onChange={(e) =>
                     setRefreshDraft((prev) => ({
                       ...prev,
-                      indexRefreshSeconds: Math.min(120, Math.max(2, Number(e.target.value) || 2)),
+                      indexRefreshSeconds: Math.min(120, Math.max(5, Number(e.target.value) || 5)),
                     }))
                   }
                   min={2}
@@ -1315,6 +1321,32 @@ export default function App() {
                   className="number-input"
                 />
                 <span>秒</span>
+              </div>
+            </div>
+
+            <div className="config-row">
+             <div>
+               <span className="config-label">金价刷新频率</span>
+               <span className="config-hint">金价行情自动刷新的固定频率</span>
+             </div>
+              <div className="number-with-unit">
+                <select
+                  value={refreshDraft.goldRefreshSeconds}
+                  onChange={(e) =>
+                    setRefreshDraft((prev) => ({
+                      ...prev,
+                      goldRefreshSeconds: Number(e.target.value),
+                    }))
+                  }
+                  className="number-input"
+                >
+                  {GOLD_REFRESH_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 300 ? '5' : `${option}`}
+                    </option>
+                  ))}
+                </select>
+                <span>{refreshDraft.goldRefreshSeconds === 300 ? '分' : '秒'}</span>
               </div>
             </div>
 

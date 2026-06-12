@@ -1,7 +1,6 @@
 import {
   fetchBatchStockQuotes,
-  fetchStockIntraday,
-  fetchTencentMarketIndexes,
+ fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
   getShanghaiYesterday,
@@ -112,8 +111,7 @@ const ALARM_UPDATE_CHECK = 'check-update';
 const UPDATE_INFO_KEY = 'extensionUpdateInfo';
 const UPDATE_COOLDOWN_KEY = 'updateCooldown';
 const LAST_UPDATE_CHECK_KEY = '_lastUpdateCheckTime';
-const STOCK_INTRADAY_DATE_KEY = 'stockIntradayDate';
-const API_ERROR_KEY = '_apiErrorState';
+ const API_ERROR_KEY = '_apiErrorState';
 const API_ERROR_COOLDOWN_MS = 30 * 60 * 1000; // 30 分钟
 let refreshStocksInFlight = false;
 let refreshFundsInFlight = false;
@@ -566,90 +564,19 @@ async function refreshStocks(force = false) {
     const quoteOk = positions.length > 0 && positions.some((p) => Number.isFinite(p.price));
 
     // 行情报价大面积失败时告警
-    if (!quoteOk) {
-      void notifyApiError('股票实时行情', 'stockQuoteErrorAt');
-    }
+   if (!quoteOk) {
+     void notifyApiError('股票实时行情', 'stockQuoteErrorAt');
+   }
 
-    const existing = await chrome.storage.local.get([
-      'stockPositions',
-      STOCK_INTRADAY_DATE_KEY,
-    ]);
-    const existingPositions = (Array.isArray(existing.stockPositions) ? existing.stockPositions : []) as StockPosition[];
-    const existingMap = new Map(existingPositions.map((p) => [p.code, p]));
-    const intradayDate = typeof existing[STOCK_INTRADAY_DATE_KEY] === 'string'
-      ? (existing[STOCK_INTRADAY_DATE_KEY] as string)
-      : '';
-    const today = getShanghaiToday();
-    // 交易时段内每次刷新都重新拉取分时数据，确保分时图实时更新
-    const isOpen = isTradingHours();
-    const shouldRefreshAllIntraday = isOpen || intradayDate !== today;
+    await chrome.storage.local.set({
+      stockPositions: positions,
+      stockUpdatedAt: new Date().toISOString(),
+    });
+    void checkAndNotifyAlerts(positions);
+    void evaluateDrawdownRules(positions);
+    void updateHoverTitleFromStorage();
 
-    const merged = positions.map((p) => ({
-      ...p,
-      intraday: existingMap.get(p.code)?.intraday ?? { data: [], prevClose: Number.NaN },
-    }));
-
-    const allCodes = stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean);
-    const codesToRefresh = shouldRefreshAllIntraday
-      ? allCodes
-      : allCodes.filter((code) => {
-        const pos = merged.find((p) => p.code === code);
-        return pos && pos.intraday.data.length === 0;
-      });
-
-    let intradayFailedCount = 0;
-    if (codesToRefresh.length > 0) {
-      const intradayResults = await pMap(
-        codesToRefresh,
-        async (code) => {
-          try {
-            const d = await fetchStockIntraday(code);
-            if (d.data.length === 0) intradayFailedCount++;
-            return { code, data: d };
-          } catch {
-            intradayFailedCount++;
-            return { code, data: { data: [], prevClose: Number.NaN } };
-          }
-        },
-        3,
-      );
-
-      // 分时数据大量失败时告警
-      if (intradayFailedCount >= codesToRefresh.length) {
-        void notifyApiError('股票分时数据', 'stockIntradayErrorAt');
-      }
-
-      const intradayMap = new Map(intradayResults.map((r) => [r.code, r.data]));
-      const final = merged.map((p) =>
-        intradayMap.has(p.code) ? { ...p, intraday: intradayMap.get(p.code)! } : p
-      );
-      await chrome.storage.local.set({
-        stockPositions: final,
-        stockUpdatedAt: new Date().toISOString(),
-        [STOCK_INTRADAY_DATE_KEY]: today,
-      });
-      // 检查告警
-      void checkAndNotifyAlerts(final);
-      // 回撤告警（每日首次）
-      void evaluateDrawdownRules(final);
-      // 更新悬浮提示
-      void updateHoverTitleFromStorage();
-    } else {
-      await chrome.storage.local.set({
-        stockPositions: merged,
-        stockUpdatedAt: new Date().toISOString(),
-        [STOCK_INTRADAY_DATE_KEY]: intradayDate || today,
-      });
-      // 检查告警
-      void checkAndNotifyAlerts(merged);
-      // 回撤告警（每日首次）
-      void evaluateDrawdownRules(merged);
-      // 更新悬浮提示
-      void updateHoverTitleFromStorage();
-    }
-
-    // 全部成功则清除错误时间戳
-    if (quoteOk && intradayFailedCount === 0) {
+    if (quoteOk) {
       const state = await getApiErrorState();
       if (state.stockQuoteErrorAt !== 0 || state.stockIntradayErrorAt !== 0) {
         await saveApiErrorState({ stockQuoteErrorAt: 0, stockIntradayErrorAt: 0, fundErrorAt: state.fundErrorAt });

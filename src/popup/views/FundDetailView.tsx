@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
 import { type FundPosition, type FundHoldingConfig, getLastTradingDay, isEtfFundName } from '../../shared/fetch';
+import { fetchInstrumentKline } from '../../shared/chart-provider.ts';
 import { getFundHoldingAddButtonState } from './fund-holdings';
 import { Button } from '../components/ui';
 
@@ -290,19 +291,15 @@ async function fetchYieldDiagram(code: string): Promise<{ points: FundYieldPoint
       // 沪深 300 指数 K 线（用于基准收益率，使用 day 字段而非 qfqday）
       (async () => {
         try {
-          const resp = await fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz399300,day,,,800,qfq');
-          const json = await resp.json() as { data?: Record<string, { day?: string[][] }> };
-          const rows = json.data?.sz399300?.day ?? [];
-          return rows
-            .filter((r) => r.length >= 3)
-            .map((r) => {
-              const rawDate = String(r[0] ?? '');
-              const date = rawDate.length === 8
-                ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
-                : rawDate;
-              return { date, close: parseFloat(String(r[2])) };
-            })
-            .filter((r) => r.date && r.date.length >= 10 && Number.isFinite(r.close));
+          const result = await fetchInstrumentKline({
+            instrumentType: 'index',
+            code: 'sz399300',
+            period: 'day',
+            count: 800,
+          });
+          return result.data
+            .map((item) => ({ date: String(item.date), close: Number(item.close) }))
+            .filter((item) => item.date && item.date.length >= 10 && Number.isFinite(item.close));
         } catch { return []; }
       })(),
     ]);

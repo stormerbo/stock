@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, RefreshCw } from 'lucide-react';
 import { isTradingHours, fetchIndexKlineDetail, type StockDetailData, type StockPeriod } from '../stockDetail';
 import KlineChart from '../components/KlineChart';
+import { mapIndexMinutePoints, type IndexMinutePoint } from '../index-chart-adapter.ts';
 
 const UP_COLOR = '#e45555';
 const DN_COLOR = '#2aa568';
@@ -10,13 +11,6 @@ type Props = {
   code: string;
   fallbackLabel: string;
   onClose: () => void;
-};
-
-type IndexMinutePoint = {
-  time: string;
-  price: number;
-  cumulativeVolume: number;
-  volume: number;
 };
 
 type IndexMinuteDetail = {
@@ -86,53 +80,17 @@ function formatVolume(volume: number): string {
 }
 
 async function fetchIndexMinuteDetail(code: string, fallbackLabel: string): Promise<IndexMinuteDetail> {
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${code}`);
-  const json = await response.json() as {
-    data?: Record<string, {
-      data?: { data?: string[] };
-      qt?: Record<string, string[]>;
-    }>;
-  };
-
-  const payload = json.data?.[code];
-  const quote = payload?.qt?.[code];
-  if (!payload || !quote) {
-    throw new Error('指数分时数据缺失');
-  }
-
-  let previousCumulative = 0;
-  const points: IndexMinutePoint[] = (payload.data?.data ?? [])
-    .map((line) => {
-      const parts = String(line).split(' ');
-      if (parts.length < 3) return null;
-      const rawTime = parts[0];
-      const time = /^\d{4}$/.test(rawTime)
-        ? `${rawTime.slice(0, 2)}:${rawTime.slice(2, 4)}`
-        : rawTime;
-      const price = toNumber(parts[1]);
-      const cumulativeVolume = toNumber(parts[2]);
-      if (!Number.isFinite(price) || !Number.isFinite(cumulativeVolume)) return null;
-
-      const volume = Math.max(0, cumulativeVolume - previousCumulative);
-      previousCumulative = cumulativeVolume;
-
-      return {
-        time,
-        price,
-        cumulativeVolume,
-        volume,
-      };
-    })
-    .filter((item): item is IndexMinutePoint => item !== null);
+  const detail = await fetchIndexKlineDetail(code, fallbackLabel, 'minute');
+  const points = mapIndexMinutePoints(detail.kline);
 
   return {
-    code,
-    name: quote[1] || fallbackLabel || code,
-    price: toNumber(quote[3]),
-    change: toNumber(quote[31]),
-    changePct: toNumber(quote[32]),
-    prevClose: toNumber(quote[4]),
-    updatedAt: formatQuoteTime(quote[30] || ''),
+    code: detail.code,
+    name: detail.name || fallbackLabel || code,
+    price: detail.price,
+    change: detail.change,
+    changePct: detail.changePct,
+    prevClose: detail.prevClose,
+    updatedAt: detail.updatedAt,
     points,
   };
 }
