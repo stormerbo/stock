@@ -343,16 +343,24 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
 
 export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
   try {
-    const { fetchInstrumentIntraday, toIntradayMiniChart } = await import('./chart-provider.ts');
-    const result = await fetchInstrumentIntraday({
-      instrumentType: 'stock',
-      code,
-      period: 'minute',
-    });
-    return {
-      data: toIntradayMiniChart(result.data),
-      prevClose: Number.NaN,
-    };
+    const tencentCode = toTencentStockCode(normalizeStockCode(code));
+    const secid = toEastmoneySecidFromTencent(tencentCode);
+    if (!secid) throw new Error('invalid secid');
+    const text = await fetchTextViaExtension(
+      'https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=' + encodeURIComponent(secid) + '&fields1=f1,f2,f3,f4,f5,f6,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&ndays=1&lmt=240&_=' + Date.now(),
+    );
+    const json = JSON.parse(text) as { data?: { trends?: string[] } };
+    const trends = json.data?.trends ?? [];
+    const data: Array<{ time: string; price: number }> = [];
+    for (const line of trends) {
+      const parts = String(line).split(',');
+      if (parts.length < 6) continue;
+      const time = String(parts[0]).slice(-5);
+      const price = toNumber(parts[2]);
+      if (!/^\d{2}:\d{2}$/.test(time) || !Number.isFinite(price)) continue;
+      data.push({ time, price });
+    }
+    return { data, prevClose: Number.NaN };
   } catch (err) {
     console.warn('[fetchStockIntraday] failed:', code, err);
     return { data: [], prevClose: Number.NaN };

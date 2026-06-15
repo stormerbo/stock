@@ -312,6 +312,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
+  const [focusStockCode, setFocusStockCode] = useState<string | null>(null);
   const [fundPositions, setFundPositions] = useState<FundPosition[]>([]);
   const [goldQuotes, setGoldQuotes] = useState<GoldQuote[]>([]);
   const [marketIndexes, setMarketIndexes] = useState<MarketIndexQuote[]>(() => (
@@ -1855,6 +1856,30 @@ export default function App() {
     setGoldDetailTarget(null);
   };
 
+  // 通知点击 → 定位到股票
+  useEffect(() => {
+    const loadFocus = async () => {
+      if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
+      const r = await chrome.storage.local.get('_focusStockCode');
+      const code = r._focusStockCode as string | undefined;
+      if (!code) return;
+      chrome.storage.local.remove('_focusStockCode');
+      setActiveTab('stocks');
+      setFocusStockCode(code);
+    };
+    void loadFocus();
+  }, []);
+
+  useEffect(() => {
+    if (!focusStockCode) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector('[data-code="' + focusStockCode + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setFocusStockCode(null);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focusStockCode]);
+
   // 开始内联编辑
   const startEditing = (kind: 'stock' | 'fund', code: string, field: 'cost' | 'shares' | 'units') => {
     const holding = kind === 'stock'
@@ -2252,6 +2277,7 @@ export default function App() {
                 setTechReportDetail={setTechReportDetail}
                 setTechReportStatus={setTechReportStatus}
                 setActiveTab={setActiveTab}
+                onFocusStock={(code) => setFocusStockCode(code)}
                 scrollPosRef={scrollPosRef}
                 renderNotificationMessage={renderNotificationMessage}
               />

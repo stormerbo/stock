@@ -151,6 +151,7 @@ export default function StockTable({
 
             return (
               <tr
+                data-code={item.code}
                 className={[
                   editingCell?.code === item.code ? 'editing-row' : '',
                   draggingCode === item.code ? 'dragging-row' : '',

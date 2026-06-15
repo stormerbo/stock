@@ -1,5 +1,6 @@
 import {
   fetchBatchStockQuotes,
+  fetchGoldQuotes,
   fetchStockIntraday,
  fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
@@ -59,6 +60,7 @@ import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleP
 import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
 import { calcAllTradeSignals, saveTradeSignalsCache, shouldRecalcTradeSignals } from '../shared/trade-signal';
 import { getNextShanghaiScheduledTime } from '../shared/shanghai-time';
+import { getStockLimitPct } from '../shared/stock-limit';
 import {
   ASSESSMENT_REPORT_NOTIFICATION_NAME,
   buildAssessmentReportSnapshot,
@@ -481,6 +483,11 @@ chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId === 'update_available') {
     chrome.tabs.create({ url: 'https://github.com/' + GITHUB_REPO + '/releases/latest' });
   }
+  if (notifId.startsWith('limit_')) {
+    const code = notifId.split('_')[1];
+    chrome.storage.local.set({ _focusStockCode: code });
+    try { (chrome.action as any).openPopup(); } catch { /* older Chrome */ }
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -499,6 +506,7 @@ function startRefreshLoop() {
     void refreshStocks();
     void refreshFunds();
     void refreshIndexes();
+    void refreshGolds();
     void migratePortfolioToSync();
   });
   void loadTechReportConfig().then((config) => {
@@ -583,6 +591,7 @@ async function refreshStocks(force = false) {
     });
     void checkAndNotifyAlerts(positions);
     void evaluateDrawdownRules(positions);
+    void checkAndNotifyLimits(positions);
     void updateHoverTitleFromStorage();
 
     if (quoteOk) {
@@ -1126,6 +1135,67 @@ async function evaluateDrawdownRules(positions: StockPosition[]) {
 // 盘后技术指标报告 — 每日 15:30 计算多指标信号
 // -----------------------------------------------------------
 
+/** 检测涨跌停并触发通知（每天每只股票最多一次） */
+async function checkAndNotifyLimits(positions: StockPosition[]) {
+  try {
+    const [workModeResult, notifResult] = await Promise.all([
+      chrome.storage.sync.get([WORK_MODE_KEY]),
+      chrome.storage.local.get([NOTIFICATION_HISTORY_KEY]),
+    ]);
+    const workModeConfig = (workModeResult[WORK_MODE_KEY] as WorkModeConfig | undefined) || DEFAULT_WORK_MODE;
+    const inWorkMode = isWorkModeHours(workModeConfig);
+
+    const r = await chrome.storage.local.get('_limitNotified');
+    const notified: Record<string, string> = (r._limitNotified as Record<string, string>) || {};
+    const today = new Date().toLocaleDateString('en-CA');
+    const now = Date.now();
+    const newRecords: NotificationRecord[] = [];
+
+    for (const p of positions) {
+      if (!Number.isFinite(p.price) || !Number.isFinite(p.dailyChangePct) || !Number.isFinite(p.prevClose)) continue;
+      if (Math.abs(p.dailyChangePct) < 0.01) continue;
+
+      const limitPct = getStockLimitPct(p.code, p.name);
+      if (p.dailyChangePct >= limitPct || p.dailyChangePct <= -limitPct) {
+        if (notified[p.code] === today) continue;
+        notified[p.code] = today;
+
+        const isUp = p.dailyChangePct >= 0;
+        newRecords.push({
+          id: 'limit_' + p.code + '_' + now + '_' + Math.random().toString(36).slice(2, 8),
+          code: p.code,
+          name: p.name,
+          message: isUp ? '涨停！当前价 ' + p.price.toFixed(2) : '跌停！当前价 ' + p.price.toFixed(2),
+          ruleType: isUp ? 'price_up' : 'price_down',
+          price: p.price,
+          changePct: p.dailyChangePct,
+          firedAt: now,
+          read: false,
+        });
+
+        if (!inWorkMode) {
+          const direction = isUp ? '涨停' : '跌停';
+          chrome.notifications.create('limit_notif_' + p.code + '_' + now, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('public/icon48.png'),
+            title: '🔔 ' + p.name + '(' + p.code + ') ' + direction + '提醒',
+            message: p.name + ' ' + direction + '！当前价 ' + p.price.toFixed(2),
+            priority: 2,
+          });
+        }
+      }
+    }
+
+    if (newRecords.length > 0) {
+      const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
+      const updatedHistory = pruneNotificationHistory([...existingNotifHistory, ...newRecords], NOTIFICATION_KEEP_HOURS);
+      await chrome.storage.local.set({ [NOTIFICATION_HISTORY_KEY]: updatedHistory, _limitNotified: notified });
+    }
+  } catch (e) {
+    console.warn('[LimitCheck] failed:', e);
+  }
+}
+
 async function generateDailyTechnicalReport() {
   const config = await loadTechReportConfig();
   if (!config.enabled) return;
@@ -1388,13 +1458,6 @@ async function recalcSnapshotRange(startDate: string) {
 }
 
 async function refreshFunds() {
-  // 如果基金页面被关闭，不拉取行情
-  try {
-    const r = await chrome.storage.sync.get('sidebarConfig');
-    const cfg = r.sidebarConfig as { fundEnabled?: boolean } | undefined;
-    if (cfg && !cfg.fundEnabled) return;
-  } catch { /* ignore */ }
-
   // 非交易时段降低刷新频率（最低 10 分钟）
   if (!isTradingHours()) {
     const r = await chrome.storage.local.get('_lastFundRefreshTime');
@@ -1416,9 +1479,25 @@ async function refreshFunds() {
     }
     if (funds.length === 0) return;
 
-    const positions = await Promise.all(
+    const settledResults = await Promise.allSettled(
       funds.map((h) => fetchTiantianFundPosition(h))
     );
+    const positions: FundPosition[] = [];
+    let failCount = 0;
+    for (const r of settledResults) {
+      if (r.status === 'fulfilled') {
+        positions.push(r.value);
+      } else {
+        failCount++;
+      }
+    }
+    if (failCount > 0) {
+      console.warn('[FundRefresh]', failCount, 'fund(s) failed');
+    }
+    if (positions.length === 0) {
+      void notifyApiError('基金净值', 'fundErrorAt');
+      return;
+    }
     const fundOk = positions.length > 0 && positions.some((p) => Number.isFinite(p.estimatedNav));
     if (!fundOk) {
       void notifyApiError('基金净值', 'fundErrorAt');
@@ -1482,6 +1561,16 @@ async function refreshIndexes() {
   }
 }
 
+async function refreshGolds() {
+  try {
+    const quotes = await fetchGoldQuotes();
+    if (quotes.length === 0) return;
+    await chrome.storage.local.set({ goldQuotes: quotes, goldUpdatedAt: new Date().toISOString() });
+  } catch (e) {
+    console.warn('[Portfolio Pulse] gold refresh failed:', e);
+  }
+}
+
 // -----------------------------------------------------------
 // 风格画像 + 止盈止损计算（refreshStocks 完成后异步触发）
 // -----------------------------------------------------------
@@ -1539,7 +1628,7 @@ async function triggerStyleAndStopCalc() {
             // skip
           }
         },
-        4,
+        2,
       );
     }
  

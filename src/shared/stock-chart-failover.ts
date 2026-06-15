@@ -110,12 +110,13 @@ export function createStockChartFailover(
   };
 }
 
- const defaultFailover = createStockChartFailover(undefined, { enableTencentFallback: true });
+ const intradayFailover = createStockChartFailover(undefined, { enableTencentFallback: true });
+ const klineFailover = createStockChartFailover(undefined, { enableTencentFallback: true, failureThreshold: 10 });
 
 export function fetchStockIntradayWithFallback(tencentCode: string, period: StockChartIntradayPeriod) {
-  return defaultFailover.fetchIntraday(tencentCode, period);
+  return intradayFailover.fetchIntraday(tencentCode, period);
 }
 
 export function fetchStockKlineWithFallback(tencentCode: string, period: StockChartKlinePeriod, count = 240) {
-  return defaultFailover.fetchKline(tencentCode, period, count);
+  return klineFailover.fetchKline(tencentCode, period, count);
 }

@@ -25,6 +25,7 @@ type Props = {
   setTechReportDetail: (d: TechReportDetail) => void;
   setTechReportStatus: (s: TechReportStatus) => void;
   setActiveTab: (tab: PageTab) => void;
+  onFocusStock: (code: string) => void;
   scrollPosRef: React.MutableRefObject<number>;
   renderNotificationMessage: (msg: string) => React.ReactNode;
 };
@@ -34,6 +35,7 @@ export default function NotificationPanel({
   techReportStatus, techReportDetail, signalStocks, unreadCount,
   markAllRead, markNotificationRead, clearNotifications, deleteNotification,
   setTechReportDetail, setTechReportStatus, setActiveTab, scrollPosRef,
+  onFocusStock,
   renderNotificationMessage,
 }: Props) {
   return (
@@ -207,6 +209,7 @@ export default function NotificationPanel({
                           const el = document.querySelector('.content-scroll');
                           if (el) scrollPosRef.current = el.scrollTop;
                           setActiveTab('stocks');
+                          onFocusStock(item.code);
                         }
                       } : undefined}
                     >

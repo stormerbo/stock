@@ -65,9 +65,9 @@ function toChartDetail(quote: GoldQuote, period: GoldDetailPeriod, kline: GoldDe
   return {
     code: quote.symbol || quote.code,
     name: quote.label,
-    price: quote.price,
-    change: quote.change,
-    changePct: quote.changePct,
+    price: kline.length > 0 ? kline[kline.length - 1].close : quote.price,
+    change: Number.isFinite(prevClose) ? kline.length > 0 ? kline[kline.length - 1].close - prevClose : quote.price - prevClose : quote.change,
+    changePct: Number.isFinite(prevClose) && prevClose > 0 ? ((kline.length > 0 ? kline[kline.length - 1].close : quote.price) - prevClose) / prevClose * 100 : quote.changePct,
     open: kline[0]?.open ?? prevClose,
     prevClose,
     high: kline.reduce((max, item) => Number.isFinite(item.high) ? Math.max(max, item.high) : max, Number.isFinite(kline[0]?.high) ? kline[0].high : prevClose),
@@ -163,11 +163,11 @@ export default function GoldDetailView({ quote, onBack }: Props) {
               <span className="quote-code">{quote.symbol || quote.code}</span>
             </div>
             <div className="quote-price-block">
-              <div className={`quote-price ${toneClass(quote.changePct)}`}>
-                {formatNumber(quote.price, 2)}
+              <div className={`quote-price ${toneClass(detail.changePct)}`}>
+                {formatNumber(detail.price, 2)}
               </div>
-              <div className={`quote-change ${toneClass(quote.changePct)}`}>
-                {formatPercent(quote.changePct)}
+              <div className={`quote-change ${toneClass(detail.changePct)}`}>
+                {formatPercent(detail.changePct)}
               </div>
             </div>
           </div>
