@@ -60,7 +60,7 @@ import { calcStyleProfile, saveStyleProfileCache, shouldRecalcStyle, type StyleP
 import { calcStopSuggest, saveStopSuggestionsCache, shouldRecalcStop } from '../shared/stop-suggest';
 import { calcAllTradeSignals, saveTradeSignalsCache, shouldRecalcTradeSignals } from '../shared/trade-signal';
 import { getNextShanghaiScheduledTime } from '../shared/shanghai-time';
-import { getStockLimitPct } from '../shared/stock-limit';
+import { getStockLimitPct, isAtPriceLimit } from '../shared/stock-limit.ts';
 import {
   ASSESSMENT_REPORT_NOTIFICATION_NAME,
   buildAssessmentReportSnapshot,
@@ -561,6 +561,8 @@ async function notifyApiError(label: string, errorAtKey: 'stockQuoteErrorAt' | '
   });
 }
 
+let lastIntradayRefreshTime = 0;
+
 async function refreshStocks(force = false) {
   if (!force && !isTradingHours()) return;
   if (refreshStocksInFlight) return;
@@ -568,12 +570,22 @@ async function refreshStocks(force = false) {
   try {
     let stocks: StockHoldingConfig[] = [];
     {
-      const result = await chrome.storage.sync.get('stockHoldings');
-      stocks = (Array.isArray(result.stockHoldings) ? result.stockHoldings : []) as StockHoldingConfig[];
-      if (stocks.length === 0) {
-        const local = await chrome.storage.local.get('stockHoldings');
-        stocks = (Array.isArray(local.stockHoldings) ? local.stockHoldings : []) as StockHoldingConfig[];
+      const [syncResult, localResult] = await Promise.all([
+        chrome.storage.sync.get('stockHoldings'),
+        chrome.storage.local.get('stockHoldings'),
+      ]);
+      const syncHoldings = (Array.isArray(syncResult.stockHoldings) ? syncResult.stockHoldings : []) as StockHoldingConfig[];
+      const localHoldings = (Array.isArray(localResult.stockHoldings) ? localResult.stockHoldings : []) as StockHoldingConfig[];
+      // 合并 sync 和 local，以 code 去重（优先用 local 的 shares/cost，local 数据更新）
+      const seen = new Set<string>();
+      const merged: StockHoldingConfig[] = [];
+      for (const h of [...localHoldings, ...syncHoldings]) {
+        if (!seen.has(h.code)) {
+          seen.add(h.code);
+          merged.push(h);
+        }
       }
+      stocks = merged;
     }
     if (stocks.length === 0) return;
 
@@ -602,7 +614,9 @@ async function refreshStocks(force = false) {
     }
 
     // 交易时段后台刷新分时数据，写入独立 key（popup 从这读）
-    if (isTradingHours()) {
+    // 分时数据变化慢，60s 一次足够，避免频繁请求 push2his API
+    if (isTradingHours() && Date.now() - lastIntradayRefreshTime >= 60_000) {
+      lastIntradayRefreshTime = Date.now();
       const allCodes = stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean);
       if (allCodes.length > 0) {
         const intradayResults = await pMap(
@@ -1150,14 +1164,21 @@ async function checkAndNotifyLimits(positions: StockPosition[]) {
     const today = new Date().toLocaleDateString('en-CA');
     const now = Date.now();
     const newRecords: NotificationRecord[] = [];
+    const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
 
     for (const p of positions) {
       if (!Number.isFinite(p.price) || !Number.isFinite(p.dailyChangePct) || !Number.isFinite(p.prevClose)) continue;
       if (Math.abs(p.dailyChangePct) < 0.01) continue;
 
       const limitPct = getStockLimitPct(p.code, p.name);
-      if (p.dailyChangePct >= limitPct || p.dailyChangePct <= -limitPct) {
-        if (notified[p.code] === today) continue;
+      const hasValidLimitRecordToday = existingNotifHistory.some((record) => {
+        if (record.code !== p.code || (record.ruleType !== 'price_up' && record.ruleType !== 'price_down')) return false;
+        const recordDay = new Date(record.firedAt).toLocaleDateString('en-CA');
+        return recordDay === today && isAtPriceLimit(p.code, p.name, record.changePct);
+      });
+
+      if (isAtPriceLimit(p.code, p.name, p.dailyChangePct)) {
+        if ((notified[p.code] === today && hasValidLimitRecordToday) || hasValidLimitRecordToday) continue;
         notified[p.code] = today;
 
         const isUp = p.dailyChangePct >= 0;
@@ -1187,7 +1208,6 @@ async function checkAndNotifyLimits(positions: StockPosition[]) {
     }
 
     if (newRecords.length > 0) {
-      const existingNotifHistory = (notifResult[NOTIFICATION_HISTORY_KEY] as NotificationRecord[]) || [];
       const updatedHistory = pruneNotificationHistory([...existingNotifHistory, ...newRecords], NOTIFICATION_KEEP_HOURS);
       await chrome.storage.local.set({ [NOTIFICATION_HISTORY_KEY]: updatedHistory, _limitNotified: notified });
     }
@@ -1470,12 +1490,22 @@ async function refreshFunds() {
   try {
     let funds: FundHoldingConfig[] = [];
     {
-      const result = await chrome.storage.sync.get('fundHoldings');
-      funds = (Array.isArray(result.fundHoldings) ? result.fundHoldings : []) as FundHoldingConfig[];
-      if (funds.length === 0) {
-        const local = await chrome.storage.local.get('fundHoldings');
-        funds = (Array.isArray(local.fundHoldings) ? local.fundHoldings : []) as FundHoldingConfig[];
+      const [syncResult, localResult] = await Promise.all([
+        chrome.storage.sync.get('fundHoldings'),
+        chrome.storage.local.get('fundHoldings'),
+      ]);
+      const syncHoldings = (Array.isArray(syncResult.fundHoldings) ? syncResult.fundHoldings : []) as FundHoldingConfig[];
+      const localHoldings = (Array.isArray(localResult.fundHoldings) ? localResult.fundHoldings : []) as FundHoldingConfig[];
+      // 合并 sync 和 local，以 code 去重（优先用 local 的 units/cost，local 数据更新）
+      const seen = new Set<string>();
+      const merged: FundHoldingConfig[] = [];
+      for (const h of [...localHoldings, ...syncHoldings]) {
+        if (!seen.has(h.code)) {
+          seen.add(h.code);
+          merged.push(h);
+        }
       }
+      funds = merged;
     }
     if (funds.length === 0) return;
 
@@ -1982,7 +2012,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     startRefreshLoop();
   }
   // holdings 变化 → 立即刷新 + 记录持仓变更历史
-  if (area === 'sync') {
+  if (area === 'sync' || area === 'local') {
     if (changes.stockHoldings) {
       void refreshStocks();
       const oldVal = (changes.stockHoldings.oldValue ?? []) as StockHoldingConfig[];

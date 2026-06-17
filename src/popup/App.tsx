@@ -1181,10 +1181,10 @@ export default function App() {
           }
         }
 
-        // 始终拉取最新分时数据（缓存用于首次秒出，后台刷新保证数据最新）
-        if (!cancelled && normalizedHoldings.length > 0) {
+        // 只拉取缓存中没有的分时数据（background 每 15s 刷新写入 stockIntradayData，popup 监听变化更新）
+        if (!cancelled && intradayMissingCodes.length > 0) {
           const intradayResults = await pMap(
-            normalizedHoldings,
+            intradayMissingCodes,
             async (code) => {
               try {
                 const result = await fetchStockIntraday(code);
@@ -1245,52 +1245,6 @@ export default function App() {
     void init();
     return () => { cancelled = true; };
   }, [portfolioReady, stockHoldings, refreshSig]);
-
-  // 交易时段内定时刷新分时数据，确保分时图实时更新
-  useEffect(() => {
-    if (!portfolioReady || stockPositions.length === 0) return;
-
-    const refreshIntraday = async () => {
-      if (!isTradingHours()) return;
-      const codes = stockPositions.map((p) => p.code);
-      if (codes.length === 0) return;
-
-      const { fetchStockIntraday, pMap } = await import('../shared/fetch');
-      const results = await pMap(
-        codes,
-        async (code) => {
-          try {
-            const result = await fetchStockIntraday(code);
-            return { code, data: result.data, prevClose: result.prevClose };
-          } catch {
-            return null;
-          }
-        },
-        3,
-      );
-
-      if (!results) return;
-      const valid = results.filter((r): r is NonNullable<typeof r> => r !== null && r.data.length > 0);
-      if (valid.length === 0) return;
-
-      setStockPositions((prev) =>
-        prev.map((p) => {
-          const found = valid.find((r) => r.code === p.code);
-          return found ? { ...p, intraday: { data: found.data, prevClose: found.prevClose } } : p;
-        }),
-      );
-      // 合并写入缓存
-      const existing = await chrome.storage.local.get('stockIntradayData');
-      const merged: Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> = { ...(existing.stockIntradayData as Record<string, { data: Array<{ time: string; price: number }>; prevClose: number }> || {}) };
-      for (const r of valid) {
-        merged[r.code] = { data: r.data, prevClose: r.prevClose };
-      }
-      await chrome.storage.local.set({ stockIntradayData: merged });
-    };
-
-    const timer = setInterval(refreshIntraday, 60_000);
-    return () => clearInterval(timer);
-  }, [portfolioReady, stockPositions]);
 
   useEffect(() => {
     if (!portfolioReady) return;

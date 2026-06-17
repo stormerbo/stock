@@ -1,4 +1,4 @@
-import { normalizeStockCode } from './fetch';
+import { normalizeStockCode } from './fetch.ts';
 
 function hasSTInName(name?: string): boolean {
   if (!name) return false;
@@ -31,4 +31,10 @@ export function getStockLimitPct(code: string, name?: string): number {
   if (isChiNextOrStar(plain)) return 0.2;
   if (isNorthBoard(plain)) return 0.3;
   return 0.1;
+}
+
+export function isAtPriceLimit(code: string, name: string | undefined, dailyChangePct: number): boolean {
+  if (!Number.isFinite(dailyChangePct)) return false;
+  const limitPct = getStockLimitPct(code, name) * 100;
+  return dailyChangePct >= limitPct || dailyChangePct <= -limitPct;
 }
