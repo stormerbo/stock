@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
-import { type FundPosition, type FundHoldingConfig, getLastTradingDay, isEtfFundName } from '../../shared/fetch';
+import { type FundPosition, type FundHoldingConfig, getLastTradingDay, isEtfFundName, isTradingHours } from '../../shared/fetch';
 import { fetchInstrumentKline } from '../../shared/chart-provider.ts';
 import { getFundHoldingAddButtonState } from './fund-holdings';
 import { Button } from '../components/ui';
@@ -954,8 +954,15 @@ export default function FundDetailView({ code, fundPosition, fundHolding, onBack
     };
 
     void load();
+    // 交易时段只刷新估值（fundgz），其余数据（净值历史、基本信息等）一天不变
     const timer = window.setInterval(() => {
-      void load();
+      if (!isTradingHours()) return;
+      fetchGzEstimate(code).then((estimate) => {
+        setDetail((prev) => {
+          if (!prev) return prev;
+          return { ...prev, estimatedNav: estimate.estimatedNav, estimatedChange: estimate.estimatedChange, estimatedChangePct: estimate.estimatedChangePct, prevDayNav: estimate.prevDayNav };
+        });
+      }).catch(() => { /* 估值刷新失败不影响已有数据显示 */ });
     }, 30_000);
 
     return () => {

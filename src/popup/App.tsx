@@ -51,6 +51,8 @@ import { formatNumber, formatLooseNumber, formatMarketAmount, formatPercent, for
 import { applyPinnedOrder, insertAfterPinned, prioritizePinnedRows, reorderCodes, sortStockRows, sortFundRows } from './utils/sorting';
 import { adjustMenuRectToViewport, clampMenuPosition } from './utils/menu-position';
 import { STORAGE_KEYS, EMPTY_PORTFOLIO, parseStockHoldings, parseFundHoldings, loadPortfolioConfig, savePortfolioConfig } from './utils/portfolio-io';
+import { buildStockPositionMap, getStockPositionByHoldingCode } from './utils/stock-position-match.ts';
+import { getStockQuoteRefreshCandidates } from './utils/stock-quote-refresh.ts';
 import { fetchTencentStockSuggestions, fetchFundSuggestions } from './utils/search-suggestions';
 import FloatingRefreshBtn from './components/FloatingRefreshBtn';
 import DetailErrorBoundary from './components/DetailErrorBoundary';
@@ -70,7 +72,7 @@ import {
 } from '../shared/stock-intraday-cache';
 
 const BADGE_STORAGE_KEY = 'badgeConfig';
-const MARKET_STATS_CACHE_KEY = 'marketStats';
+const MARKET_STATS_CACHE_KEY = 'marketStatsCache';
 const MARKET_STATS_UPDATED_AT_KEY = 'marketStatsUpdatedAt';
 const MARKET_STATS_HISTORY_KEY = 'marketStatsHistory';
 
@@ -154,6 +156,7 @@ export default function App() {
   // ---- Market Stats (trading hours only) ----
   const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
   const marketStatsHistoryRef = useRef<Record<string, number>>({});
+  const searchThrottleRef = useRef<number>(0);
 
   // ---- Notification Panel ----
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
@@ -569,11 +572,11 @@ export default function App() {
   const stockPinnedCodes = stockHoldings.filter((item) => item.pinned).map((item) => item.code);
   const fundPinnedCodes = fundHoldings.filter((item) => item.pinned).map((item) => item.code);
   const stockRows = useMemo<StockRow[]>(() => {
-    const positionMap = new Map(stockPositions.map((item) => [item.code, item]));
+    const positionMap = buildStockPositionMap(stockPositions);
     const today = getShanghaiToday();
     const rows: StockRow[] = [];
     for (const holding of stockHoldings) {
-      const row = positionMap.get(holding.code);
+      const row = getStockPositionByHoldingCode(positionMap, holding.code);
       if (!row) continue;
       const next: StockRow = {
         ...row,
@@ -952,25 +955,6 @@ export default function App() {
       }
     })();
 
-    const fetchOnce = async () => {
-      const stats = await fetchMarketStats();
-      if (!cancelled && stats) {
-        const today = getShanghaiToday();
-        const history = marketStatsHistoryRef.current;
-        const displayStats = deriveMarketStats(stats, history, today);
-        history[today] = stats.turnover;
-        marketStatsHistoryRef.current = history;
-        setMarketStats(displayStats);
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-          void chrome.storage.local.set({
-            [cacheKey]: stats,
-            [historyKey]: history,
-            [updatedAtKey]: new Date().toISOString(),
-          });
-        }
-      }
-    };
-
     // 首次加载：始终尝试获取一次，避免缓存缺失时直接空白
     const initialFetch = async () => {
       const stats = await fetchMarketStats();
@@ -992,25 +976,8 @@ export default function App() {
     };
     void initialFetch();
 
-    // 读取刷新间隔配置
-    let refreshSeconds = 30;
-    if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-      chrome.storage.sync.get('refreshConfig', (result: Record<string, unknown>) => {
-        const config = result['refreshConfig'] as { marketStatsRefreshSeconds?: number } | undefined;
-        if (config?.marketStatsRefreshSeconds) {
-          refreshSeconds = config.marketStatsRefreshSeconds;
-        }
-      });
-    }
-
-    // 定时刷新
-    const timer = setInterval(() => {
-      void fetchOnce();
-    }, refreshSeconds * 1000);
-
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
   }, []);
 
@@ -1074,6 +1041,19 @@ export default function App() {
           const found = cached.find((c) => c.code === item.code);
           return found || { code: item.code, label: item.label, price: Number.NaN, change: Number.NaN, changePct: Number.NaN };
         }));
+      }
+      // 市场统计由 background 定时刷新，popup 只读缓存
+      if (changes[MARKET_STATS_CACHE_KEY]?.newValue) {
+        const stats = changes[MARKET_STATS_CACHE_KEY].newValue as MarketStats | undefined;
+        if (stats && Number.isFinite(stats.turnover)) {
+          const today = getShanghaiToday();
+          const history = marketStatsHistoryRef.current;
+          const displayStats = deriveMarketStats(stats, history, today);
+          history[today] = stats.turnover;
+          marketStatsHistoryRef.current = history;
+          setMarketStats(displayStats);
+          void chrome.storage.local.set({ [MARKET_STATS_HISTORY_KEY]: history });
+        }
       }
     };
     if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
@@ -1151,8 +1131,15 @@ export default function App() {
           .filter(Boolean);
 
         // 基于 storage 数据检查缺口
-        const positionCodes = new Set(cached.map((p) => p.code));
-        const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(h.code));
+        const positionCodes = new Set(cached.map((p) => normalizeStockCode(p.code) || p.code));
+        const missingHoldings = stockHoldings.filter((h) => !positionCodes.has(normalizeStockCode(h.code) || h.code));
+        const invalidQuoteHoldings = getStockQuoteRefreshCandidates(stockHoldings, cached);
+        const quoteRefreshMap = new Map<string, StockHoldingConfig>();
+        for (const holding of [...missingHoldings, ...invalidQuoteHoldings]) {
+          const key = normalizeStockCode(holding.code) || holding.code;
+          quoteRefreshMap.set(key, holding);
+        }
+        const quoteRefreshHoldings = [...quoteRefreshMap.values()];
         const intradayMissingCodes = normalizedHoldings.filter((code) => {
           const position = cached.find((row) => row.code === code);
           if (!position) return true;
@@ -1165,18 +1152,17 @@ export default function App() {
 
         const { fetchBatchStockQuotes, fetchStockIntraday, pMap } = await import('../shared/fetch');
 
-        if (!cancelled && missingHoldings.length > 0) {
-          const newRows = await fetchBatchStockQuotes(missingHoldings);
+        if (!cancelled && quoteRefreshHoldings.length > 0) {
+          const newRows = await fetchBatchStockQuotes(quoteRefreshHoldings);
           if (!cancelled) {
             setStockPositions((prev) => {
-              const existingCodes = new Set(prev.map((p) => p.code));
-              const appended = [...prev];
+              const nextMap = new Map(prev.map((p) => [normalizeStockCode(p.code) || p.code, p]));
               for (const row of newRows) {
-                if (!existingCodes.has(row.code)) {
-                  appended.push(row);
-                }
+                nextMap.set(normalizeStockCode(row.code) || row.code, row);
               }
-              return appended;
+              return stockHoldings
+                .map((holding) => nextMap.get(normalizeStockCode(holding.code) || holding.code))
+                .filter((item): item is StockPosition => Boolean(item));
             });
           }
         }
@@ -1263,8 +1249,8 @@ export default function App() {
     const loadFunds = async () => {
       setFundsLoading(true);
       try {
-        const { fetchTiantianFundPosition } = await import('../shared/fetch');
-        const rows = await Promise.all(fundHoldings.map((holding) => fetchTiantianFundPosition(holding)));
+        const { fetchTiantianFundPosition, pMap } = await import('../shared/fetch');
+        const rows = await pMap(fundHoldings, (holding) => fetchTiantianFundPosition(holding), 4);
         if (!cancelled) {
           setFundPositions(rows);
           setFundsError('');
@@ -1313,6 +1299,10 @@ export default function App() {
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
+      // 最小请求间隔 500ms，防止快速连续输入时堆积
+      const now = Date.now();
+      if (now - (searchThrottleRef.current || 0) < 500) return;
+      searchThrottleRef.current = now;
       try {
         const result = activeTab === 'funds'
           ? await fetchFundSuggestions(query)
@@ -1438,8 +1428,8 @@ export default function App() {
           },
           refreshFundsDirect: async () => {
             if (fundHoldings.length === 0) return;
-            const { fetchTiantianFundPosition } = await import('../shared/fetch');
-            const rows = await Promise.all(fundHoldings.map((h) => fetchTiantianFundPosition(h)));
+            const { fetchTiantianFundPosition, pMap } = await import('../shared/fetch');
+            const rows = await pMap(fundHoldings, (h) => fetchTiantianFundPosition(h), 4);
             setFundPositions(rows);
           },
           afterRefresh: () => {

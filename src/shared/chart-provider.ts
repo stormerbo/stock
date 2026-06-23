@@ -74,6 +74,7 @@ function buildDetail(
     price: meta.price,
     change: meta.change,
     changePct: meta.changePct,
+    suspended: meta.suspended,
     open: meta.open,
     prevClose: meta.prevClose,
     high: meta.high,

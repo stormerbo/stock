@@ -1521,6 +1521,13 @@ body {
   background: color-mix(in srgb, var(--text-2) 50%, transparent) !important;
 }
 
+.stock-badge.suspended {
+  background: color-mix(in srgb, var(--text-1) 18%, var(--bg-1) 82%);
+  color: var(--text-0);
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  box-sizing: border-box;
+}
+
 .signal-tooltip-fixed {
   position: fixed;
   transform: translateY(-100%);
@@ -1925,6 +1932,13 @@ body {
   font-size: 18px;
   font-weight: 700;
   margin-right: 8px;
+}
+
+.quote-title-left {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .quote-code {

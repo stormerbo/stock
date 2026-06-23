@@ -10,6 +10,7 @@ import {
   type GoldInstrumentId,
   type GoldMarket,
 } from './gold-config.ts';
+import { parseTencentQuoteMetaPayload } from './stock-chart-sources.ts';
 
 export type StockHoldingConfig = {
   code: string;
@@ -49,6 +50,7 @@ export type StockPosition = {
   floatingPnl: number;
   dailyPnl: number;
   dailyChangePct: number;
+  suspended?: boolean;
   intraday?: { data: Array<{ time: string; price: number }>; prevClose: number };
   updatedAt: string;
 };
@@ -119,6 +121,33 @@ export type GoldDetailKlinePoint = {
   low: number;
   volume: number;
 };
+
+function hasUsableStockPrice(position: StockPosition | undefined): boolean {
+  return Boolean(position && Number.isFinite(position.price) && position.price > 0);
+}
+
+function shouldPreferFallbackStockQuote(primary: StockPosition, fallback: StockPosition | undefined): boolean {
+  if (!fallback) return false;
+  if (!hasUsableStockPrice(primary)) return true;
+  return Boolean(!primary.suspended && fallback.suspended);
+}
+
+export function mergeStockQuoteSources(primary: StockPosition[], fallback: StockPosition[]): StockPosition[] {
+  const fallbackMap = new Map(fallback.map((item) => [item.code, item]));
+  return primary.map((item) => {
+    const fallbackItem = fallbackMap.get(item.code);
+    if (!shouldPreferFallbackStockQuote(item, fallbackItem)) return item;
+    return fallbackItem ?? item;
+  });
+}
+
+function shouldFetchTencentQuoteSupplement(position: StockPosition): boolean {
+  if (!hasUsableStockPrice(position)) return true;
+  return Number.isFinite(position.prevClose)
+    && position.prevClose > 0
+    && position.price === position.prevClose
+    && position.dailyChangePct === 0;
+}
 
 export const MARKET_INDEXES: Array<{ code: string; label: string }> = [
   { code: 'sh000001', label: '上证指数' },
@@ -337,8 +366,15 @@ export async function fetchBatchStockQuotes(holdings: StockHoldingConfig[]): Pro
   if (valid.length === 0) return [];
 
   const eastmoneyRows = await fetchBatchStockQuotesFromEastmoney(valid);
-  if (eastmoneyRows.length > 0) return eastmoneyRows;
-  return fetchBatchStockQuotesFromTencent(valid);
+  if (eastmoneyRows.length === 0) return fetchBatchStockQuotesFromTencent(valid);
+
+  const supplementCandidates = eastmoneyRows.filter(shouldFetchTencentQuoteSupplement);
+  if (supplementCandidates.length === 0) return eastmoneyRows;
+
+  const fallbackRows = await fetchBatchStockQuotesFromTencent(
+    valid.filter((holding) => supplementCandidates.some((item) => item.code === holding.code)),
+  );
+  return mergeStockQuoteSources(eastmoneyRows, fallbackRows);
 }
 
 export async function fetchStockIntraday(code: string): Promise<{ data: Array<{ time: string; price: number }>; prevClose: number }> {
@@ -822,6 +858,7 @@ async function fetchBatchStockQuotesFromEastmoney(holdings: Array<StockHoldingCo
        floatingPnl,
        dailyPnl,
        dailyChangePct: changePct,
+       suspended: false,
        updatedAt: formatEastmoneyTime(row?.f124),
      };
    });
@@ -840,14 +877,32 @@ async function fetchBatchStockQuotesFromTencent(holdings: Array<StockHoldingConf
   return holdings.map((holding) => {
     const tencentCode = toTencentStockCode(holding.code);
     const matched = text.match(new RegExp(`v_${tencentCode}=\"([^\"]*)\"`));
-    const parts = matched?.[1]?.split('~') ?? [];
+    const meta = matched?.[1]
+      ? parseTencentQuoteMetaPayload(matched[1], holding.code)
+      : {
+        name: holding.code,
+        price: Number.NaN,
+        change: Number.NaN,
+        changePct: Number.NaN,
+        open: Number.NaN,
+        prevClose: Number.NaN,
+        high: Number.NaN,
+        low: Number.NaN,
+        volumeHands: Number.NaN,
+        amountWanYuan: Number.NaN,
+        turnoverRate: Number.NaN,
+        peTtm: Number.NaN,
+        totalMarketCapYi: Number.NaN,
+        updatedAt: '-',
+        suspended: false,
+      };
 
     const shares = Math.max(0, holding.shares);
     const cost = Math.max(0, holding.cost);
-    const price = toNumber(parts[3]);
-    const prevClose = toNumber(parts[4]);
-    const change = toNumber(parts[31]);
-    const changePct = toNumber(parts[32]);
+    const price = meta.price;
+    const prevClose = meta.prevClose;
+    const change = meta.change;
+    const changePct = meta.changePct;
     const floatingPnl = shares > 0 && cost > 0 && Number.isFinite(price)
       ? (price - cost) * shares
       : Number.NaN;
@@ -857,7 +912,7 @@ async function fetchBatchStockQuotesFromTencent(holdings: Array<StockHoldingConf
 
     return {
       code: holding.code,
-      name: parts[1] || holding.code,
+      name: meta.name || holding.code,
       shares,
       cost,
       price,
@@ -865,7 +920,8 @@ async function fetchBatchStockQuotesFromTencent(holdings: Array<StockHoldingConf
       floatingPnl,
       dailyPnl,
       dailyChangePct: changePct,
-      updatedAt: formatQuoteTime(parts[30] || ''),
+      suspended: meta.suspended,
+      updatedAt: meta.updatedAt,
     };
   });
 }
@@ -928,6 +984,10 @@ export type MarketStats = {
   prevTurnover: number; // 昨成交（亿）
   volumeChange: number; // 缩量/放量（亿）
 };
+
+export function shouldFetchMarketStats(ignoreTradingHours = false, tradingHours = isTradingHours()): boolean {
+  return ignoreTradingHours || tradingHours;
+}
 
 const MARKET_STATS_HOST = 'https://40.push2.eastmoney.com';
 const SINA_MARKET_HOST = 'https://vip.stock.finance.sina.com.cn';
@@ -1140,9 +1200,8 @@ async function fetchEastmoneyBreadthFallback(): Promise<MarketBreadthSnapshot | 
  * 2) 腾讯：成交额 + 昨成交（通过指数实时+日K）
  * 3) 东财：成交额兜底（stock/get），并保留 breadth 兜底
  */
-export async function fetchMarketStats(): Promise<MarketStats | null> {
-  // 过了交易时间不再拉取（数据不变）
-  if (!isTradingHours()) return null;
+export async function fetchMarketStats(options: { ignoreTradingHours?: boolean } = {}): Promise<MarketStats | null> {
+  if (!shouldFetchMarketStats(Boolean(options.ignoreTradingHours))) return null;
   const [sinaResult, tencentResult, eastmoneyTurnoverResult] = await Promise.allSettled([
     fetchSinaBreadthSnapshot(),
     fetchTencentTurnoverSnapshot(),

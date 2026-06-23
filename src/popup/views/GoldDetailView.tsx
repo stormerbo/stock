@@ -31,6 +31,7 @@ import { Button } from '../components/ui';
 import {
   fetchGoldIntraday,
   fetchGoldKline,
+  isTradingHours,
   type GoldDetailKlinePoint,
   type GoldQuote,
 } from '../../shared/fetch';
@@ -127,14 +128,18 @@ export default function GoldDetailView({ quote, onBack }: Props) {
 
     void load();
 
-    const timer = window.setInterval(() => {
-      void load();
-    }, period === 'minute' ? 20_000 : 40_000);
+    // 非 minute 周期：历史 K 线数据不会变，不轮询
+    if (period === 'minute') {
+      const timer = window.setInterval(() => {
+        if (isTradingHours()) void load();
+      }, 20_000);
+      return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+      };
+    }
 
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    return () => { cancelled = true; };
   }, [period, quote.code, quote.change, quote.price, refreshAt]);
 
   const detail = useMemo(

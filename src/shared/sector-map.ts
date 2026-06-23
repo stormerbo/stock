@@ -213,10 +213,10 @@ export function guessSector(code: string, _name?: string): string {
   const plain = code.replace(/^(sh|sz)/, '');
   if (STOCK_SECTOR_MAP[plain]) return STOCK_SECTOR_MAP[plain];
 
+  if (/^68\d{4}$/.test(plain)) return '科创板';
+  if (/^(300|301)\d{3}$/.test(plain)) return '创业板';
   if (/^6\d{5}$/.test(plain)) return '沪市主板';
   if (/^(000|001|002)\d{3}$/.test(plain)) return '深市主板';
-  if (/^(300|301)\d{3}$/.test(plain)) return '创业板';
-  if (/^68\d{4}$/.test(plain)) return '科创板';
   if (/^(4|8)\d{4}$/.test(plain)) return '北交所';
 
   return '其他';

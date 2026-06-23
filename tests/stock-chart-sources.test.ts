@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   parseEastmoneyIntradayTrends,
   parseEastmoneyKlineRows,
+  parseTencentQuoteMetaPayload,
   parseTencentKlineRows,
   parseTencentMinuteRows,
 } from '../src/shared/stock-chart-sources.ts';
@@ -50,4 +51,13 @@ test('parseTencentKlineRows skips malformed rows and keeps valid rows', () => {
 
   assert.equal(points.length, 1);
   assert.equal(points[0]?.high, 1278);
+});
+
+test('parseTencentQuoteMetaPayload marks suspended stocks from zero-volume quote payloads', () => {
+  const active = parseTencentQuoteMetaPayload('1~华兴源创~688001~81.41~79.50~79.11~15208035~7725355~7482477~81.40~11~81.39~3~81.38~9~81.35~2~81.28~16~81.41~8~81.42~5~81.45~15~81.46~2~81.48~5~~20260623142350~1.91~2.40~84.98~76.00~81.41/15208035/1253700000~15208035~125370~3.22~338.65~S~84.98~76.00~11.30~383.90~383.90');
+  const suspended = parseTencentQuoteMetaPayload('1~中船特气~688146~389.99~389.99~0.00~0~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20260623142737~0.00~0.00~0.00~0.00~389.99/0/0~0~0~0.00~573.30~S~0.00~0.00~0.00~565.37~2064.65');
+
+  assert.equal(active.suspended, false);
+  assert.equal(suspended.suspended, true);
+  assert.equal(suspended.price, 389.99);
 });

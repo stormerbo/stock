@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Badge, Button, Input, ModalShell, Panel } from '../src/popup/components/ui/index.ts';
+import StockStatusBadge from '../src/popup/components/StockStatusBadge.ts';
 
 test('Button renders semantic variant and loading state', () => {
   const html = renderToStaticMarkup(
@@ -62,4 +63,16 @@ test('ModalShell renders open content and footer actions', () => {
   assert.match(html, /确认操作/);
   assert.match(html, /body/);
   assert.match(html, /footer/);
+});
+
+test('StockStatusBadge renders suspended label only when stock is suspended', () => {
+  const html = renderToStaticMarkup(
+    React.createElement('div', null,
+      React.createElement(StockStatusBadge, { suspended: true }),
+      React.createElement(StockStatusBadge, { suspended: false }),
+    ),
+  );
+
+  assert.match(html, /停牌/);
+  assert.match(html, /stock-badge suspended/);
 });

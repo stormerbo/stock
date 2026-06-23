@@ -28,6 +28,7 @@ export type StockQuoteMeta = {
   peTtm: number;
   totalMarketCapYi: number;
   updatedAt: string;
+  suspended: boolean;
 };
 
 type TencentMinuteResponse = {
@@ -193,13 +194,31 @@ export function parseTencentKlineRows(rows: string[][] | undefined): StockChartK
     ));
 }
 
-export async function fetchTencentQuoteMeta(tencentCode: string, fallbackName = ''): Promise<StockQuoteMeta> {
-  const text = await fetchTextViaExtension(`https://qt.gtimg.cn/q=${tencentCode}`);
-  const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
-  const parts = matched?.[1]?.split('~') ?? [];
+function isTencentQuoteSuspended(parts: string[]): boolean {
+  const price = toNumber(parts[3]);
+  const prevClose = toNumber(parts[4]);
+  const open = toNumber(parts[5]);
+  const change = toNumber(parts[31]);
+  const high = toNumber(parts[33]);
+  const low = toNumber(parts[34]);
+  const volumeHands = toNumber(parts[36]);
+
+  return Number.isFinite(price)
+    && Number.isFinite(prevClose)
+    && prevClose > 0
+    && price === prevClose
+    && volumeHands === 0
+    && change === 0
+    && open === 0
+    && high === 0
+    && low === 0;
+}
+
+export function parseTencentQuoteMetaPayload(payload: string, fallbackName = ''): StockQuoteMeta {
+  const parts = payload.split('~');
   if (parts.length < 46) throw new Error('missing quote payload');
   return {
-    name: parts[1] || fallbackName || tencentCode,
+    name: parts[1] || fallbackName,
     price: toNumber(parts[3]),
     change: toNumber(parts[31]),
     changePct: toNumber(parts[32]),
@@ -213,7 +232,15 @@ export async function fetchTencentQuoteMeta(tencentCode: string, fallbackName = 
     peTtm: toNumber(parts[39]),
     totalMarketCapYi: toNumber(parts[45]),
     updatedAt: formatQuoteTime(parts[30] || ''),
+    suspended: isTencentQuoteSuspended(parts),
   };
+}
+
+export async function fetchTencentQuoteMeta(tencentCode: string, fallbackName = ''): Promise<StockQuoteMeta> {
+  const text = await fetchTextViaExtension(`https://qt.gtimg.cn/q=${tencentCode}`);
+  const matched = text.match(new RegExp(`v_${tencentCode}="([^"]*)"`));
+  if (!matched?.[1]) throw new Error('missing quote payload');
+  return parseTencentQuoteMetaPayload(matched[1], fallbackName || tencentCode);
 }
 
 function eastmoneyKlt(period: StockChartKlinePeriod): number {

@@ -12,6 +12,7 @@ import { fetchDayFqKline, detectAllSignals, type TechnicalSignal } from "../../s
 import TradeHistoryView from "./TradeHistoryView";
 import AssessmentSummaryBlock from "../components/AssessmentSummaryBlock";
 import { Button } from "../components/ui";
+import StockStatusBadge from "../components/StockStatusBadge.ts";
 import { loadCachedStockAssessments, sanitizeStockAssessmentCache } from "../../shared/stock-assessment-cache.ts";
 import type { StockAssessment } from "../../shared/stock-assessment.ts";
 import { getStockLimitPct } from '../../shared/stock-limit';
@@ -43,6 +44,10 @@ function formatPercent(value: number): string {
 function toneClass(value: number): string {
   if (!Number.isFinite(value)) return "";
   return value >= 0 ? "up" : "down";
+}
+
+function toneClassWithSuspended(suspended: boolean | undefined, value: number): string {
+  return suspended ? '' : toneClass(value);
 }
 
 type TabValue = StockDetailTabValue;
@@ -235,13 +240,14 @@ export default function StockDetailView({ code, fallbackName, onBack, onStockTra
               <div className="quote-title-row">
                 <div className="quote-title-left">
                   <strong>{detail.name}</strong>
+                  <StockStatusBadge suspended={detail.suspended} />
                   <span className="quote-code">{detail.code}</span>
                 </div>
                 <div className="quote-price-block">
-                  <div className={`quote-price ${toneClass(detail.changePct)}`}>
+                  <div className={`quote-price ${toneClassWithSuspended(detail.suspended, detail.changePct)}`}>
                     {formatNumber(detail.price, 2)}
                   </div>
-                  <div className={`quote-change ${toneClass(detail.changePct)}`}>
+                  <div className={`quote-change ${toneClassWithSuspended(detail.suspended, detail.changePct)}`}>
                     {formatPercent(detail.changePct)}
                   </div>
                 </div>
@@ -259,7 +265,7 @@ export default function StockDetailView({ code, fallbackName, onBack, onStockTra
                     return (
                       <div key={key} className="summary-cell">
                         <span className="summary-label">{label}</span>
-                        <b className={toneClass(toneValue)}>{formatNumber(value, 2)}</b>
+                        <b className={toneClassWithSuspended(detail.suspended, toneValue)}>{formatNumber(value, 2)}</b>
                       </div>
                     );
                   })}
@@ -282,11 +288,11 @@ export default function StockDetailView({ code, fallbackName, onBack, onStockTra
                   return (
                     <div className="quick-stats">
                       <div className="stat-cell"><span className="stat-label">昨收</span><b>{formatNumber(detail.prevClose, 2)}</b></div>
-                      <div className="stat-cell"><span className="stat-label">涨停价</span><b className="up">{formatNumber(limitUp, 2)}</b></div>
-                      <div className="stat-cell"><span className="stat-label">跌停价</span><b className="down">{formatNumber(limitDown, 2)}</b></div>
+                      <div className="stat-cell"><span className="stat-label">涨停价</span><b className={detail.suspended ? '' : 'up'}>{formatNumber(limitUp, 2)}</b></div>
+                      <div className="stat-cell"><span className="stat-label">跌停价</span><b className={detail.suspended ? '' : 'down'}>{formatNumber(limitDown, 2)}</b></div>
                       <div className="stat-cell"><span className="stat-label">成交量</span><b>{formatNumber(detail.volumeHands / 10000, 2)}万手</b></div>
                       <div className="stat-cell"><span className="stat-label">成交额</span><b>{formatNumber(detail.amountWanYuan / 10000, 2)}亿</b></div>
-                      <div className="stat-cell"><span className="stat-label">换手</span><b>{formatPercent(detail.turnoverRate)}</b></div>
+                      <div className="stat-cell"><span className="stat-label">换手</span><b className={detail.suspended ? '' : toneClass(detail.turnoverRate)}>{formatPercent(detail.turnoverRate)}</b></div>
                       <div className="stat-cell"><span className="stat-label">市盈率</span><b>{formatNumber(detail.peTtm, 2)}</b></div>
                       <div className="stat-cell"><span className="stat-label">总市值</span><b>{formatNumber(detail.totalMarketCapYi, 2)}亿</b></div>
                     </div>

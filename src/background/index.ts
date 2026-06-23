@@ -2,7 +2,7 @@ import {
   fetchBatchStockQuotes,
   fetchGoldQuotes,
   fetchStockIntraday,
- fetchTencentMarketIndexes,
+  fetchTencentMarketIndexes,
   fetchTiantianFundPosition,
   getShanghaiToday,
   getShanghaiYesterday,
@@ -16,6 +16,8 @@ import {
   type StockHoldingConfig,
   type StockPosition,
 } from '../shared/fetch';
+import { DEFAULT_REFRESH_CONFIG, type RefreshConfig, normalizeRefreshConfig } from '../shared/refresh-config.ts';
+import { runManualForceRefresh } from './manual-force-refresh.ts';
 import {
   loadAlertConfig,
   saveAlertConfig,
@@ -70,6 +72,14 @@ import {
   type StockAssessment,
 } from '../shared/stock-assessment.ts';
 import { clearStockAssessmentCache, loadCachedStockAssessments, saveStockAssessmentCache, shouldRecalcStockAssessments } from '../shared/stock-assessment-cache.ts';
+import {
+  ALARM_FUND,
+  ALARM_GOLD,
+  ALARM_INDEX,
+  ALARM_MARKET_STATS,
+  ALARM_STOCK,
+  buildRefreshAlarmPeriods,
+} from './refresh-alarms.ts';
 
 export type BadgeMode =
   | 'off'
@@ -88,12 +98,6 @@ export type BadgeConfig = {
   mode: BadgeMode;
 };
 
-type RefreshConfig = {
-  stockRefreshSeconds: number;
-  fundRefreshSeconds: number;
-  indexRefreshSeconds: number;
-};
-
 const BADGE_STORAGE_KEY = 'badgeConfig';
 const REFRESH_STORAGE_KEY = 'refreshConfig';
 const TECH_REPORT_STORAGE_KEY = 'technicalReportConfig';
@@ -106,11 +110,11 @@ const WORK_MODE_KEY = 'workModeConfig';
 const DRAWDOWN_EVAL_DATE_KEY = '_lastDrawdownEvalDate';
 const NOTIFICATION_KEEP_HOURS = 24;
 
-const ALARM_STOCK = 'refresh-stocks';
-const ALARM_FUND = 'refresh-funds';
-const ALARM_INDEX = 'refresh-indexes';
 const ALARM_TECH_REPORT = 'daily-technical-report';
 const ALARM_UPDATE_CHECK = 'check-update';
+const MARKET_STATS_CACHE_KEY = 'marketStatsCache';
+const MARKET_STATS_HISTORY_KEY = 'marketStatsHistory';
+const MARKET_STATS_UPDATED_AT_KEY = 'marketStatsUpdatedAt';
 const UPDATE_INFO_KEY = 'extensionUpdateInfo';
 const UPDATE_COOLDOWN_KEY = 'updateCooldown';
 const LAST_UPDATE_CHECK_KEY = '_lastUpdateCheckTime';
@@ -164,12 +168,6 @@ function isWorkModeHours(config: WorkModeConfig): boolean {
     return currentMinutes >= startMinutes || currentMinutes < endMinutes;
   }
 }
-
-const DEFAULT_REFRESH: RefreshConfig = {
-  stockRefreshSeconds: 15,
-  fundRefreshSeconds: 60,
-  indexRefreshSeconds: 30,
-};
 
 // -----------------------------------------------------------
 // 角标更新
@@ -268,10 +266,9 @@ async function updateHoverTitleFromStorage() {
 async function loadRefreshConfig(): Promise<RefreshConfig> {
   try {
     const result = await chrome.storage.sync.get(REFRESH_STORAGE_KEY);
-    const config = result[REFRESH_STORAGE_KEY] as RefreshConfig | undefined;
-    return config || DEFAULT_REFRESH;
+    return normalizeRefreshConfig(result[REFRESH_STORAGE_KEY]);
   } catch {
-    return DEFAULT_REFRESH;
+    return DEFAULT_REFRESH_CONFIG;
   }
 }
 
@@ -338,13 +335,10 @@ async function loadBadgeConfig(): Promise<BadgeConfig> {
 // -----------------------------------------------------------
 
 function setupAlarms(config: RefreshConfig) {
-  const minSec = 2;
-  const stockSec = Math.max(minSec, config.stockRefreshSeconds);
-  const fundSec = Math.max(minSec, config.fundRefreshSeconds);
-  const indexSec = Math.max(minSec, config.indexRefreshSeconds);
-  chrome.alarms.create(ALARM_STOCK, { periodInMinutes: stockSec / 60 });
-  chrome.alarms.create(ALARM_FUND, { periodInMinutes: fundSec / 60 });
-  chrome.alarms.create(ALARM_INDEX, { periodInMinutes: indexSec / 60 });
+  const periods = buildRefreshAlarmPeriods(config);
+  for (const [name, periodInMinutes] of Object.entries(periods)) {
+    chrome.alarms.create(name, { periodInMinutes });
+  }
 }
 
 /** 设置盘后技术报告告警（15:30 上海时间） */
@@ -362,16 +356,20 @@ function clearAlarms() {
   chrome.alarms.clear(ALARM_STOCK);
   chrome.alarms.clear(ALARM_FUND);
   chrome.alarms.clear(ALARM_INDEX);
+  chrome.alarms.clear(ALARM_GOLD);
   chrome.alarms.clear(ALARM_TECH_REPORT);
   chrome.alarms.clear(ALARM_UPDATE_CHECK);
+  chrome.alarms.clear(ALARM_MARKET_STATS);
 }
 
 async function handleAlarm(name: string) {
   if (name === ALARM_STOCK) await refreshStocks();
   else if (name === ALARM_FUND) await refreshFunds();
   else if (name === ALARM_INDEX) await refreshIndexes();
+  else if (name === ALARM_GOLD) await refreshGolds();
   else if (name === ALARM_TECH_REPORT) await generateDailyTechnicalReport();
   else if (name === ALARM_UPDATE_CHECK) await checkForUpdate();
+  else if (name === ALARM_MARKET_STATS) await refreshMarketStats();
 }
 
 // -----------------------------------------------------------
@@ -615,7 +613,7 @@ async function refreshStocks(force = false) {
 
     // 交易时段后台刷新分时数据，写入独立 key（popup 从这读）
     // 分时数据变化慢，60s 一次足够，避免频繁请求 push2his API
-    if (isTradingHours() && Date.now() - lastIntradayRefreshTime >= 60_000) {
+    if ((force || isTradingHours()) && (force || Date.now() - lastIntradayRefreshTime >= 60_000)) {
       lastIntradayRefreshTime = Date.now();
       const allCodes = stocks.map((h) => normalizeStockCode(h.code)).filter(Boolean);
       if (allCodes.length > 0) {
@@ -1509,8 +1507,17 @@ async function refreshFunds() {
     }
     if (funds.length === 0) return;
 
-    const settledResults = await Promise.allSettled(
-      funds.map((h) => fetchTiantianFundPosition(h))
+    // 使用 pMap 控制并发，避免同时发起 2M 个请求
+    const settledResults = await pMap(
+      funds,
+      async (h) => {
+        try {
+          return { status: 'fulfilled' as const, value: await fetchTiantianFundPosition(h) };
+        } catch {
+          return { status: 'rejected' as const };
+        }
+      },
+      4,
     );
     const positions: FundPosition[] = [];
     let failCount = 0;
@@ -1580,8 +1587,8 @@ function isWeekendInShanghai(): boolean {
   return dayOfWeek === 'Sat' || dayOfWeek === 'Sun';
 }
 
-async function refreshIndexes() {
-  if (!isTradingHours()) return;
+async function refreshIndexes(force = false) {
+  if (!force && !isTradingHours()) return;
   try {
     const indexes = await fetchTencentMarketIndexes();
     await chrome.storage.local.set({ indexPositions: indexes, indexUpdatedAt: new Date().toISOString() });
@@ -1591,13 +1598,28 @@ async function refreshIndexes() {
   }
 }
 
-async function refreshGolds() {
+async function refreshGolds(_force = false) {
   try {
     const quotes = await fetchGoldQuotes();
     if (quotes.length === 0) return;
     await chrome.storage.local.set({ goldQuotes: quotes, goldUpdatedAt: new Date().toISOString() });
   } catch (e) {
     console.warn('[Portfolio Pulse] gold refresh failed:', e);
+  }
+}
+
+async function refreshMarketStats(force = false) {
+  if (!force && !isTradingHours()) return;
+  try {
+    const { fetchMarketStats } = await import('../shared/fetch');
+    const stats = await fetchMarketStats({ ignoreTradingHours: force });
+    if (!stats) return;
+    await chrome.storage.local.set({
+      [MARKET_STATS_CACHE_KEY]: stats,
+      [MARKET_STATS_UPDATED_AT_KEY]: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn('[Portfolio Pulse] market stats refresh failed:', e);
   }
 }
 
@@ -2221,19 +2243,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (request.type === 'force-refresh') {
     void (async () => {
       try {
-        await Promise.all([refreshStocks(true), refreshFunds()]);
-        // 同时清除缓存并触发画像/风控重算
-        await Promise.all([
-          chrome.storage.local.remove([
-            '_lastStyleCalcTime',
-            '_lastStopCalcTime',
-            '_lastTradeSignalTime',
-            '_stopSuggestVersion',
-            'stopSuggestions',
-          ]),
-          clearStockAssessmentCache(),
-        ]);
-        void triggerStyleAndStopCalc();
+        await runManualForceRefresh({
+          refreshStocks,
+          refreshFunds,
+          refreshIndexes,
+          refreshGolds,
+          refreshMarketStats,
+          clearDerivedCaches: async () => {
+            await Promise.all([
+              chrome.storage.local.remove([
+                '_lastStyleCalcTime',
+                '_lastStopCalcTime',
+                '_lastTradeSignalTime',
+                '_stopSuggestVersion',
+                'stopSuggestions',
+              ]),
+              clearStockAssessmentCache(),
+            ]);
+          },
+          afterRefresh: () => {
+            void triggerStyleAndStopCalc();
+          },
+        });
         sendResponse({ ok: true });
       } catch (error) {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown error' });

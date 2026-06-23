@@ -6,6 +6,7 @@ import IntradayChart from './IntradayChart';
 import FloatingRefreshBtn from './FloatingRefreshBtn';
 import { formatNumber, formatPercent, formatRatioPercent, toneClass } from '../utils/format';
 import { getStockRowBadges, hasTechSignalBadge, resolveTechSignalBadgeTone } from './stock-row-badges';
+import StockStatusBadge from './StockStatusBadge.ts';
 import type { StockRow, StockSortKey, SortDir, ColumnSort } from '../types';
 
 type EditingCell = {
@@ -70,6 +71,9 @@ export default function StockTable({
   handleDragStart, handleDragEnd, handleStockDrop,
   onRemoveStock, onRefresh, refreshing, privacyHidden,
 }: Props) {
+  const toneBySuspended = (suspended: boolean | undefined, value: number): string => (
+    suspended ? '' : toneClass(value)
+  );
   const [tip, setTip] = useState<{
     x: number; y: number;
     signals?: Array<{ label: string; severity: string }>;
@@ -181,7 +185,8 @@ export default function StockTable({
                       <span className="name-inline">
                         {item.pinned ? <Pin size={10} className="pinned-flag" /> : null}
                         {item.special ? <Star size={10} className="special-star-icon" aria-hidden="true" /> : null}
-                        <span className={`name-text ${toneClass(item.dailyChangePct)}`}>{item.name || item.code}</span>
+                        <StockStatusBadge suspended={item.suspended} />
+                        <span className={`name-text ${toneBySuspended(item.suspended, item.dailyChangePct)}`}>{item.name || item.code}</span>
                       </span>
                       <span className="name-badge-slot">
                         {badges.nameRowBadge ? <span className={`stock-badge ${badges.nameRowBadge.tone}`}>{badges.nameRowBadge.label}</span> : null}
@@ -232,12 +237,12 @@ export default function StockTable({
                   />
                 </td>
                 <td className="dual-value">
-                  <span className={rowPrivacyHidden ? '' : toneClass(item.floatingPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.floatingPnl, 2)}</span>
-                  <span className={rowPrivacyHidden ? '' : toneClass(holdingRate)}>{rowPrivacyHidden ? hiddenText : formatPercent(holdingRate)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneBySuspended(item.suspended, item.floatingPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.floatingPnl, 2)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneBySuspended(item.suspended, holdingRate)}>{rowPrivacyHidden ? hiddenText : formatPercent(holdingRate)}</span>
                 </td>
                 <td className="dual-value">
-                  <span className={rowPrivacyHidden ? '' : toneClass(item.dailyPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.dailyPnl, 2)}</span>
-                  <span className={rowPrivacyHidden ? '' : toneClass(item.dailyChangePct)}>{rowPrivacyHidden ? hiddenText : formatPercent(item.dailyChangePct)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneBySuspended(item.suspended, item.dailyPnl)}>{rowPrivacyHidden ? hiddenText : formatNumber(item.dailyPnl, 2)}</span>
+                  <span className={rowPrivacyHidden ? '' : toneBySuspended(item.suspended, item.dailyChangePct)}>{rowPrivacyHidden ? hiddenText : formatPercent(item.dailyChangePct)}</span>
                 </td>
                 <td className="dual-value price-cell">
                   {editingCell?.kind === 'stock' && editingCell.code === item.code && editingCell.field === 'cost' ? (
@@ -254,11 +259,14 @@ export default function StockTable({
                       {rowPrivacyHidden ? hiddenText : (hasCost ? formatNumber(item.cost, 3) : '输入成本价')}
                     </span>
                   )}
-                  <span className="price-line">{formatNumber(item.price, 2)}<span style={{ display: 'inline', marginLeft: 6 }} className={toneClass(item.price - item.prevClose)}>{formatPercent(item.prevClose > 0 ? (item.price - item.prevClose) / item.prevClose * 100 : 0)}</span></span>
+                  <span className="price-line">
+                    {formatNumber(item.price, 2)}
+                    <span style={{ display: 'inline', marginLeft: 6 }} className={toneBySuspended(item.suspended, item.price - item.prevClose)}>{formatPercent(item.prevClose > 0 ? (item.price - item.prevClose) / item.prevClose * 100 : 0)}</span>
+                  </span>
                   {Number.isFinite(item.addedPrice) && item.addedPrice! > 0 ? (
                     <span style={{ fontSize: 9, color: 'var(--text-1)', opacity: 0.6, lineHeight: 1.2, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                       <span>关注 {formatNumber(item.addedPrice!, 2)}</span>
-                      <span className={toneClass(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}>
+                      <span className={toneBySuspended(item.suspended, ((item.price - item.addedPrice!) / item.addedPrice!) * 100)}>
                         {formatPercent(((item.price - item.addedPrice!) / item.addedPrice!) * 100)}
                       </span>
                     </span>

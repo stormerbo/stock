@@ -30,6 +30,7 @@ export type StockDetailData = {
   price: number;
   change: number;
   changePct: number;
+  suspended?: boolean;
   open: number;
   prevClose: number;
   high: number;
